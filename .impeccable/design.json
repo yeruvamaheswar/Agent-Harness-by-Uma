@@ -1,0 +1,656 @@
+{
+  "schemaVersion": 2,
+  "generatedAt": "2026-10-12T00:00:00Z",
+  "title": "Design System: Agentic Harness public pages (the project explainer)",
+  "extensions": {
+    "scope": {
+      "surface": "public pages: the project explainer",
+      "built": "docs/project-explainer.html",
+      "planPageSystem": "design/DESIGN.md and design/.impeccable/design.json. Not replaced by this file. The two share the colour tokens and the type roles.",
+      "decided": [
+        "The owner, 2026-10-12: public pages are the same family as the plan pages, expanded.",
+        "The owner, 2026-10-12: the structure of the explainer is the figure atlas.",
+        "The owner, 2026-10-12: this surface has no margin rule."
+      ],
+      "approval": "Every entry with status 'approved by the owner, 2026-10-13' is new on this surface and is recorded from the built page."
+    },
+    "colorMeta": {
+      "paper": {
+        "role": "neutral",
+        "displayName": "Cool Paper",
+        "canonical": "#F3F5F1",
+        "oklch": "oklch(96.8% 0.006 129)",
+        "tonalRamp": [
+          "oklch(15% 0.006 129)",
+          "oklch(27% 0.006 129)",
+          "oklch(39% 0.006 129)",
+          "oklch(51% 0.006 129)",
+          "oklch(63% 0.006 129)",
+          "oklch(75% 0.006 129)",
+          "oklch(85% 0.006 129)",
+          "oklch(95% 0.006 129)"
+        ]
+      },
+      "ink": {
+        "role": "neutral",
+        "displayName": "Ink",
+        "canonical": "#1A1D1B",
+        "oklch": "oklch(22.7% 0.006 157)",
+        "tonalRamp": [
+          "oklch(15% 0.006 157)",
+          "oklch(27% 0.006 157)",
+          "oklch(39% 0.006 157)",
+          "oklch(51% 0.006 157)",
+          "oklch(63% 0.006 157)",
+          "oklch(75% 0.006 157)",
+          "oklch(85% 0.006 157)",
+          "oklch(95% 0.006 157)"
+        ]
+      },
+      "ink-2": {
+        "role": "neutral",
+        "displayName": "Ink Two",
+        "canonical": "#4A524D",
+        "oklch": "oklch(43.0% 0.013 158)",
+        "tonalRamp": [
+          "oklch(15% 0.013 158)",
+          "oklch(27% 0.013 158)",
+          "oklch(39% 0.013 158)",
+          "oklch(51% 0.013 158)",
+          "oklch(63% 0.013 158)",
+          "oklch(75% 0.013 158)",
+          "oklch(85% 0.013 158)",
+          "oklch(95% 0.013 158)"
+        ]
+      },
+      "form": {
+        "role": "primary",
+        "displayName": "Form Green-Grey",
+        "canonical": "#3D5A4C",
+        "oklch": "oklch(44.0% 0.042 163)",
+        "tonalRamp": [
+          "oklch(15% 0.042 163)",
+          "oklch(27% 0.042 163)",
+          "oklch(39% 0.042 163)",
+          "oklch(51% 0.042 163)",
+          "oklch(63% 0.042 163)",
+          "oklch(75% 0.042 163)",
+          "oklch(85% 0.042 163)",
+          "oklch(95% 0.042 163)"
+        ]
+      },
+      "rule": {
+        "role": "neutral",
+        "displayName": "Rule",
+        "canonical": "#C3CEC6",
+        "oklch": "oklch(84.1% 0.016 154)",
+        "tonalRamp": [
+          "oklch(15% 0.016 154)",
+          "oklch(27% 0.016 154)",
+          "oklch(39% 0.016 154)",
+          "oklch(51% 0.016 154)",
+          "oklch(63% 0.016 154)",
+          "oklch(75% 0.016 154)",
+          "oklch(85% 0.016 154)",
+          "oklch(95% 0.016 154)"
+        ]
+      },
+      "rule-2": {
+        "role": "neutral",
+        "displayName": "Faint Rule",
+        "canonical": "#DDE4DF",
+        "oklch": "oklch(91.2% 0.010 155)",
+        "tonalRamp": [
+          "oklch(15% 0.010 155)",
+          "oklch(27% 0.010 155)",
+          "oklch(39% 0.010 155)",
+          "oklch(51% 0.010 155)",
+          "oklch(63% 0.010 155)",
+          "oklch(75% 0.010 155)",
+          "oklch(85% 0.010 155)",
+          "oklch(95% 0.010 155)"
+        ]
+      },
+      "agent": {
+        "role": "secondary",
+        "displayName": "Agent Cobalt",
+        "canonical": "#2B4C9B",
+        "oklch": "oklch(43.7% 0.135 264)",
+        "tonalRamp": [
+          "oklch(15% 0.135 264)",
+          "oklch(27% 0.135 264)",
+          "oklch(39% 0.135 264)",
+          "oklch(51% 0.135 264)",
+          "oklch(63% 0.135 264)",
+          "oklch(75% 0.135 264)",
+          "oklch(85% 0.135 264)",
+          "oklch(95% 0.135 264)"
+        ]
+      },
+      "claude": {
+        "role": "secondary",
+        "displayName": "Claude Clay",
+        "canonical": "#A84F2A",
+        "oklch": "oklch(53.3% 0.128 42)",
+        "tonalRamp": [
+          "oklch(15% 0.128 42)",
+          "oklch(27% 0.128 42)",
+          "oklch(39% 0.128 42)",
+          "oklch(51% 0.128 42)",
+          "oklch(63% 0.128 42)",
+          "oklch(75% 0.128 42)",
+          "oklch(85% 0.128 42)",
+          "oklch(95% 0.128 42)"
+        ]
+      },
+      "user": {
+        "role": "secondary",
+        "displayName": "User Green",
+        "canonical": "#2C7038",
+        "oklch": "oklch(48.7% 0.111 147)",
+        "tonalRamp": [
+          "oklch(15% 0.111 147)",
+          "oklch(27% 0.111 147)",
+          "oklch(39% 0.111 147)",
+          "oklch(51% 0.111 147)",
+          "oklch(63% 0.111 147)",
+          "oklch(75% 0.111 147)",
+          "oklch(85% 0.111 147)",
+          "oklch(95% 0.111 147)"
+        ]
+      },
+      "pencil": {
+        "role": "neutral",
+        "displayName": "Graphite Pencil",
+        "canonical": "#646B67",
+        "oklch": "oklch(52.0% 0.011 161)",
+        "tonalRamp": [
+          "oklch(15% 0.011 161)",
+          "oklch(27% 0.011 161)",
+          "oklch(39% 0.011 161)",
+          "oklch(51% 0.011 161)",
+          "oklch(63% 0.011 161)",
+          "oklch(75% 0.011 161)",
+          "oklch(85% 0.011 161)",
+          "oklch(95% 0.011 161)"
+        ]
+      },
+      "paper-dark": {
+        "role": "neutral",
+        "displayName": "Cool Paper (dark)",
+        "canonical": "#121614",
+        "oklch": "oklch(19.5% 0.007 164)",
+        "tonalRamp": [
+          "oklch(15% 0.007 164)",
+          "oklch(27% 0.007 164)",
+          "oklch(39% 0.007 164)",
+          "oklch(51% 0.007 164)",
+          "oklch(63% 0.007 164)",
+          "oklch(75% 0.007 164)",
+          "oklch(85% 0.007 164)",
+          "oklch(95% 0.007 164)"
+        ]
+      },
+      "ink-dark": {
+        "role": "neutral",
+        "displayName": "Ink (dark)",
+        "canonical": "#E5E9E6",
+        "oklch": "oklch(93.0% 0.006 154)",
+        "tonalRamp": [
+          "oklch(15% 0.006 154)",
+          "oklch(27% 0.006 154)",
+          "oklch(39% 0.006 154)",
+          "oklch(51% 0.006 154)",
+          "oklch(63% 0.006 154)",
+          "oklch(75% 0.006 154)",
+          "oklch(85% 0.006 154)",
+          "oklch(95% 0.006 154)"
+        ]
+      },
+      "ink-2-dark": {
+        "role": "neutral",
+        "displayName": "Ink Two (dark)",
+        "canonical": "#A9B2AC",
+        "oklch": "oklch(75.5% 0.013 157)",
+        "tonalRamp": [
+          "oklch(15% 0.013 157)",
+          "oklch(27% 0.013 157)",
+          "oklch(39% 0.013 157)",
+          "oklch(51% 0.013 157)",
+          "oklch(63% 0.013 157)",
+          "oklch(75% 0.013 157)",
+          "oklch(85% 0.013 157)",
+          "oklch(95% 0.013 157)"
+        ]
+      },
+      "form-dark": {
+        "role": "primary",
+        "displayName": "Form Green-Grey (dark)",
+        "canonical": "#9DB8A9",
+        "oklch": "oklch(75.8% 0.036 161)",
+        "tonalRamp": [
+          "oklch(15% 0.036 161)",
+          "oklch(27% 0.036 161)",
+          "oklch(39% 0.036 161)",
+          "oklch(51% 0.036 161)",
+          "oklch(63% 0.036 161)",
+          "oklch(75% 0.036 161)",
+          "oklch(85% 0.036 161)",
+          "oklch(95% 0.036 161)"
+        ]
+      },
+      "rule-dark": {
+        "role": "neutral",
+        "displayName": "Rule (dark)",
+        "canonical": "#34403A",
+        "oklch": "oklch(35.9% 0.019 164)",
+        "tonalRamp": [
+          "oklch(15% 0.019 164)",
+          "oklch(27% 0.019 164)",
+          "oklch(39% 0.019 164)",
+          "oklch(51% 0.019 164)",
+          "oklch(63% 0.019 164)",
+          "oklch(75% 0.019 164)",
+          "oklch(85% 0.019 164)",
+          "oklch(95% 0.019 164)"
+        ]
+      },
+      "rule-2-dark": {
+        "role": "neutral",
+        "displayName": "Faint Rule (dark)",
+        "canonical": "#232B27",
+        "oklch": "oklch(28.0% 0.013 164)",
+        "tonalRamp": [
+          "oklch(15% 0.013 164)",
+          "oklch(27% 0.013 164)",
+          "oklch(39% 0.013 164)",
+          "oklch(51% 0.013 164)",
+          "oklch(63% 0.013 164)",
+          "oklch(75% 0.013 164)",
+          "oklch(85% 0.013 164)",
+          "oklch(95% 0.013 164)"
+        ]
+      },
+      "agent-dark": {
+        "role": "secondary",
+        "displayName": "Agent Cobalt (dark)",
+        "canonical": "#93AEF2",
+        "oklch": "oklch(75.7% 0.103 267)",
+        "tonalRamp": [
+          "oklch(15% 0.103 267)",
+          "oklch(27% 0.103 267)",
+          "oklch(39% 0.103 267)",
+          "oklch(51% 0.103 267)",
+          "oklch(63% 0.103 267)",
+          "oklch(75% 0.103 267)",
+          "oklch(85% 0.103 267)",
+          "oklch(95% 0.103 267)"
+        ]
+      },
+      "claude-dark": {
+        "role": "secondary",
+        "displayName": "Claude Clay (dark)",
+        "canonical": "#E79A73",
+        "oklch": "oklch(75.4% 0.107 47)",
+        "tonalRamp": [
+          "oklch(15% 0.107 47)",
+          "oklch(27% 0.107 47)",
+          "oklch(39% 0.107 47)",
+          "oklch(51% 0.107 47)",
+          "oklch(63% 0.107 47)",
+          "oklch(75% 0.107 47)",
+          "oklch(85% 0.107 47)",
+          "oklch(95% 0.107 47)"
+        ]
+      },
+      "user-dark": {
+        "role": "secondary",
+        "displayName": "User Green (dark)",
+        "canonical": "#8ACB94",
+        "oklch": "oklch(78.4% 0.102 148)",
+        "tonalRamp": [
+          "oklch(15% 0.102 148)",
+          "oklch(27% 0.102 148)",
+          "oklch(39% 0.102 148)",
+          "oklch(51% 0.102 148)",
+          "oklch(63% 0.102 148)",
+          "oklch(75% 0.102 148)",
+          "oklch(85% 0.102 148)",
+          "oklch(95% 0.102 148)"
+        ]
+      },
+      "pencil-dark": {
+        "role": "neutral",
+        "displayName": "Graphite Pencil (dark)",
+        "canonical": "#9AA19C",
+        "oklch": "oklch(70.2% 0.011 155)",
+        "tonalRamp": [
+          "oklch(15% 0.011 155)",
+          "oklch(27% 0.011 155)",
+          "oklch(39% 0.011 155)",
+          "oklch(51% 0.011 155)",
+          "oklch(63% 0.011 155)",
+          "oklch(75% 0.011 155)",
+          "oklch(85% 0.011 155)",
+          "oklch(95% 0.011 155)"
+        ]
+      },
+      "tint": {
+        "role": "neutral",
+        "displayName": "Form Tint",
+        "canonical": "color-mix(in srgb, #3D5A4C 7%, #F3F5F1)",
+        "status": "approved by the owner, 2026-10-13"
+      },
+      "chip": {
+        "role": "neutral",
+        "displayName": "Code Chip",
+        "canonical": "color-mix(in srgb, #3D5A4C 10%, transparent)"
+      },
+      "tint-dark": {
+        "role": "neutral",
+        "displayName": "Form Tint (dark)",
+        "canonical": "color-mix(in srgb, #9DB8A9 7%, #121614)",
+        "status": "approved by the owner, 2026-10-13"
+      },
+      "chip-dark": {
+        "role": "neutral",
+        "displayName": "Code Chip (dark)",
+        "canonical": "color-mix(in srgb, #9DB8A9 10%, transparent)"
+      }
+    },
+    "typographyMeta": {
+      "display": {
+        "displayName": "Display",
+        "purpose": "The page title only. Approved by the owner, 2026-10-13."
+      },
+      "headline": {
+        "displayName": "Headline",
+        "purpose": "Each figure heading and each text-section heading. Size approved by the owner, 2026-10-13."
+      },
+      "title": {
+        "displayName": "Title",
+        "purpose": "The product name in the top bar."
+      },
+      "fact-lead": {
+        "displayName": "Fact-lead",
+        "purpose": "The first value of a facts form. Approved by the owner, 2026-10-13."
+      },
+      "band": {
+        "displayName": "Band",
+        "purpose": "Uppercase sub-headings inside plates and text sections, in form."
+      },
+      "label": {
+        "displayName": "Label",
+        "purpose": "Form labels, table heads, figure numbers in the list of figures, button text."
+      },
+      "lane": {
+        "displayName": "Lane",
+        "purpose": "Owner lane names, in owner ink."
+      },
+      "lead": {
+        "displayName": "Lead",
+        "purpose": "The one line under the title, in ink-2. Approved by the owner, 2026-10-13."
+      },
+      "body": {
+        "displayName": "Body",
+        "purpose": "Prose and lists, 44rem measure, tabular figures."
+      },
+      "caption": {
+        "displayName": "Caption",
+        "purpose": "The text of the caption column."
+      },
+      "body-dense": {
+        "displayName": "Body dense",
+        "purpose": "Text inside plates."
+      },
+      "facts": {
+        "displayName": "Facts",
+        "purpose": "Facts-form rows."
+      },
+      "note": {
+        "displayName": "Note",
+        "purpose": "Sources and limits under a figure, in ink-2."
+      },
+      "mono": {
+        "displayName": "Mono",
+        "purpose": "Inline code, paths, digests."
+      },
+      "mono-block": {
+        "displayName": "Mono block",
+        "purpose": "Command boxes."
+      }
+    },
+    "shadows": [],
+    "rings": [
+      {
+        "name": "selected-ring",
+        "value": "box-shadow: inset 0 0 0 1.5px <border colour>",
+        "purpose": "Selected node, pipeline step, session item, run step. No offset, no blur. Approved by the owner, 2026-10-13."
+      },
+      {
+        "name": "selected-ring-thin",
+        "value": "box-shadow: inset 0 0 0 1px var(--form)",
+        "purpose": "Selected action chip and session moment. Approved by the owner, 2026-10-13."
+      }
+    ],
+    "motion": [
+      {
+        "name": "ease",
+        "value": "cubic-bezier(.16,1,.3,1)",
+        "purpose": "The one easing curve (--ease). Shared with the plan pages."
+      },
+      {
+        "name": "state",
+        "value": "background-color .2s to .25s var(--ease)",
+        "purpose": "Hover and selected state of parts and buttons."
+      },
+      {
+        "name": "travel",
+        "value": "9px square along a line; progress 1 - 2^(-9t); 380 to 640ms a hop (default 640ms)",
+        "purpose": "The travelling mark. One per plate. Approved by the owner, 2026-10-13."
+      },
+      {
+        "name": "travel-reduced",
+        "value": "no mark; the line thickens to 2.4px; 260ms wait; longer pause at each stop",
+        "purpose": "The same steps under prefers-reduced-motion: reduce."
+      },
+      {
+        "name": "land",
+        "value": "translateY(-10px) and opacity 0 to rest; .6s var(--ease)",
+        "purpose": "The flag mark lands on a step of the strength scale. Only under no-preference."
+      },
+      {
+        "name": "arrive",
+        "value": "background color-mix(form 20%) to transparent; 1.4s var(--ease)",
+        "purpose": "A heading reached from the list of figures. Only under no-preference. Approved by the owner, 2026-10-13."
+      },
+      {
+        "name": "smooth-scroll",
+        "value": "scroll-behavior: smooth; auto under reduced motion",
+        "purpose": "Jumps from the list of figures."
+      },
+      {
+        "name": "reduced",
+        "value": "transition-duration: .01ms on every element",
+        "purpose": "prefers-reduced-motion: reduce."
+      }
+    ],
+    "breakpoints": [
+      {
+        "name": "caption-stack",
+        "value": "max-width: 73.75rem",
+        "purpose": "The caption column stacks: heading, plate, body."
+      },
+      {
+        "name": "rail-strip",
+        "value": "max-width: 56.25rem",
+        "purpose": "The list of figures becomes a sticky strip that scrolls sideways."
+      },
+      {
+        "name": "phone",
+        "value": "max-width: 40rem",
+        "purpose": "Plates become one or two columns; tables stack; touch targets are 2.75rem."
+      },
+      {
+        "name": "labels-off",
+        "value": "plate width under 560px (script)",
+        "purpose": "Line labels and some lines are not drawn."
+      }
+    ],
+    "focus": {
+      "value": "outline 2px solid var(--agent); offset 2px; radius 2px"
+    },
+    "keyboard": {
+      "value": "Roving tab stop inside each figure: Tab enters once; arrow keys, Home, End move; the selected part holds the tab stop.",
+      "status": "approved by the owner, 2026-10-13"
+    }
+  },
+  "components": [
+    {
+      "name": "Plate with caption",
+      "kind": "card",
+      "refersTo": "plate",
+      "status": "approved by the owner, 2026-10-13",
+      "description": "A figure: a plate (1px rule border, 2px form top rule) with a control strip, and a caption column with the folded figure number.",
+      "html": "<div class=\"ds-spread\"><div class=\"ds-plate\"><div class=\"ds-stage\"><button class=\"ds-node\" type=\"button\" aria-pressed=\"true\">Release 1.4.3<small>frozen, never edited</small></button></div><div class=\"ds-ctl\"><button class=\"ds-btn\" type=\"button\">Follow one rule</button><p class=\"ds-note\">Solid lines are commands in this repo.</p></div></div><header class=\"ds-cap\"><h2><span class=\"ds-figno\">Fig. 1.</span> The whole system on one page</h2><p>You write the rules once.</p></header></div>",
+      "css": ".ds-spread{background:var(--paper,#F3F5F1);color:var(--ink,#1A1D1B);font:16px/1.6 system-ui,-apple-system,'Segoe UI',Roboto,sans-serif;font-variant-numeric:tabular-nums;display:grid;grid-template-columns:minmax(0,1fr) 16.375rem;column-gap:2.25rem;align-items:start} .ds-plate{border:1px solid var(--rule,#C3CEC6);border-top:2px solid var(--form,#3D5A4C);display:flex;flex-direction:column} .ds-stage{padding:2.1rem 1.75rem 2.2rem;display:grid;justify-items:center} .ds-stage .ds-node{min-width:16rem} .ds-ctl{display:flex;flex-wrap:wrap;align-items:center;gap:.6rem .9rem;border-top:1px solid var(--rule,#C3CEC6);padding:.65rem .9rem} .ds-note{font-size:.8rem;line-height:1.45;color:var(--ink-2,#4A524D);margin:0} .ds-cap h2{font:650 1.625rem/1.15 Archivo,'Arial Narrow','Helvetica Neue',system-ui,sans-serif;font-stretch:80%;margin:0 0 .75rem;text-wrap:balance} .ds-figno{color:var(--form,#3D5A4C)} .ds-cap p{font-size:.97rem;line-height:1.5;margin:0} .ds-node{position:relative;background:var(--paper,#F3F5F1);color:var(--ink,#1A1D1B);border:1.5px solid var(--c,var(--form,#3D5A4C));border-radius:0;min-height:3.5rem;padding:.5rem .55rem;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:.1rem;text-align:center;font:.95rem/1.25 system-ui,-apple-system,'Segoe UI',Roboto,sans-serif;cursor:pointer;transition:background-color .2s cubic-bezier(.16,1,.3,1)} .ds-node small{font-size:.76rem;line-height:1.3;color:var(--ink-2,#4A524D)} .ds-node:hover{background:color-mix(in srgb,var(--form,#3D5A4C) 7%,var(--paper,#F3F5F1))} .ds-node[aria-pressed=true]{background:color-mix(in srgb,var(--form,#3D5A4C) 7%,var(--paper,#F3F5F1));box-shadow:inset 0 0 0 1.5px var(--c,var(--form,#3D5A4C));font-weight:650} .ds-node.ds-pencil{border:1.3px dashed var(--pencil,#646B67);color:var(--pencil,#646B67);font-style:italic} .ds-node.ds-pencil small{color:var(--pencil,#646B67)} .ds-node:focus-visible{outline:2px solid var(--agent,#2B4C9B);outline-offset:2px;border-radius:2px} .ds-btn{font:600 .72rem/1.2 Archivo,'Arial Narrow','Helvetica Neue',system-ui,sans-serif;font-stretch:82%;letter-spacing:.09em;text-transform:uppercase;color:var(--form,#3D5A4C);background:var(--paper,#F3F5F1);border:1px solid var(--form,#3D5A4C);border-radius:2px;padding:.55rem .75rem;min-height:2.25rem;cursor:pointer;transition:background-color .2s cubic-bezier(.16,1,.3,1),color .2s cubic-bezier(.16,1,.3,1)} .ds-btn:hover{background:color-mix(in srgb,var(--form,#3D5A4C) 7%,var(--paper,#F3F5F1))} .ds-btn:active,.ds-btn[aria-pressed=true]{background:var(--form,#3D5A4C);color:var(--paper,#F3F5F1)} .ds-btn:disabled{color:var(--pencil,#646B67);border-color:var(--rule,#C3CEC6);border-style:dashed;cursor:not-allowed;background:var(--paper,#F3F5F1)} .ds-btn:focus-visible{outline:2px solid var(--agent,#2B4C9B);outline-offset:2px;border-radius:2px}"
+    },
+    {
+      "name": "Diagram node",
+      "kind": "custom",
+      "refersTo": "node",
+      "status": "approved by the owner, 2026-10-13",
+      "description": "A part of a figure. Border in the owner ink; selected is the 7 percent form tint with an inset ring; unknown is dashed pencil.",
+      "html": "<div class=\"ds-nodes\"><button class=\"ds-node\" type=\"button\" style=\"--c:var(--user,#2C7038)\">The rules<small>knowledge/core.md</small></button><button class=\"ds-node\" type=\"button\" style=\"--c:var(--claude,#A84F2A)\" aria-pressed=\"true\">Claude Code<small>selected</small></button><button class=\"ds-node\" type=\"button\" style=\"--c:var(--agent,#2B4C9B)\">Codex<small>agent ink</small></button><button class=\"ds-node ds-pencil\" type=\"button\">Spot checks<small>fresh session, logged</small></button></div>",
+      "css": ".ds-nodes{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:1.75rem;padding:1.5rem;background:var(--paper,#F3F5F1)} .ds-node{position:relative;background:var(--paper,#F3F5F1);color:var(--ink,#1A1D1B);border:1.5px solid var(--c,var(--form,#3D5A4C));border-radius:0;min-height:3.5rem;padding:.5rem .55rem;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:.1rem;text-align:center;font:.95rem/1.25 system-ui,-apple-system,'Segoe UI',Roboto,sans-serif;cursor:pointer;transition:background-color .2s cubic-bezier(.16,1,.3,1)} .ds-node small{font-size:.76rem;line-height:1.3;color:var(--ink-2,#4A524D)} .ds-node:hover{background:color-mix(in srgb,var(--form,#3D5A4C) 7%,var(--paper,#F3F5F1))} .ds-node[aria-pressed=true]{background:color-mix(in srgb,var(--form,#3D5A4C) 7%,var(--paper,#F3F5F1));box-shadow:inset 0 0 0 1.5px var(--c,var(--form,#3D5A4C));font-weight:650} .ds-node.ds-pencil{border:1.3px dashed var(--pencil,#646B67);color:var(--pencil,#646B67);font-style:italic} .ds-node.ds-pencil small{color:var(--pencil,#646B67)} .ds-node:focus-visible{outline:2px solid var(--agent,#2B4C9B);outline-offset:2px;border-radius:2px}"
+    },
+    {
+      "name": "Line, arrowhead, and travelling mark",
+      "kind": "custom",
+      "refersTo": "node",
+      "status": "approved by the owner, 2026-10-13",
+      "description": "Diagram grammar, shown still: a 1.3px form line with a 5px arrowhead, a dashed form line for a manual step, a dashed pencil line for a test session, and the 9px mark. In the page a script draws each line from the measured positions of its two parts.",
+      "html": "<svg class=\"ds-wires\" viewBox=\"0 0 360 96\" width=\"360\" height=\"96\" role=\"img\" aria-label=\"Three kinds of line and the mark\"><path class=\"ds-w\" d=\"M20 12V44H110V84\"/><path class=\"ds-head\" d=\"M105 78L110 84L115 78Z\"/><rect class=\"ds-tok\" x=\"60.5\" y=\"39.5\" width=\"9\" height=\"9\"/><path class=\"ds-w ds-manual\" d=\"M150 12V44H220V84\"/><path class=\"ds-head\" d=\"M215 78L220 84L225 78Z\"/><path class=\"ds-w ds-pencil\" d=\"M260 12V44H330V84\"/><path class=\"ds-head ds-pencil\" d=\"M325 78L330 84L335 78Z\"/></svg>",
+      "css": ".ds-wires{background:var(--paper,#F3F5F1);overflow:visible} .ds-w{fill:none;stroke:var(--form,#3D5A4C);stroke-width:1.3} .ds-w.ds-manual{stroke-dasharray:5 4} .ds-w.ds-pencil{stroke:var(--pencil,#646B67);stroke-dasharray:5 4} .ds-head,.ds-tok{fill:var(--form,#3D5A4C)} .ds-head.ds-pencil{fill:var(--pencil,#646B67)}"
+    },
+    {
+      "name": "Button",
+      "kind": "button",
+      "refersTo": "button",
+      "status": "approved by the owner, 2026-10-13",
+      "description": "Label type in form on paper, 1px form border, 2px corners. Pressed fills with form. Disabled is dashed pencil.",
+      "html": "<div class=\"ds-row\"><button class=\"ds-btn\" type=\"button\">Follow one rule</button><button class=\"ds-btn\" type=\"button\" aria-pressed=\"true\">Pressed</button><button class=\"ds-btn\" type=\"button\" disabled>Verify</button></div>",
+      "css": ".ds-row{display:flex;gap:.6rem;padding:1rem;background:var(--paper,#F3F5F1)} .ds-btn{font:600 .72rem/1.2 Archivo,'Arial Narrow','Helvetica Neue',system-ui,sans-serif;font-stretch:82%;letter-spacing:.09em;text-transform:uppercase;color:var(--form,#3D5A4C);background:var(--paper,#F3F5F1);border:1px solid var(--form,#3D5A4C);border-radius:2px;padding:.55rem .75rem;min-height:2.25rem;cursor:pointer;transition:background-color .2s cubic-bezier(.16,1,.3,1),color .2s cubic-bezier(.16,1,.3,1)} .ds-btn:hover{background:color-mix(in srgb,var(--form,#3D5A4C) 7%,var(--paper,#F3F5F1))} .ds-btn:active,.ds-btn[aria-pressed=true]{background:var(--form,#3D5A4C);color:var(--paper,#F3F5F1)} .ds-btn:disabled{color:var(--pencil,#646B67);border-color:var(--rule,#C3CEC6);border-style:dashed;cursor:not-allowed;background:var(--paper,#F3F5F1)} .ds-btn:focus-visible{outline:2px solid var(--agent,#2B4C9B);outline-offset:2px;border-radius:2px}"
+    },
+    {
+      "name": "Command box with copy button",
+      "kind": "button",
+      "refersTo": "copy-button",
+      "status": "approved by the owner, 2026-10-13",
+      "description": "A command in a 1px rule box with the copy button at the top right. The button reads Copy, then Copied.",
+      "html": "<div class=\"ds-cmd\"><pre>npm run harness -- status</pre><button class=\"ds-btn\" type=\"button\" aria-label=\"Copy the command\">Copy</button></div>",
+      "css": ".ds-cmd{position:relative;border:1px solid var(--rule,#C3CEC6);background:var(--paper,#F3F5F1);color:var(--ink,#1A1D1B)} .ds-cmd pre{margin:0;padding:.6rem 4.6rem .6rem .7rem;font:.84rem/1.55 ui-monospace,'SF Mono',Menlo,Consolas,monospace;white-space:pre-wrap;overflow-wrap:anywhere} .ds-cmd .ds-btn{position:absolute;top:.3rem;right:.3rem;min-height:1.9rem;padding:.4rem .55rem} .ds-btn{font:600 .72rem/1.2 Archivo,'Arial Narrow','Helvetica Neue',system-ui,sans-serif;font-stretch:82%;letter-spacing:.09em;text-transform:uppercase;color:var(--form,#3D5A4C);background:var(--paper,#F3F5F1);border:1px solid var(--form,#3D5A4C);border-radius:2px;padding:.55rem .75rem;min-height:2.25rem;cursor:pointer;transition:background-color .2s cubic-bezier(.16,1,.3,1),color .2s cubic-bezier(.16,1,.3,1)} .ds-btn:hover{background:color-mix(in srgb,var(--form,#3D5A4C) 7%,var(--paper,#F3F5F1))} .ds-btn:active,.ds-btn[aria-pressed=true]{background:var(--form,#3D5A4C);color:var(--paper,#F3F5F1)} .ds-btn:disabled{color:var(--pencil,#646B67);border-color:var(--rule,#C3CEC6);border-style:dashed;cursor:not-allowed;background:var(--paper,#F3F5F1)} .ds-btn:focus-visible{outline:2px solid var(--agent,#2B4C9B);outline-offset:2px;border-radius:2px}"
+    },
+    {
+      "name": "Facts form",
+      "kind": "custom",
+      "refersTo": "facts-form",
+      "status": "approved by the owner, 2026-10-13",
+      "description": "The facts for the selected part: a label column and a value column on a 2px form top rule. The first value is fact-lead type.",
+      "html": "<dl class=\"ds-facts\"><dt>Part</dt><dd class=\"ds-big\">Release 1.4.3</dd><dt>What</dt><dd>A numbered, frozen copy of the rules.</dd><dt>Lives in</dt><dd><code>releases/1.4.2/</code></dd><dt>Note</dt><dd>Never edited. A new rule is a new version.</dd></dl>",
+      "css": ".ds-facts{background:var(--paper,#F3F5F1);color:var(--ink,#1A1D1B);font:16px/1.6 system-ui,-apple-system,'Segoe UI',Roboto,sans-serif;font-variant-numeric:tabular-nums;border-top:2px solid var(--form,#3D5A4C);margin:0;padding-top:.7rem;display:grid;grid-template-columns:4.6rem minmax(0,1fr);gap:.5rem .7rem;font-size:.875rem;line-height:1.42;max-width:16.375rem} .ds-facts dt{color:var(--ink-2,#4A524D)} .ds-facts dd{margin:0;min-width:0} .ds-facts dd.ds-big{font-family:Archivo,'Arial Narrow','Helvetica Neue',system-ui,sans-serif;font-stretch:80%;font-weight:650;font-size:1.3rem;line-height:1.15} .ds-facts code{font:.86em/1.5 ui-monospace,'SF Mono',Menlo,Consolas,monospace;background:color-mix(in srgb,var(--form,#3D5A4C) 10%,transparent);padding:.06em .3em;border-radius:3px;overflow-wrap:anywhere}"
+    },
+    {
+      "name": "List of figures",
+      "kind": "nav",
+      "refersTo": "rail-link",
+      "status": "approved by the owner, 2026-10-13",
+      "description": "The contents rail: figure number in label type, then the name. The current entry is form green-grey at weight 650.",
+      "html": "<nav class=\"ds-rail\" aria-label=\"List of figures\"><span class=\"ds-lbl\">List of figures</span><ol><li><a href=\"#\" aria-current=\"true\"><i>Fig. 1</i>The whole system</a></li><li><a href=\"#\"><i></i>Why it exists</a></li><li><a href=\"#\"><i>Fig. 2</i>Advice, ask rule, lock</a></li></ol></nav>",
+      "css": ".ds-rail{background:var(--paper,#F3F5F1);color:var(--ink,#1A1D1B);font:16px/1.6 system-ui,-apple-system,'Segoe UI',Roboto,sans-serif;font-variant-numeric:tabular-nums;width:14.75rem} .ds-lbl{font:600 .72rem/1.2 Archivo,'Arial Narrow','Helvetica Neue',system-ui,sans-serif;font-stretch:82%;letter-spacing:.09em;text-transform:uppercase;color:var(--form,#3D5A4C);display:block;padding-bottom:.5rem;border-bottom:1px solid var(--form,#3D5A4C)} .ds-rail ol{list-style:none;margin:0;padding:0} .ds-rail a{display:flex;gap:.75rem;padding:.56rem 0 .62rem;border-bottom:1px solid var(--rule-2,#DDE4DF);font-size:.9rem;line-height:1.3;color:var(--ink-2,#4A524D);text-decoration:none} .ds-rail a:hover{color:var(--ink,#1A1D1B)} .ds-rail a:focus-visible{outline:2px solid var(--agent,#2B4C9B);outline-offset:2px;border-radius:2px} .ds-rail a i{font:600 .72rem/1.5 Archivo,'Arial Narrow','Helvetica Neue',system-ui,sans-serif;font-stretch:82%;letter-spacing:.06em;text-transform:uppercase;color:var(--form,#3D5A4C);flex:none;width:2.4rem} .ds-rail a[aria-current=true]{color:var(--form,#3D5A4C);font-weight:650}"
+    },
+    {
+      "name": "Table that stacks on a phone",
+      "kind": "custom",
+      "refersTo": "table-head",
+      "status": "approved by the owner, 2026-10-13",
+      "description": "Head in label type on a 1px form rule; the selected row takes the form tint. At 640px and below each row becomes a block and each cell shows its column name.",
+      "html": "<table class=\"ds-tbl\"><thead><tr><th scope=\"col\">Platform</th><th scope=\"col\">By hand</th><th scope=\"col\">Locks</th></tr></thead><tbody><tr class=\"ds-on\"><th scope=\"row\">Claude Code</th><td data-l=\"By hand\">None for the rules.</td><td data-l=\"Locks\">Yes: 27 rules</td></tr><tr><th scope=\"row\">Codex</th><td data-l=\"By hand\">None</td><td data-l=\"Locks\">None yet</td></tr></tbody></table>",
+      "css": ".ds-tbl{background:var(--paper,#F3F5F1);color:var(--ink,#1A1D1B);font:16px/1.6 system-ui,-apple-system,'Segoe UI',Roboto,sans-serif;font-variant-numeric:tabular-nums;width:100%;border-collapse:collapse;font-size:.86rem;line-height:1.4} .ds-tbl th,.ds-tbl td{text-align:left;vertical-align:top;padding:.6rem .6rem .65rem;border-bottom:1px solid var(--rule-2,#DDE4DF)} .ds-tbl thead th{font:600 .72rem/1.25 Archivo,'Arial Narrow','Helvetica Neue',system-ui,sans-serif;font-stretch:82%;letter-spacing:.09em;text-transform:uppercase;color:var(--form,#3D5A4C);border-bottom:1px solid var(--form,#3D5A4C);vertical-align:bottom} .ds-tbl tbody tr:last-child>*{border-bottom:0} .ds-tbl tr.ds-on>*{background:color-mix(in srgb,var(--form,#3D5A4C) 7%,var(--paper,#F3F5F1))} @media (max-width:40rem){.ds-tbl thead{display:none} .ds-tbl tr{display:block;padding:.6rem 0;border-bottom:1px solid var(--rule,#C3CEC6)} .ds-tbl th,.ds-tbl td{display:grid;grid-template-columns:7.2rem minmax(0,1fr);gap:.6rem;border:0;padding:.2rem .5rem} .ds-tbl td::before{content:attr(data-l);font:600 .72rem/1.5 Archivo,'Arial Narrow','Helvetica Neue',system-ui,sans-serif;font-stretch:82%;letter-spacing:.09em;text-transform:uppercase;color:var(--form,#3D5A4C)} .ds-tbl tbody th{display:block;font-size:1rem;padding-bottom:.3rem}}"
+    }
+  ],
+  "narrative": {
+    "northStar": "The Witnessed Notebook, as a figure atlas",
+    "overview": "**Creative North Star: \"The Witnessed Notebook, as a figure atlas\"**\n\nThe page is a book of plates. Nine numbered figures carry the explanation, and the text beside each figure is its caption. The reader selects a part of a figure, and a small form next to it states the facts for that part.\n\nThe paper is flat and cool. Rules and labels are printed in green-grey. Colour names who acts: green for the user, clay for Claude, cobalt for any other agent. Graphite pencil marks what is unknown, manual, or not built. Corners are square. There are no drop shadows.",
+    "keyCharacteristics": [
+      "A list of figures at the left is the contents.",
+      "Each figure is a plate with a caption column.",
+      "The figure number is part of the heading.",
+      "Diagram lines are drawn from where the parts really are.",
+      "One small square travels a line to show one rule in motion.",
+      "Selected parts take a 7 percent form tint and an inset ring.",
+      "Unknowns and manual steps are dashed."
+    ],
+    "rules": [
+      {
+        "name": "The Owner Ink Rule",
+        "body": "An owner ink marks who acts: node borders and lane labels. A node with no owner takes form green-grey. There are three owner inks and no fourth.",
+        "section": "colors"
+      },
+      {
+        "name": "The Pencil Rule",
+        "body": "What is unknown, not observed, or not built is written in pencil, in italics, with a dashed line or border.",
+        "section": "colors"
+      },
+      {
+        "name": "The No Margin Rule",
+        "body": "This surface has no margin rule. Margin pink-red is not a token here. (The owner, 2026-10-12.)",
+        "section": "colors"
+      },
+      {
+        "name": "The Folded Number Rule",
+        "body": "A figure heading reads \"Fig. N.\" and then its title, in one heading. The number is in form green-grey. No label sits above a heading. Approved by the owner, 2026-10-13.",
+        "section": "typography"
+      },
+      {
+        "name": "The Form Label Rule",
+        "body": "A label names a form field or is the heading of its block. It is never stacked above a heading that already names the block.",
+        "section": "typography"
+      },
+      {
+        "name": "The Tabular Rule",
+        "body": "Figures stay tabular (`font-variant-numeric: tabular-nums` on body).",
+        "section": "typography"
+      },
+      {
+        "name": "The Flat Paper Rule",
+        "body": "No drop shadows. A tint is a state, not a panel: form tint marks hover, selected, and the current table row. The only resting tint is the inline code chip.",
+        "section": "elevation"
+      },
+      {
+        "name": "The Inset Ring Rule",
+        "body": "A selected part takes the form tint and an inset ring in its own border colour (1px or 1.5px, `box-shadow: inset`). The ring has no offset and no blur. Approved by the owner, 2026-10-13.",
+        "section": "elevation"
+      }
+    ],
+    "dos": [
+      "**Do** open every plate with a 2px form top rule and a 1px rule border.",
+      "**Do** fold the figure number into the heading: \"Fig. N.\" in form, then the title.",
+      "**Do** colour a node border by its owner; use form when there is no owner.",
+      "**Do** draw every diagram line from the measured position of its two parts.",
+      "**Do** dash what is manual, and write what is unknown or not built in pencil.",
+      "**Do** show selection with the form tint and an inset ring, and say it in `aria-pressed`.",
+      "**Do** keep each plate to one travelling mark, and stop the travel under reduced motion.",
+      "**Do** put a facts form next to each interactive figure.",
+      "**Do** keep text at AA contrast on paper in both themes."
+    ],
+    "donts": [
+      "**Don't** add a margin rule or margin pink-red to this surface.",
+      "**Don't** add drop shadows, gradients, or rounded panels.",
+      "**Don't** fill a resting panel with a tint; a tint means hover, selected, or current.",
+      "**Don't** stack a label above a heading as a kicker.",
+      "**Don't** add a fourth owner ink; any owner that is not Claude or the user is agent.",
+      "**Don't** make content reachable by motion or hover alone."
+    ]
+  }
+}

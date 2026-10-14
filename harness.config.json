@@ -1,0 +1,11 @@
+{
+  "schemaVersion": 1,
+  "notionVersion": "2022-06-28",
+  "core": "knowledge/core.md",
+  "coreNotionPageId": "3e609576726d81d3ac0df21841f388a4",
+  "documents": [
+    {"id":"engineering", "title":"First-principles engineering", "path":"knowledge/references/engineering.md", "domain":"engineering", "notionPageId":"3c609576726d81458959fbe1e06845ff", "sourceUrl":"https://app.notion.com/p/3c609576726d81458959fbe1e06845ff"},
+    {"id":"agent-design", "title":"AI agent system design", "path":"knowledge/references/agent-design.md", "domain":"engineering", "notionPageId":"3c609576726d81d3b381ddda93c75eae", "sourceUrl":"https://app.notion.com/p/3c609576726d81d3b381ddda93c75eae"},
+    {"id":"pragmatic", "title":"Pragmatic engineering and tracer bullets", "path":"knowledge/references/pragmatic.md", "domain":"engineering", "notionPageId":"3e609576726d81bbba98cea9884a1412", "sourceUrl":"https://app.notion.com/p/3e609576726d81bbba98cea9884a1412"}
+  ]
+}

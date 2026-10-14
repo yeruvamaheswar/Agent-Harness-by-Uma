@@ -1,0 +1,21 @@
+{
+  "schemaVersion": 1,
+  "id": "yeruvamaheswar/testing-basics",
+  "name": "Testing basics",
+  "category": "testing",
+  "version": "1.0.0",
+  "author": {
+    "name": "yeruvamaheswar",
+    "github": "yeruvamaheswar"
+  },
+  "license": "CC-BY-4.0",
+  "description": "General rules for reproducing bugs, testing real boundaries, isolating test state, and reporting results honestly.",
+  "minHarness": "1.0.0",
+  "platforms": [
+    "codex",
+    "claude",
+    "cursor",
+    "generic"
+  ],
+  "digest": "1ef177f607e6288058ac122a2311597cbdaab7d0d3090bb639569c253d2a640f"
+}

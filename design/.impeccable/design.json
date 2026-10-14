@@ -1,0 +1,569 @@
+{
+  "schemaVersion": 2,
+  "generatedAt": "2026-10-06T12:00:00-05:00",
+  "title": "Design System: md-view plan page",
+  "extensions": {
+    "source": {
+      "built": "md-view.template.html",
+      "promotedFrom": "md-view.template.sample.html",
+      "promoted": "2026-10-06",
+      "backup": "md-view.template.v1.html",
+      "note": "Live template, plain CSS."
+    },
+    "colorMeta": {
+      "paper": {
+        "role": "neutral",
+        "displayName": "Cool Paper",
+        "canonical": "#F3F5F1",
+        "oklch": "oklch(96.8% 0.006 129)",
+        "tonalRamp": [
+          "oklch(15% 0.006 129)",
+          "oklch(27% 0.006 129)",
+          "oklch(39% 0.006 129)",
+          "oklch(51% 0.006 129)",
+          "oklch(63% 0.006 129)",
+          "oklch(75% 0.006 129)",
+          "oklch(85% 0.006 129)",
+          "oklch(95% 0.006 129)"
+        ]
+      },
+      "ink": {
+        "role": "neutral",
+        "displayName": "Ink",
+        "canonical": "#1A1D1B",
+        "oklch": "oklch(22.7% 0.006 157)",
+        "tonalRamp": [
+          "oklch(15% 0.006 157)",
+          "oklch(27% 0.006 157)",
+          "oklch(39% 0.006 157)",
+          "oklch(51% 0.006 157)",
+          "oklch(63% 0.006 157)",
+          "oklch(75% 0.006 157)",
+          "oklch(85% 0.006 157)",
+          "oklch(95% 0.006 157)"
+        ]
+      },
+      "ink-2": {
+        "role": "neutral",
+        "displayName": "Ink Two",
+        "canonical": "#4A524D",
+        "oklch": "oklch(43.0% 0.013 158)",
+        "tonalRamp": [
+          "oklch(15% 0.013 158)",
+          "oklch(27% 0.013 158)",
+          "oklch(39% 0.013 158)",
+          "oklch(51% 0.013 158)",
+          "oklch(63% 0.013 158)",
+          "oklch(75% 0.013 158)",
+          "oklch(85% 0.013 158)",
+          "oklch(95% 0.013 158)"
+        ]
+      },
+      "form": {
+        "role": "primary",
+        "displayName": "Form Green-Grey",
+        "canonical": "#3D5A4C",
+        "oklch": "oklch(44.0% 0.042 163)",
+        "tonalRamp": [
+          "oklch(15% 0.042 163)",
+          "oklch(27% 0.042 163)",
+          "oklch(39% 0.042 163)",
+          "oklch(51% 0.042 163)",
+          "oklch(63% 0.042 163)",
+          "oklch(75% 0.042 163)",
+          "oklch(85% 0.042 163)",
+          "oklch(95% 0.042 163)"
+        ]
+      },
+      "rule": {
+        "role": "neutral",
+        "displayName": "Rule",
+        "canonical": "#C3CEC6",
+        "oklch": "oklch(84.1% 0.016 154)",
+        "tonalRamp": [
+          "oklch(15% 0.016 154)",
+          "oklch(27% 0.016 154)",
+          "oklch(39% 0.016 154)",
+          "oklch(51% 0.016 154)",
+          "oklch(63% 0.016 154)",
+          "oklch(75% 0.016 154)",
+          "oklch(85% 0.016 154)",
+          "oklch(95% 0.016 154)"
+        ]
+      },
+      "rule-2": {
+        "role": "neutral",
+        "displayName": "Faint Rule",
+        "canonical": "#DDE4DF",
+        "oklch": "oklch(91.2% 0.010 155)",
+        "tonalRamp": [
+          "oklch(15% 0.010 155)",
+          "oklch(27% 0.010 155)",
+          "oklch(39% 0.010 155)",
+          "oklch(51% 0.010 155)",
+          "oklch(63% 0.010 155)",
+          "oklch(75% 0.010 155)",
+          "oklch(85% 0.010 155)",
+          "oklch(95% 0.010 155)"
+        ]
+      },
+      "margin": {
+        "role": "tertiary",
+        "displayName": "Margin Pink-Red",
+        "canonical": "#D9827A",
+        "oklch": "oklch(69.7% 0.109 26)",
+        "tonalRamp": [
+          "oklch(15% 0.109 26)",
+          "oklch(27% 0.109 26)",
+          "oklch(39% 0.109 26)",
+          "oklch(51% 0.109 26)",
+          "oklch(63% 0.109 26)",
+          "oklch(75% 0.109 26)",
+          "oklch(85% 0.109 26)",
+          "oklch(95% 0.109 26)"
+        ]
+      },
+      "agent": {
+        "role": "secondary",
+        "displayName": "Agent Cobalt",
+        "canonical": "#2B4C9B",
+        "oklch": "oklch(43.7% 0.135 264)",
+        "tonalRamp": [
+          "oklch(15% 0.135 264)",
+          "oklch(27% 0.135 264)",
+          "oklch(39% 0.135 264)",
+          "oklch(51% 0.135 264)",
+          "oklch(63% 0.135 264)",
+          "oklch(75% 0.135 264)",
+          "oklch(85% 0.135 264)",
+          "oklch(95% 0.135 264)"
+        ]
+      },
+      "claude": {
+        "role": "secondary",
+        "displayName": "Claude Clay",
+        "canonical": "#A84F2A",
+        "oklch": "oklch(53.3% 0.128 42)",
+        "tonalRamp": [
+          "oklch(15% 0.128 42)",
+          "oklch(27% 0.128 42)",
+          "oklch(39% 0.128 42)",
+          "oklch(51% 0.128 42)",
+          "oklch(63% 0.128 42)",
+          "oklch(75% 0.128 42)",
+          "oklch(85% 0.128 42)",
+          "oklch(95% 0.128 42)"
+        ]
+      },
+      "user": {
+        "role": "secondary",
+        "displayName": "User Green",
+        "canonical": "#2C7038",
+        "oklch": "oklch(48.7% 0.111 147)",
+        "tonalRamp": [
+          "oklch(15% 0.111 147)",
+          "oklch(27% 0.111 147)",
+          "oklch(39% 0.111 147)",
+          "oklch(51% 0.111 147)",
+          "oklch(63% 0.111 147)",
+          "oklch(75% 0.111 147)",
+          "oklch(85% 0.111 147)",
+          "oklch(95% 0.111 147)"
+        ]
+      },
+      "pencil": {
+        "role": "neutral",
+        "displayName": "Graphite Pencil",
+        "canonical": "#646B67",
+        "oklch": "oklch(52.0% 0.011 161)",
+        "tonalRamp": [
+          "oklch(15% 0.011 161)",
+          "oklch(27% 0.011 161)",
+          "oklch(39% 0.011 161)",
+          "oklch(51% 0.011 161)",
+          "oklch(63% 0.011 161)",
+          "oklch(75% 0.011 161)",
+          "oklch(85% 0.011 161)",
+          "oklch(95% 0.011 161)"
+        ]
+      },
+      "paper-dark": {
+        "role": "neutral",
+        "displayName": "Cool Paper (dark)",
+        "canonical": "#121614",
+        "oklch": "oklch(19.5% 0.007 164)",
+        "tonalRamp": [
+          "oklch(15% 0.007 164)",
+          "oklch(27% 0.007 164)",
+          "oklch(39% 0.007 164)",
+          "oklch(51% 0.007 164)",
+          "oklch(63% 0.007 164)",
+          "oklch(75% 0.007 164)",
+          "oklch(85% 0.007 164)",
+          "oklch(95% 0.007 164)"
+        ]
+      },
+      "ink-dark": {
+        "role": "neutral",
+        "displayName": "Ink (dark)",
+        "canonical": "#E5E9E6",
+        "oklch": "oklch(93.0% 0.006 154)",
+        "tonalRamp": [
+          "oklch(15% 0.006 154)",
+          "oklch(27% 0.006 154)",
+          "oklch(39% 0.006 154)",
+          "oklch(51% 0.006 154)",
+          "oklch(63% 0.006 154)",
+          "oklch(75% 0.006 154)",
+          "oklch(85% 0.006 154)",
+          "oklch(95% 0.006 154)"
+        ]
+      },
+      "ink-2-dark": {
+        "role": "neutral",
+        "displayName": "Ink Two (dark)",
+        "canonical": "#A9B2AC",
+        "oklch": "oklch(75.5% 0.013 157)",
+        "tonalRamp": [
+          "oklch(15% 0.013 157)",
+          "oklch(27% 0.013 157)",
+          "oklch(39% 0.013 157)",
+          "oklch(51% 0.013 157)",
+          "oklch(63% 0.013 157)",
+          "oklch(75% 0.013 157)",
+          "oklch(85% 0.013 157)",
+          "oklch(95% 0.013 157)"
+        ]
+      },
+      "form-dark": {
+        "role": "primary",
+        "displayName": "Form Green-Grey (dark)",
+        "canonical": "#9DB8A9",
+        "oklch": "oklch(75.8% 0.036 161)",
+        "tonalRamp": [
+          "oklch(15% 0.036 161)",
+          "oklch(27% 0.036 161)",
+          "oklch(39% 0.036 161)",
+          "oklch(51% 0.036 161)",
+          "oklch(63% 0.036 161)",
+          "oklch(75% 0.036 161)",
+          "oklch(85% 0.036 161)",
+          "oklch(95% 0.036 161)"
+        ]
+      },
+      "rule-dark": {
+        "role": "neutral",
+        "displayName": "Rule (dark)",
+        "canonical": "#34403A",
+        "oklch": "oklch(35.9% 0.019 164)",
+        "tonalRamp": [
+          "oklch(15% 0.019 164)",
+          "oklch(27% 0.019 164)",
+          "oklch(39% 0.019 164)",
+          "oklch(51% 0.019 164)",
+          "oklch(63% 0.019 164)",
+          "oklch(75% 0.019 164)",
+          "oklch(85% 0.019 164)",
+          "oklch(95% 0.019 164)"
+        ]
+      },
+      "rule-2-dark": {
+        "role": "neutral",
+        "displayName": "Faint Rule (dark)",
+        "canonical": "#232B27",
+        "oklch": "oklch(28.0% 0.013 164)",
+        "tonalRamp": [
+          "oklch(15% 0.013 164)",
+          "oklch(27% 0.013 164)",
+          "oklch(39% 0.013 164)",
+          "oklch(51% 0.013 164)",
+          "oklch(63% 0.013 164)",
+          "oklch(75% 0.013 164)",
+          "oklch(85% 0.013 164)",
+          "oklch(95% 0.013 164)"
+        ]
+      },
+      "margin-dark": {
+        "role": "tertiary",
+        "displayName": "Margin Pink-Red (dark)",
+        "canonical": "#9A5048",
+        "oklch": "oklch(51.9% 0.100 27)",
+        "tonalRamp": [
+          "oklch(15% 0.100 27)",
+          "oklch(27% 0.100 27)",
+          "oklch(39% 0.100 27)",
+          "oklch(51% 0.100 27)",
+          "oklch(63% 0.100 27)",
+          "oklch(75% 0.100 27)",
+          "oklch(85% 0.100 27)",
+          "oklch(95% 0.100 27)"
+        ]
+      },
+      "agent-dark": {
+        "role": "secondary",
+        "displayName": "Agent Cobalt (dark)",
+        "canonical": "#93AEF2",
+        "oklch": "oklch(75.7% 0.103 267)",
+        "tonalRamp": [
+          "oklch(15% 0.103 267)",
+          "oklch(27% 0.103 267)",
+          "oklch(39% 0.103 267)",
+          "oklch(51% 0.103 267)",
+          "oklch(63% 0.103 267)",
+          "oklch(75% 0.103 267)",
+          "oklch(85% 0.103 267)",
+          "oklch(95% 0.103 267)"
+        ]
+      },
+      "claude-dark": {
+        "role": "secondary",
+        "displayName": "Claude Clay (dark)",
+        "canonical": "#E79A73",
+        "oklch": "oklch(75.4% 0.107 47)",
+        "tonalRamp": [
+          "oklch(15% 0.107 47)",
+          "oklch(27% 0.107 47)",
+          "oklch(39% 0.107 47)",
+          "oklch(51% 0.107 47)",
+          "oklch(63% 0.107 47)",
+          "oklch(75% 0.107 47)",
+          "oklch(85% 0.107 47)",
+          "oklch(95% 0.107 47)"
+        ]
+      },
+      "user-dark": {
+        "role": "secondary",
+        "displayName": "User Green (dark)",
+        "canonical": "#8ACB94",
+        "oklch": "oklch(78.4% 0.102 148)",
+        "tonalRamp": [
+          "oklch(15% 0.102 148)",
+          "oklch(27% 0.102 148)",
+          "oklch(39% 0.102 148)",
+          "oklch(51% 0.102 148)",
+          "oklch(63% 0.102 148)",
+          "oklch(75% 0.102 148)",
+          "oklch(85% 0.102 148)",
+          "oklch(95% 0.102 148)"
+        ]
+      },
+      "pencil-dark": {
+        "role": "neutral",
+        "displayName": "Graphite Pencil (dark)",
+        "canonical": "#9AA19C",
+        "oklch": "oklch(70.2% 0.011 155)",
+        "tonalRamp": [
+          "oklch(15% 0.011 155)",
+          "oklch(27% 0.011 155)",
+          "oklch(39% 0.011 155)",
+          "oklch(51% 0.011 155)",
+          "oklch(63% 0.011 155)",
+          "oklch(75% 0.011 155)",
+          "oklch(85% 0.011 155)",
+          "oklch(95% 0.011 155)"
+        ]
+      }
+    },
+    "typographyMeta": {
+      "display": {
+        "displayName": "Display",
+        "purpose": "The current step's text in Steps, in order, only."
+      },
+      "headline": {
+        "displayName": "Headline",
+        "purpose": "Section openers."
+      },
+      "title": {
+        "displayName": "Title",
+        "purpose": "Page title in the header strip."
+      },
+      "body": {
+        "displayName": "Body",
+        "purpose": "Prose and lists, 72ch measure, tabular figures."
+      },
+      "body-dense": {
+        "displayName": "Body dense",
+        "purpose": "Step rows and unknown rows."
+      },
+      "note": {
+        "displayName": "Note",
+        "purpose": "Slice cards, sources, hints, counts, footer, in ink-2."
+      },
+      "band": {
+        "displayName": "Band",
+        "purpose": "Uppercase progress-board headings on a 2px form rule."
+      },
+      "label": {
+        "displayName": "Label",
+        "purpose": "Uppercase form labels, ### headings, card numbers, the NOW tag, in form green-grey."
+      },
+      "lane": {
+        "displayName": "Lane",
+        "purpose": "Owner lane labels, in owner ink."
+      },
+      "mono": {
+        "displayName": "Mono",
+        "purpose": "Code blocks, inline code, page hash."
+      }
+    },
+    "shadows": [],
+    "motion": [
+      {
+        "name": "flag-land",
+        "value": "transform translateX(-14px) to none; .7s cubic-bezier(.16,1,.3,1) .15s both",
+        "purpose": "Now flag lands in the margin on load. Only under prefers-reduced-motion: no-preference."
+      },
+      {
+        "name": "arrival-ink",
+        "value": "background color-mix(margin 22%) to transparent; 1.4s cubic-bezier(.16,1,.3,1)",
+        "purpose": "Section opener inks when reached from contents."
+      },
+      {
+        "name": "smooth-scroll",
+        "value": "scroll-behavior: smooth",
+        "purpose": "Contents jumps. Only under prefers-reduced-motion: no-preference."
+      }
+    ],
+    "breakpoints": [
+      {
+        "name": "stack",
+        "value": "max-width: 1023px",
+        "purpose": "Contents becomes a wrapping row."
+      },
+      {
+        "name": "mobile",
+        "value": "max-width: 719px",
+        "purpose": "Gutter 1.6rem; header 3 columns; slice map two cards per row; step rows and facts stack with inline labels."
+      },
+      {
+        "name": "lanes-vertical",
+        "value": "max-width: 640px (script)",
+        "purpose": "Loop lanes become columns with a vertical elbow wire."
+      }
+    ],
+    "focus": {
+      "value": "outline 2px solid var(--agent); offset 2px; radius 2px"
+    }
+  },
+  "components": [
+    {
+      "name": "Header Strip",
+      "kind": "nav",
+      "refersTo": "header-strip",
+      "description": "Printed form strip: labelled cells for kind, title, status, date, entries, page hash.",
+      "html": "<header class=\"ds-head\"><div><span class=\"ds-lbl\">Kind</span><div class=\"ds-val\">Plan</div></div><div><span class=\"ds-lbl\">Title</span><h1 class=\"ds-h1\">Context diet</h1></div><div><span class=\"ds-lbl\">Entries done</span><div class=\"ds-val\">4 of 9</div></div><div><span class=\"ds-lbl\">Page</span><div class=\"ds-val ds-hash\">c42ba9325e16</div></div></header>",
+      "css": ".ds-head{display:grid;grid-template-columns:auto minmax(0,1fr) auto auto;border:1px solid var(--form,#3D5A4C);border-top-width:2px;background:var(--paper,#F3F5F1);color:var(--ink,#1A1D1B);font:16px/1.6 system-ui,-apple-system,'Segoe UI',Roboto,sans-serif;font-variant-numeric:tabular-nums} .ds-head>div{padding:.55rem 1rem .7rem;border-left:1px solid var(--rule,#C3CEC6)} .ds-head>div:first-child{border-left:0} .ds-lbl{font:600 .72rem/1.2 Archivo,system-ui,sans-serif;font-stretch:82%;letter-spacing:.09em;text-transform:uppercase;color:var(--form,#3D5A4C);} .ds-val{margin-top:.3rem;font-size:.95rem;line-height:1.3;white-space:nowrap} .ds-h1{margin:.3rem 0 0;font:650 1.2rem/1.25 Archivo,system-ui,sans-serif;font-stretch:85%;letter-spacing:-.005em} .ds-hash{font-family:ui-monospace,'SF Mono',Menlo,Consolas,monospace;font-size:.85rem}"
+    },
+    {
+      "name": "Loop Step Frame",
+      "kind": "custom",
+      "refersTo": "step-frame",
+      "description": "A loop step on its owner lane: static owner label in lane type, owner-ink frame on paper over a dashed lane rule, joined by a form elbow wire.",
+      "html": "<div class=\"ds-lanerow\"><span class=\"ds-lane\">Agent<span class=\"ds-turn\">has the next step</span></span><span class=\"ds-rule\"></span><div class=\"ds-step ds-ag\"><span class=\"ds-no\">Step 1</span><span class=\"ds-nm\">Edit the .md</span></div><div class=\"ds-step ds-ag\"><span class=\"ds-no\">Step 2</span><span class=\"ds-nm\">Rebuild the page</span></div></div>",
+      "css": ".ds-lanerow{position:relative;display:flex;gap:1.6rem;align-items:center;padding:.6rem 0;background:var(--paper,#F3F5F1);font:16px/1.6 system-ui,-apple-system,'Segoe UI',Roboto,sans-serif} .ds-rule{position:absolute;left:0;right:0;top:50%;border-top:1px dashed var(--rule,#C3CEC6)} .ds-step{position:relative;z-index:1;background:var(--paper,#F3F5F1);border:1px solid currentColor;padding:.35rem .5rem .4rem;font-size:.84rem;line-height:1.25;min-width:7rem} .ds-ag{color:var(--agent,#2B4C9B)} .ds-no{display:block;font:650 .72rem/1.2 Archivo,system-ui,sans-serif;letter-spacing:.06em;color:var(--form,#3D5A4C)} .ds-nm{color:var(--ink,#1A1D1B)} .ds-lane{position:relative;z-index:1;background:var(--paper,#F3F5F1);width:5.5rem;flex:none;font:650 .78rem/1.2 Archivo,system-ui,sans-serif;font-stretch:85%;letter-spacing:.06em;text-transform:uppercase;padding:.3rem 0;color:var(--agent,#2B4C9B)} .ds-turn{display:block;font:500 .74rem/1.2 system-ui,-apple-system,'Segoe UI',Roboto,sans-serif;letter-spacing:0;text-transform:none;color:var(--ink-2,#4A524D)}"
+    },
+    {
+      "name": "Slice Map",
+      "kind": "custom",
+      "refersTo": "slice-card",
+      "description": "Signature: numbered cards joined by form arrows; done struck and shaded, now in a 2px owner-ink border, todo dashed.",
+      "html": "<div class=\"ds-board\"><h2 class=\"ds-band\"><span>Slice map</span><span class=\"ds-n\">1 of 3 done</span></h2><ol class=\"ds-smap\"><li class=\"ds-sm ds-done\"><a href=\"#\"><span class=\"ds-smn\">1</span><span class=\"ds-smt\">Build md-view.sh</span><span class=\"ds-smo ds-ag\">agent</span></a></li><li class=\"ds-sm ds-now ds-cl\"><a href=\"#\"><span class=\"ds-smn\">2 · now</span><span class=\"ds-smt\">Promote the template</span><span class=\"ds-smo\">Claude</span></a></li><li class=\"ds-sm ds-todo\"><a href=\"#\"><span class=\"ds-smn\">3</span><span class=\"ds-smt\">Approve in chat</span><span class=\"ds-smo ds-us\">user</span></a></li></ol></div>",
+      "css": ".ds-board{background:var(--paper,#F3F5F1);color:var(--ink,#1A1D1B);font:16px/1.6 system-ui,-apple-system,'Segoe UI',Roboto,sans-serif;font-variant-numeric:tabular-nums} .ds-band{display:flex;justify-content:space-between;align-items:baseline;margin:0;padding:.45rem 0 .35rem;border-top:2px solid var(--form,#3D5A4C);font:700 .95rem/1.2 Archivo,system-ui,sans-serif;font-stretch:80%;letter-spacing:.06em;text-transform:uppercase;color:var(--form,#3D5A4C)} .ds-band .ds-n{font:500 .8rem system-ui,-apple-system,'Segoe UI',Roboto,sans-serif;letter-spacing:0;text-transform:none;color:var(--ink-2,#4A524D)} .ds-smap{list-style:none;margin:.7rem 0 .4rem;padding:0;display:flex;flex-wrap:wrap;gap:.8rem 1.5rem} .ds-sm{position:relative;width:8.75rem} .ds-sm:not(:last-child)::after{content:'';position:absolute;top:50%;right:-1.2rem;width:.95rem;border-top:1px solid var(--form,#3D5A4C)} .ds-sm:not(:last-child)::before{content:'';position:absolute;top:calc(50% - 4px);right:-1.25rem;border:4px solid transparent;border-left:5px solid var(--form,#3D5A4C);border-right:0} .ds-sm a{display:grid;align-content:start;gap:.2rem;height:100%;padding:.45rem .6rem .5rem;border:1px solid var(--rule,#C3CEC6);color:var(--ink,#1A1D1B);text-decoration:none;font-size:.8rem;line-height:1.3} .ds-sm a:hover{border-color:var(--form,#3D5A4C)} .ds-sm a:focus-visible{outline:2px solid var(--agent,#2B4C9B);outline-offset:2px;border-radius:2px} .ds-smn{font:650 .72rem/1.2 Archivo,system-ui,sans-serif;letter-spacing:.05em;text-transform:uppercase;color:var(--form,#3D5A4C)} .ds-smt{display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden} .ds-smo{font-size:.72rem} .ds-done a{background:color-mix(in srgb,var(--form,#3D5A4C) 7%,transparent)} .ds-done .ds-smt{text-decoration:line-through;text-decoration-color:var(--ink-2,#4A524D);color:var(--ink-2,#4A524D)} .ds-todo a{border-style:dashed;border-color:var(--form,#3D5A4C)} .ds-now a{border:2px solid currentColor} .ds-now .ds-smn{color:currentColor} .ds-cl{color:var(--claude,#A84F2A)} .ds-ag{color:var(--agent,#2B4C9B)} .ds-us{color:var(--user,#2C7038)}"
+    },
+    {
+      "name": "Steps, in order",
+      "kind": "custom",
+      "refersTo": "ledger-row",
+      "description": "One numbered stack; done struck in ink-2, the current step in display type with a NOW tag and a margin flag.",
+      "html": "<div class=\"ds-sheet\"><h2 class=\"ds-band\"><span>Steps, in order</span><span class=\"ds-n\">struck = done</span></h2><ol class=\"ds-ledger\"><li class=\"ds-row ds-done\"><span class=\"ds-m ds-f\"><svg viewBox=\"0 0 16 16\" width=\"16\" height=\"16\" aria-hidden=\"true\"><rect x=\"2\" y=\"2\" width=\"12\" height=\"12\" rx=\"1\" fill=\"currentColor\"/><path d=\"M5 8.3l2.1 2.1L11.2 5.8\" fill=\"none\" stroke=\"#F3F5F1\" stroke-width=\"1.7\" stroke-linecap=\"round\" stroke-linejoin=\"round\"/></svg></span><span class=\"ds-t\"><span class=\"ds-num\">1.</span><span class=\"ds-tx\">Build md-view.sh</span></span><span class=\"ds-c ds-ag\">agent</span><span class=\"ds-c\">--check prints fresh</span><span class=\"ds-c\">none</span></li><li class=\"ds-row ds-next\"><span class=\"ds-m ds-fl ds-cl\"><svg viewBox=\"0 0 20 20\" width=\"20\" height=\"20\" aria-hidden=\"true\"><path d=\"M4 2v16\" stroke=\"currentColor\" stroke-width=\"1.7\" stroke-linecap=\"round\"/><path d=\"M4.8 3h11.4l-3.3 4 3.3 4H4.8z\" fill=\"currentColor\"/></svg></span><span class=\"ds-t\"><span class=\"ds-num\">2.</span><span class=\"ds-tx\">Promote the template</span><span class=\"ds-tag\">Now</span></span><span class=\"ds-c ds-cl\">Claude</span><span class=\"ds-c\">page renders</span><span class=\"ds-c\">restore v1</span></li><li class=\"ds-row\"><span class=\"ds-m ds-us\"><svg viewBox=\"0 0 16 16\" width=\"16\" height=\"16\" aria-hidden=\"true\"><rect x=\"2.5\" y=\"2.5\" width=\"11\" height=\"11\" rx=\"1\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.5\"/></svg></span><span class=\"ds-t\"><span class=\"ds-num\">3.</span><span class=\"ds-tx\">Approve in chat</span></span><span class=\"ds-c ds-us\">user</span><span class=\"ds-c\">approved</span><span class=\"ds-c\">keep sample</span></li></ol></div>",
+      "css": ".ds-sheet{position:relative;padding-left:4rem;background:var(--paper,#F3F5F1);color:var(--ink,#1A1D1B);font:16px/1.6 system-ui,-apple-system,'Segoe UI',Roboto,sans-serif;font-variant-numeric:tabular-nums} .ds-sheet::before{content:'';position:absolute;top:0;bottom:0;left:2.75rem;width:1.5px;background:var(--margin,#D9827A)} .ds-band{display:flex;justify-content:space-between;align-items:baseline;margin:0;padding:.45rem 0 .35rem;border-top:2px solid var(--form,#3D5A4C);font:700 .95rem/1.2 Archivo,system-ui,sans-serif;font-stretch:80%;letter-spacing:.06em;text-transform:uppercase;color:var(--form,#3D5A4C)} .ds-band .ds-n{font:500 .8rem system-ui,-apple-system,'Segoe UI',Roboto,sans-serif;letter-spacing:0;text-transform:none;color:var(--ink-2,#4A524D)} .ds-ledger{list-style:none;margin:0;padding:0} .ds-row{position:relative;display:grid;grid-template-columns:minmax(0,1.6fr) 6.5rem minmax(0,1fr) minmax(0,1fr);gap:.2rem 1.25rem;padding:.6rem 0 .65rem;border-bottom:1px solid var(--rule-2,#DDE4DF);font-size:.95rem;line-height:1.45} .ds-m{position:absolute;left:calc(-4rem + 1.375rem - 8px);top:.75rem;width:16px;height:16px} .ds-fl{left:calc(-4rem + 1.375rem - 10px);width:20px;height:20px} @media (prefers-reduced-motion:no-preference){.ds-fl{animation:ds-land .7s cubic-bezier(.16,1,.3,1) .15s both}} @keyframes ds-land{from{transform:translateX(-14px)}to{transform:none}} .ds-num{margin-right:.4rem;color:var(--ink-2,#4A524D)} .ds-c{font-size:.85rem;color:var(--ink-2,#4A524D)} .ds-done .ds-t{color:var(--ink-2,#4A524D)} .ds-done .ds-tx{text-decoration:line-through;text-decoration-color:var(--ink-2,#4A524D)} .ds-next .ds-t{font-weight:600} .ds-next .ds-tx{font:640 1.35rem/1.2 Archivo,system-ui,sans-serif;font-stretch:80%} .ds-tag{margin-left:.6rem;padding:.05rem .4rem;border:1px solid currentColor;font:650 .72rem/1.4 Archivo,system-ui,sans-serif;letter-spacing:.06em;text-transform:uppercase;vertical-align:.2em} .ds-f{color:var(--form,#3D5A4C)} .ds-cl{color:var(--claude,#A84F2A)} .ds-ag{color:var(--agent,#2B4C9B)} .ds-us{color:var(--user,#2C7038)}"
+    },
+    {
+      "name": "Not Yet Confirmed",
+      "kind": "card",
+      "refersTo": "band",
+      "description": "Band with count, a one-line hint, then pencil-marked unknowns with their source section.",
+      "html": "<div class=\"ds-board\"><h2 class=\"ds-band\"><span>Not yet confirmed</span><span class=\"ds-n\">1</span></h2><p class=\"ds-hint\">Facts the plan relies on that nobody has checked yet.</p><ul class=\"ds-ul\"><li><span class=\"ds-pc\"><svg viewBox=\"0 0 16 16\" width=\"14\" height=\"14\" aria-hidden=\"true\"><circle cx=\"8\" cy=\"8\" r=\"6.3\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.3\" stroke-dasharray=\"2.2 1.7\"/><path d=\"M6.2 6.3a1.9 1.9 0 1 1 2.6 1.8c-.5.2-.8.6-.8 1.1v.4\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.3\" stroke-linecap=\"round\"/><circle cx=\"8\" cy=\"11.6\" r=\".85\" fill=\"currentColor\"/></svg></span><span>Codex reads <code class=\"ds-code\">AGENTS.md</code> here: <span class=\"ds-unk\">unknown</span><span class=\"ds-src\">Codex</span></span></li></ul></div>",
+      "css": ".ds-board{background:var(--paper,#F3F5F1);color:var(--ink,#1A1D1B);font:16px/1.6 system-ui,-apple-system,'Segoe UI',Roboto,sans-serif;font-variant-numeric:tabular-nums} .ds-band{display:flex;justify-content:space-between;align-items:baseline;margin:0;padding:.45rem 0 .35rem;border-top:2px solid var(--form,#3D5A4C);font:700 .95rem/1.2 Archivo,system-ui,sans-serif;font-stretch:80%;letter-spacing:.06em;text-transform:uppercase;color:var(--form,#3D5A4C)} .ds-band .ds-n{font:500 .8rem system-ui,-apple-system,'Segoe UI',Roboto,sans-serif;letter-spacing:0;text-transform:none;color:var(--ink-2,#4A524D)} .ds-hint{margin:.3rem 0 .2rem;font-size:.8rem;color:var(--ink-2,#4A524D)} .ds-ul{list-style:none;margin:0;padding:0} .ds-ul li{display:grid;grid-template-columns:14px minmax(0,1fr);gap:.6rem;padding:.55rem 0;border-bottom:1px solid var(--rule-2,#DDE4DF);font-size:.95rem} .ds-ul svg{width:14px;height:14px;margin-top:.25rem} .ds-pc{color:var(--pencil,#646B67)} .ds-src{display:block;margin-top:.15rem;font-size:.8rem;color:var(--ink-2,#4A524D)} .ds-code{font-family:ui-monospace,'SF Mono',Menlo,Consolas,monospace;font-size:.86em;background:color-mix(in srgb,var(--form,#3D5A4C) 10%,transparent);padding:.06em .3em;border-radius:3px} .ds-unk{color:var(--pencil,#646B67);font-style:italic;text-decoration:underline dashed 1px;text-underline-offset:3px}"
+    },
+    {
+      "name": "Contents with Tally",
+      "kind": "nav",
+      "refersTo": "label",
+      "description": "Progress row first with done/all and tally strokes; section rows name only; current row bold in form.",
+      "html": "<nav class=\"ds-toc\"><span class=\"ds-lbl\">Contents</span><ol><li><a href=\"#\" aria-current=\"true\"><span class=\"ds-nm\">Progress</span><span class=\"ds-frac\">1/6</span><svg class=\"ds-tally\" width=\"38\" viewBox=\"0 0 38 12\"><line x1=\"1\" y1=\"1\" x2=\"1\" y2=\"11\" style=\"stroke:var(--form,#3D5A4C)\"/><line x1=\"4.6\" y1=\"1\" x2=\"4.6\" y2=\"11\"/><line x1=\"8.2\" y1=\"1\" x2=\"8.2\" y2=\"11\"/><line x1=\"11.8\" y1=\"1\" x2=\"11.8\" y2=\"11\"/><line x1=\"-.5\" y1=\"9.5\" x2=\"13.3\" y2=\"2.5\"/><line x1=\"20\" y1=\"1\" x2=\"20\" y2=\"11\"/></svg></a></li><li><a href=\"#\"><span class=\"ds-nm\">Workflow</span></a></li></ol></nav>",
+      "css": ".ds-toc{width:12.5rem;background:var(--paper,#F3F5F1);color:var(--ink,#1A1D1B);font:16px/1.6 system-ui,-apple-system,'Segoe UI',Roboto,sans-serif} .ds-lbl{font:600 .72rem/1.2 Archivo,system-ui,sans-serif;font-stretch:82%;letter-spacing:.09em;text-transform:uppercase;color:var(--form,#3D5A4C);} .ds-toc ol{list-style:none;margin:.55rem 0 0;padding:0;border-top:1px solid var(--rule,#C3CEC6)} .ds-toc a{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:.3rem .5rem;padding:.5rem 0 .55rem;border-bottom:1px solid var(--rule-2,#DDE4DF);color:var(--ink,#1A1D1B);text-decoration:none;font-size:.92rem;line-height:1.3} .ds-toc a:hover .ds-nm{text-decoration:underline;text-underline-offset:3px} .ds-toc a:focus-visible{outline:2px solid var(--agent,#2B4C9B);outline-offset:2px;border-radius:2px} .ds-toc a[aria-current=true] .ds-nm{font-weight:650;color:var(--form,#3D5A4C)} .ds-frac{font-size:.78rem;color:var(--ink-2,#4A524D)} .ds-tally{grid-column:1/-1;height:12px;overflow:visible} .ds-tally line{stroke:color-mix(in srgb,var(--ink-2,#4A524D) 50%,transparent);stroke-width:1.3;stroke-linecap:round}"
+    },
+    {
+      "name": "Copy Button",
+      "kind": "button",
+      "refersTo": "copy-button",
+      "description": "Top-right of every code block; label type, hair radius.",
+      "html": "<div class=\"ds-pre\"><code>./md-view.sh --check context-diet.md</code><button type=\"button\" class=\"ds-copy\">Copy</button></div>",
+      "css": ".ds-pre{position:relative;padding:.8rem 5rem .8rem .95rem;border:1px solid var(--rule,#C3CEC6);background:var(--paper,#F3F5F1);color:var(--ink,#1A1D1B);font:.86rem/1.55 ui-monospace,'SF Mono',Menlo,Consolas,monospace} .ds-copy{position:absolute;top:.5rem;right:.5rem;font:650 .72rem/1 Archivo,system-ui,sans-serif;letter-spacing:.08em;text-transform:uppercase;color:var(--form,#3D5A4C);background:var(--paper,#F3F5F1);border:1px solid var(--rule,#C3CEC6);border-radius:2px;padding:.35rem .55rem;cursor:pointer} .ds-copy:hover{border-color:var(--form,#3D5A4C)} .ds-copy:focus-visible{outline:2px solid var(--agent,#2B4C9B);outline-offset:2px}"
+    },
+    {
+      "name": "Code Chip and Pencil Unknown",
+      "kind": "chip",
+      "refersTo": "unknown",
+      "description": "Inline code chip (form 10% tint, 3px) and an unknown written in graphite pencil, with its gutter mark.",
+      "html": "<p class=\"ds-p\"><span class=\"ds-um\"><svg viewBox=\"0 0 16 16\" width=\"14\" height=\"14\" aria-hidden=\"true\"><circle cx=\"8\" cy=\"8\" r=\"6.3\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.3\" stroke-dasharray=\"2.2 1.7\"/><path d=\"M6.2 6.3a1.9 1.9 0 1 1 2.6 1.8c-.5.2-.8.6-.8 1.1v.4\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.3\" stroke-linecap=\"round\"/><circle cx=\"8\" cy=\"11.6\" r=\".85\" fill=\"currentColor\"/></svg></span>Codex reads <code class=\"ds-code\">AGENTS.md</code> here: <span class=\"ds-unk\">unknown</span></p>",
+      "css": ".ds-p{margin:0;background:var(--paper,#F3F5F1);color:var(--ink,#1A1D1B);font:16px/1.6 system-ui,-apple-system,'Segoe UI',Roboto,sans-serif} .ds-um{color:var(--pencil,#646B67);margin-right:.5rem;vertical-align:-2px} .ds-code{font-family:ui-monospace,'SF Mono',Menlo,Consolas,monospace;font-size:.86em;background:color-mix(in srgb,var(--form,#3D5A4C) 10%,transparent);padding:.06em .3em;border-radius:3px} .ds-unk{color:var(--pencil,#646B67);font-style:italic;text-decoration:underline dashed 1px;text-underline-offset:3px}"
+    }
+  ],
+  "narrative": {
+    "northStar": "The Witnessed Notebook",
+    "overview": "Each `.md` renders as one numbered notebook page. Agents write the entries; the owner witnesses them and signs off in chat. Flat cool paper, printed form rules and labels in green-grey, one pink-red margin rule, owner inks in the margin. Dense, single page, no tabs. The brief is one progress board: slice map, steps in order, then what is not yet confirmed.",
+    "keyCharacteristics": [
+      "A form header strip, then a contents column and one ruled sheet.",
+      "A margin gutter that carries every status mark.",
+      "One progress board: every task appears once, in one order.",
+      "Three owner inks that answer \"who owns it\".",
+      "Unknowns in graphite pencil.",
+      "Tally strokes and tabular figures for progress.",
+      "A condensed form face for labels and headings; system sans for reading."
+    ],
+    "rules": [
+      {
+        "name": "The One Margin Rule",
+        "body": "One 1.5px margin rule per sheet. Margin pink-red appears nowhere else except the arrival ink.",
+        "section": "colors"
+      },
+      {
+        "name": "The Owner Ink Rule",
+        "body": "Owner inks mark ownership only: gutter marks of open steps, the owner column, the owner line and border of the now card, lane labels, step frames. Done marks switch to form green-grey.",
+        "section": "colors"
+      },
+      {
+        "name": "The Form Label Rule",
+        "body": "A label names a form field or is the heading itself. Never stack a label above a heading that already names the block.",
+        "section": "typography"
+      },
+      {
+        "name": "The Tabular Rule",
+        "body": "Figures stay tabular (`font-variant-numeric: tabular-nums` on body).",
+        "section": "typography"
+      },
+      {
+        "name": "The Flat Paper Rule",
+        "body": "No shadows and no tinted panels. The only tints are the inline code chip (form 10%), done slice cards (form 7%), and text selection (agent 24%).",
+        "section": "elevation"
+      }
+    ],
+    "dos": [
+      "**Do** keep every status mark in the gutter, left of the one margin rule.",
+      "**Do** use owner inks wherever an owner is named, and only there.",
+      "**Do** write every `unknown` in pencil and list it in Not yet confirmed.",
+      "**Do** open board blocks with a 2px form top rule; underline section openers with 1px form.",
+      "**Do** show each task once, in the progress board, in one numbered order.",
+      "**Do** keep text at AA contrast on paper in both themes."
+    ],
+    "donts": [
+      "**Don't** put sections behind tabs or clicks.",
+      "**Don't** add shadows, solid-filled cards, or rounded panels.",
+      "**Don't** use margin pink-red for text, marks, or emphasis.",
+      "**Don't** use a label as a kicker above a heading.",
+      "**Don't** add a fourth owner ink; any non-Claude, non-user owner is agent."
+    ]
+  }
+}

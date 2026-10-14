@@ -1,0 +1,38 @@
+{
+  "schemaVersion": 1,
+  "categories": [
+    "security",
+    "writing",
+    "data",
+    "testing",
+    "agent-design"
+  ],
+  "packs": [
+    {
+      "id": "yeruvamaheswar/testing-basics",
+      "name": "Testing basics",
+      "category": "testing",
+      "author": {
+        "name": "yeruvamaheswar",
+        "github": "yeruvamaheswar"
+      },
+      "license": "CC-BY-4.0",
+      "description": "General rules for reproducing bugs, testing real boundaries, isolating test state, and reporting results honestly.",
+      "versions": [
+        {
+          "version": "1.0.0",
+          "digest": "1ef177f607e6288058ac122a2311597cbdaab7d0d3090bb639569c253d2a640f",
+          "bytes": 1574,
+          "minHarness": "1.0.0",
+          "platforms": [
+            "codex",
+            "claude",
+            "cursor",
+            "generic"
+          ],
+          "path": "packs/yeruvamaheswar/testing-basics/1.0.0"
+        }
+      ]
+    }
+  ]
+}

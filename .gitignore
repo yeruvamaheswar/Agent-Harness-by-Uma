@@ -1,0 +1,14 @@
+node_modules/
+.env
+.env.*
+!.env.example
+.state/
+coverage/
+.DS_Store
+*.log
+.claude/settings.local.json
+.impeccable/mocks/
+.impeccable/review/
+.impeccable/questions/
+*.pem
+*.key

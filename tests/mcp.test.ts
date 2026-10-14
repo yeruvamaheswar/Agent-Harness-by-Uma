@@ -1,0 +1,35 @@
+import {test} from 'node:test';
+import assert from 'node:assert/strict';
+import {mkdtemp,mkdir,writeFile,copyFile,symlink,rm} from 'node:fs/promises';
+import {tmpdir} from 'node:os';
+import {dirname,join,resolve} from 'node:path';
+import {fileURLToPath} from 'node:url';
+import {Client} from '@modelcontextprotocol/sdk/client/index.js';
+import {StdioClientTransport} from '@modelcontextprotocol/sdk/client/stdio.js';
+import {loadSnapshot,digest,publish} from '../src/core.ts';
+
+test('a fresh MCP process outside any repository serves pinned read-only references',async(t)=>{
+ const project=resolve(dirname(fileURLToPath(import.meta.url)),'..');
+ const root=await mkdtemp(join(tmpdir(),'harness-mcp-'));
+ t.after(()=>rm(root,{recursive:true,force:true}));
+ await mkdir(join(root,'src'));
+ for(const name of ['mcp.ts','core.ts','env.ts'])await copyFile(join(project,'src',name),join(root,'src',name));
+ await symlink(join(project,'node_modules'),join(root,'node_modules'));
+ await writeFile(join(root,'package.json'),'{"type":"module"}');
+ await writeFile(join(root,'core.md'),'Build one verified tracer bullet.');
+ await writeFile(join(root,'reference.md'),'# Tracer bullets\nVerify expense persistence before adding reports.');
+ await writeFile(join(root,'harness.config.json'),JSON.stringify({core:'core.md',documents:[{id:'guide',title:'Guide',domain:'engineering',path:'reference.md',sourceUrl:'https://example.com/guide'}]}));
+ await publish(root,'1.0.0',digest(await loadSnapshot(root)),true);
+ const client=new Client({name:'harness-test',version:'1.0.0'});
+ const transport=new StdioClientTransport({command:process.execPath,args:['--experimental-strip-types',join(root,'src/mcp.ts')],cwd:tmpdir(),stderr:'pipe'});
+ await client.connect(transport);t.after(()=>client.close());
+ const tools=await client.listTools();assert.deepEqual(tools.tools.map(t=>t.name).sort(),['get_document','harness_status','search_knowledge']);
+ const status:any=await client.callTool({name:'harness_status',arguments:{}});assert.equal(JSON.parse(status.content[0].text).release,'1.0.0');
+ assert.equal('corePolicy' in JSON.parse(status.content[0].text),false);
+ const full:any=await client.callTool({name:'harness_status',arguments:{include_policy:true}});assert.equal(JSON.parse(full.content[0].text).corePolicy.trim(),'Build one verified tracer bullet.');
+ const search:any=await client.callTool({name:'search_knowledge',arguments:{query:'expense'}});assert.equal(JSON.parse(search.content[0].text).results[0].sourceUrl,'https://example.com/guide');
+ const missing:any=await client.callTool({name:'get_document',arguments:{document_id:'private-family'}});assert.equal(missing.isError,true);
+ await writeFile(join(root,'core.md'),'A second policy.');
+ await publish(root,'1.1.0',digest(await loadSnapshot(root)),true);
+ const pinned:any=await client.callTool({name:'harness_status',arguments:{}});assert.equal(JSON.parse(pinned.content[0].text).release,'1.0.0');
+});

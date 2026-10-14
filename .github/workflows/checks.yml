@@ -1,0 +1,23 @@
+name: Harness checks
+on: [push, pull_request]
+permissions:
+  contents: read
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: npm
+      - run: npm ci
+      - run: npm run typecheck
+      - run: npm test
+      # Validates every pack (manifest, digest, lint) and fails if catalog/index.json is stale.
+      - run: npm run harness -- catalog build
+      - run: git diff --exit-code catalog/index.json
+      # Scans the full history. The gitleaks action fails on a push that contains the root commit.
+      - run: docker run --rm -v "$PWD:/repo" ghcr.io/gitleaks/gitleaks:v8.24.3 git /repo --redact --verbose

@@ -1,0 +1,75 @@
+{
+  "schemaVersion": 1,
+  "note": "Enforced by each platform, not by the model. Edit by hand, then run: harness controls install claude. {HARNESS_ROOT} and {CODE_ROOT} are replaced with the harness root and the engine folder at install.",
+  "controls": [
+    {
+      "id": "no-force-push",
+      "why": "A force-push rewrites shared history.",
+      "effect": "deny",
+      "claude": [
+        "Bash(git push --force:*)",
+        "Bash(git push -f:*)",
+        "Bash(git push origin --force:*)",
+        "Bash(git push origin -f:*)",
+        "Bash(git push origin +*)"
+      ]
+    },
+    {
+      "id": "ask-push-main",
+      "why": "Pushing to main needs your OK.",
+      "effect": "ask",
+      "claude": [
+        "Bash(git push origin main:*)",
+        "Bash(git push origin HEAD:main:*)",
+        "Bash(git push -u origin main:*)"
+      ]
+    },
+    {
+      "id": "ask-force-with-lease",
+      "why": "A force-push with lease can still replace remote commits; it needs your OK.",
+      "effect": "ask",
+      "claude": [
+        "Bash(git push --force-with-lease:*)"
+      ]
+    },
+    {
+      "id": "no-secret-reads",
+      "why": "Agents never read secrets.",
+      "effect": "deny",
+      "claude": [
+        "Read(**/.env)",
+        "Read(**/.env.*)",
+        "Read(~/.ssh/**)",
+        "Bash(cat .env:*)",
+        "Bash(cat ~/.ssh/:*)"
+      ]
+    },
+    {
+      "id": "ask-deploys",
+      "why": "Deploys reach production and need your OK.",
+      "effect": "ask",
+      "claude": [
+        "Bash(vercel --prod:*)",
+        "Bash(vercel deploy --prod:*)",
+        "Bash(render deploys create:*)",
+        "Bash(supabase db push:*)"
+      ]
+    },
+    {
+      "id": "no-self-edit",
+      "why": "An agent must not loosen its own controls.",
+      "effect": "deny",
+      "claude": [
+        "Edit(~/.claude/settings.json)",
+        "Edit(~/.claude/settings.local.json)",
+        "Edit(**/.claude/settings.json)",
+        "Edit(**/.claude/settings.local.json)",
+        "Edit(/{CODE_ROOT}/controls/**)",
+        "Edit(/{HARNESS_ROOT}/.state/**)",
+        "Bash(npm run harness -- controls:*)",
+        "Bash(node --experimental-strip-types src/cli.ts controls:*)",
+        "Bash(node --experimental-strip-types {CODE_ROOT}/src/cli.ts controls:*)"
+      ]
+    }
+  ]
+}
