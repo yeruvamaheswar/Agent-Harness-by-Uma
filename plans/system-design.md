@@ -91,7 +91,7 @@ flowchart TB
 - Every install backs up the old file first and writes a receipt. `npm run harness -- uninstall PLATFORM` puts the old file back.
 
 ### Skills: one manual step
-- The handbook names three skills: `grill-me`, `html-explainer`, `render-rules`. Their sources are in `tools/agents/skills/`. A fourth skill, `verify`, is there too. It loads only when you ask for it.
+- The handbook names three skills: `grill-me`, `html-explainer`, `render-rules`. Their sources are in `tools/agents/skills/`. Two more skills are there too: `verify` and `continue-work`. They load only when you ask for them. `/continue-work` resumes a task in a new session: it rebuilds state from files and checks, reports with evidence, and waits for your go-ahead.
 - No harness command installs them yet. Copy each folder to `~/.agents/skills/`, and link each into `~/.claude/skills/` for Claude Code.
 - `html-explainer` also needs the page builder: copy `tools/agents/bin/md-view.sh` and `md-view.template.html` to `~/.agents/bin/`.
 - Without the skills, the assistant still follows the handbook. It only lacks the detailed procedures.

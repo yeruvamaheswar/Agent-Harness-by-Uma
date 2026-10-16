@@ -1,0 +1,5 @@
+interface:
+  display_name: "Continue work"
+  short_description: "Resume a task from files and checks, not chat memory"
+policy:
+  allow_implicit_invocation: false

@@ -210,7 +210,7 @@ footer{margin-top:3.5rem;padding-top:.8rem;border-top:1px solid var(--rule);font
 }
 </style>
 </head>
-<body data-hash="db4907b087de" data-repo="Agent-Harness-by-Uma">
+<body data-hash="1e287baf186a" data-repo="Agent-Harness-by-Uma">
 <script type="text/plain" id="src">---
 kind: explainer
 title: How your AI assistants use the Agentic Harness
@@ -304,7 +304,7 @@ flowchart TB
 - Every install backs up the old file first and writes a receipt. `npm run harness -- uninstall PLATFORM` puts the old file back.
 
 ### Skills: one manual step
-- The handbook names three skills: `grill-me`, `html-explainer`, `render-rules`. Their sources are in `tools/agents/skills/`. A fourth skill, `verify`, is there too. It loads only when you ask for it.
+- The handbook names three skills: `grill-me`, `html-explainer`, `render-rules`. Their sources are in `tools/agents/skills/`. Two more skills are there too: `verify` and `continue-work`. They load only when you ask for them. `/continue-work` resumes a task in a new session: it rebuilds state from files and checks, reports with evidence, and waits for your go-ahead.
 - No harness command installs them yet. Copy each folder to `~/.agents/skills/`, and link each into `~/.claude/skills/` for Claude Code.
 - `html-explainer` also needs the page builder: copy `tools/agents/bin/md-view.sh` and `md-view.template.html` to `~/.agents/bin/`.
 - Without the skills, the assistant still follows the handbook. It only lacks the detailed procedures.
@@ -449,7 +449,7 @@ flowchart TB
     <div><span class="lbl">Status</span><div class="val" id="status"></div></div>
     <div><span class="lbl">Dated</span><div class="val" id="dated"></div></div>
     <div><span class="lbl">Entries done</span><div class="val" id="count"></div></div>
-    <div><span class="lbl">Page</span><div class="val hash">db4907b087de</div></div>
+    <div><span class="lbl">Page</span><div class="val hash">1e287baf186a</div></div>
   </header>
   <div class="layout">
     <nav class="contents" aria-label="Contents"><span class="lbl">Contents</span><ol id="toc"></ol></nav>
@@ -457,7 +457,7 @@ flowchart TB
       <div class="gutter" id="gutter" aria-hidden="true"></div>
       <section id="brief" class="sec" style="margin-top:0" aria-label="Brief"></section>
       <div id="sections"></div>
-      <footer>Generated from plans/system-design.md in Agent-Harness-by-Uma by md-view.sh · built 2026-10-13 20:48 · page db4907b087de (source + template). Agents: edit system-design.md, then rebuild. Never edit this page.</footer>
+      <footer>Generated from plans/system-design.md in Agent-Harness-by-Uma by md-view.sh · built 2026-10-16 11:42 · page 1e287baf186a (source + template). Agents: edit system-design.md, then rebuild. Never edit this page.</footer>
     </main>
   </div>
 </div>
