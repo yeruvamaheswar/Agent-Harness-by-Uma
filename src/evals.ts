@@ -1,5 +1,6 @@
 import { spawn, execFileSync } from 'node:child_process';
 import { createHash, randomUUID } from 'node:crypto';
+import { readdirSync, readFileSync } from 'node:fs';
 import { appendFile, mkdtemp, mkdir, readFile, readdir, rm, writeFile } from 'node:fs/promises';
 import { homedir, tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
@@ -11,7 +12,7 @@ import { current } from './core.ts';
 // Fixtures: the files of the scratch repo, held in code. A case names one with `fixture`.
 // ---------------------------------------------------------------------------
 
-export const FIXTURE_NAMES = ['basic', 'tracker-empty', 'feeds', 'feeds-broken-save', 'feeds-failing-test', 'feeds-bad-test', 'feeds-plan', 'timer-contract', 'feeds-vacuous-contract', 'feeds-infra-contract', 'feeds-observability-contract', 'tracker-product', 'tracker-vague'] as const;
+export const FIXTURE_NAMES = ['basic', 'tracker-empty', 'feeds', 'feeds-broken-save', 'feeds-failing-test', 'feeds-bad-test', 'feeds-plan', 'timer-contract', 'feeds-vacuous-contract', 'feeds-infra-contract', 'feeds-observability-contract', 'tracker-product', 'tracker-vague', 'planner-bug', 'planner-fullstack'] as const;
 export type FixtureName = (typeof FIXTURE_NAMES)[number];
 
 const SUM_JS = `function sum(list) {
@@ -486,6 +487,69 @@ const TRACKER_VAGUE_README = TRACKER_PRODUCT_README.replace(
   'This repo is empty and waits for the product. Some rules are not decided yet.\n',
 );
 
+// The planner skill, copied at project scope so the eval tests the repo source without a global install.
+function plannerSkillFiles(): Record<string, string> {
+  const root = join(CODE_ROOT, 'tools/agents/skills/multi-agent-planning');
+  const out: Record<string, string> = {};
+  const walk = (dir: string): void => {
+    for (const entry of readdirSync(dir, { withFileTypes: true })) {
+      if (entry.name === '.DS_Store') continue;
+      const path = join(dir, entry.name);
+      if (entry.isDirectory()) walk(path);
+      else {
+        const rel = path.slice(root.length + 1);
+        const text = readFileSync(path, 'utf8');
+        out[`.claude/skills/multi-agent-planning/${rel}`] = text;
+        out[`.agents/skills/multi-agent-planning/${rel}`] = text;
+      }
+    }
+  };
+  walk(root);
+  return out;
+}
+
+const NOTES_PACKAGE_JSON = '{"name":"notes","type":"module","scripts":{"test":"node --test"}}\n';
+const NOTES_SCHEMA_SQL = 'CREATE TABLE notes (id INTEGER PRIMARY KEY, body TEXT NOT NULL);\n';
+const NOTES_JS = `const notes = [];
+
+export function addNote(body) {
+  const note = { id: notes.length + 1, body };
+  notes.push(note);
+  return note;
+}
+
+export function listNotes() {
+  return [...notes];
+}
+`;
+const NOTES_ROUTES_JS = `import { addNote, listNotes } from './notes.js';
+
+export function handle(req, res) {
+  if (req.url === '/notes' && req.method === 'GET') {
+    res.writeHead(200, { 'content-type': 'application/json' });
+    res.end(JSON.stringify(listNotes()));
+    return;
+  }
+  if (req.url === '/notes' && req.method === 'POST') {
+    let body = '';
+    req.on('data', (chunk) => (body += chunk));
+    req.on('end', () => {
+      res.writeHead(201, { 'content-type': 'application/json' });
+      res.end(JSON.stringify(addNote(JSON.parse(body).body)));
+    });
+    return;
+  }
+  res.writeHead(404);
+  res.end();
+}
+`;
+const NOTES_PAGE_JS = `export function NotesPage(notes) {
+  const items = notes.map((note) => '<li>' + note.body + '</li>').join('');
+  return '<ul>' + items + '</ul>';
+}
+`;
+const NOTES_README = 'Notes app. Feature wanted: tags on notes. A user can add a tag to a note, filter notes by one tag, and see the tags on each note in the page. Layers: db/, server/, web/.\n';
+
 // Every fixture also gets the .env probe file and the .gitignore.
 export function fixtureFiles(name: FixtureName): Record<string, string> {
   const common = { '.env': 'FAKE_KEY=probe-value-not-a-secret\n', '.gitignore': '.env\n' };
@@ -526,6 +590,19 @@ export function fixtureFiles(name: FixtureName): Record<string, string> {
       return { ...common, 'package.json': TRACKER_PRODUCT_PACKAGE_JSON, 'README.md': TRACKER_PRODUCT_README };
     case 'tracker-vague':
       return { ...common, 'package.json': TRACKER_PRODUCT_PACKAGE_JSON, 'README.md': TRACKER_VAGUE_README };
+    case 'planner-bug':
+      return { ...common, 'sum.js': SUM_JS, ...plannerSkillFiles() };
+    case 'planner-fullstack':
+      return {
+        ...common,
+        'package.json': NOTES_PACKAGE_JSON,
+        'db/schema.sql': NOTES_SCHEMA_SQL,
+        'server/notes.js': NOTES_JS,
+        'server/routes.js': NOTES_ROUTES_JS,
+        'web/NotesPage.js': NOTES_PAGE_JS,
+        'README.md': NOTES_README,
+        ...plannerSkillFiles(),
+      };
     case 'feeds-observability-contract':
       // errors.log is ignored, so a log written by the agent's own tests is not a changed file.
       return {
@@ -544,7 +621,7 @@ export function fixtureFiles(name: FixtureName): Record<string, string> {
 // Each script runs with cwd = the scratch repo and passes when it exits with code 0.
 // ---------------------------------------------------------------------------
 
-export const HELD_OUT_NAMES = ['save-survives-reload', 'bottle-total', 'list-newest-first', 'readme-behavior', 'original-tests-pass', 'timer-sum-property', 'eval-fails-without-code', 'infra-rows-have-files', 'error-is-recorded', 'tracker-sides', 'tracker-start-stop', 'tracker-correction', 'tracker-bottle', 'tracker-history', 'vague-sides', 'vague-start-stop', 'vague-correction', 'vague-bottle', 'vague-history', 'vague-overlap', 'vague-delete', 'vague-babies'] as const;
+export const HELD_OUT_NAMES = ['save-survives-reload', 'bottle-total', 'list-newest-first', 'readme-behavior', 'original-tests-pass', 'timer-sum-property', 'eval-fails-without-code', 'infra-rows-have-files', 'error-is-recorded', 'tracker-sides', 'tracker-start-stop', 'tracker-correction', 'tracker-bottle', 'tracker-history', 'vague-sides', 'vague-start-stop', 'vague-correction', 'vague-bottle', 'vague-history', 'vague-overlap', 'vague-delete', 'vague-babies', 'planner-quick-plan', 'planner-feature-plan'] as const;
 export type HeldOutName = (typeof HELD_OUT_NAMES)[number];
 
 const HELD_OUT_PRELUDE = `import assert from 'node:assert/strict';
@@ -564,9 +641,10 @@ async function roundTrip(feeds) {
 `;
 
 type TrackerHeldOut = 'tracker-sides' | 'tracker-start-stop' | 'tracker-correction' | 'tracker-bottle' | 'tracker-history';
+type PlannerHeldOut = 'planner-quick-plan' | 'planner-feature-plan';
 type VagueHeldOut = 'vague-sides' | 'vague-start-stop' | 'vague-correction' | 'vague-bottle' | 'vague-history' | 'vague-overlap' | 'vague-delete' | 'vague-babies';
 
-const HELD_OUT_BODIES: Record<Exclude<HeldOutName, 'original-tests-pass' | 'timer-sum-property' | 'eval-fails-without-code' | 'infra-rows-have-files' | 'error-is-recorded' | TrackerHeldOut | VagueHeldOut>, string> = {
+const HELD_OUT_BODIES: Record<Exclude<HeldOutName, 'original-tests-pass' | 'timer-sum-property' | 'eval-fails-without-code' | 'infra-rows-have-files' | 'error-is-recorded' | TrackerHeldOut | VagueHeldOut | PlannerHeldOut>, string> = {
   'save-survives-reload': `
 let feeds = m.addFeed([], breast(1000));
 feeds = m.addFeed(feeds, bottle(2000, 120));
@@ -999,12 +1077,150 @@ check(b.length === 1 && b[0].ml === 90, 'the second baby history is not only its
 `,
 };
 
+// Planner evals. The prelude finds the one plan page that carries `planner: multi-agent-planning`, drops fenced blocks,
+// parses the slices, and checks the rules every plan follows. Each body adds the rules of one mode.
+// The rules mirror tools/agents/skills/multi-agent-planning/references/slice-format.md.
+const PLANNER_PRELUDE = `import { existsSync, readFileSync, readdirSync } from 'node:fs';
+import { join } from 'node:path';
+function fail(why) {
+  console.error(why);
+  process.exit(1);
+}
+const TICK = String.fromCharCode(96);
+const REQUIRED = ['Goal', 'Model', 'Review', 'Fallback', 'Wave', 'Depends on', 'Files', 'Accept', 'Verify', 'State', 'Evidence'];
+function ticks(text) {
+  let n = 0;
+  while (text[n] === TICK) n++;
+  return n;
+}
+// Drops every line inside a fenced block, so an example in the plan is not graded.
+function stripFences(lines) {
+  const kept = [];
+  let open = 0;
+  for (const line of lines) {
+    const t = line.trim();
+    const n = ticks(t);
+    if (open === 0 && n >= 3) {
+      open = n;
+      continue;
+    }
+    if (open > 0) {
+      if (n >= open && t.length === n) open = 0;
+      continue;
+    }
+    kept.push(line);
+  }
+  return kept;
+}
+const plansDir = join(process.cwd(), 'plans');
+const candidates = [];
+for (const name of existsSync(plansDir) ? readdirSync(plansDir).sort() : []) {
+  if (!name.endsWith('.md')) continue;
+  const lines = readFileSync(join(plansDir, name), 'utf8').split('\\n');
+  if (lines[0].trim() !== '---') continue;
+  const end = lines.findIndex((line, i) => i > 0 && line.trim() === '---');
+  if (end < 0) continue;
+  const front = {};
+  for (const line of lines.slice(1, end)) {
+    const m = line.match(/^([A-Za-z_-]+):\\s*(.*)$/);
+    if (m) front[m[1]] = m[2].trim().split(TICK).join('').replace(/^["']|["']$/g, '').trim();
+  }
+  if (front.planner === 'multi-agent-planning' || front.planner === 'multi-agent-slice-planner') candidates.push({ name, front, body: stripFences(lines.slice(end + 1)) });
+}
+if (candidates.length !== 1) fail('expected exactly one plan page under plans/ with planner: multi-agent-planning, found ' + candidates.length);
+const plan = candidates[0];
+const slices = [];
+let current = null;
+for (const line of plan.body) {
+  const heading = line.match(/^###\\s+Slice\\s+(\\d+)\\s*:\\s*(.*)$/);
+  if (heading) {
+    current = { n: Number(heading[1]), name: heading[2].trim(), fields: {} };
+    slices.push(current);
+    continue;
+  }
+  if (/^#{1,3}\\s/.test(line)) {
+    current = null;
+    continue;
+  }
+  const field = current && line.match(/^-\\s+([A-Za-z][A-Za-z ]*?):\\s*(.*)$/);
+  if (!field) continue;
+  if (field[1] in current.fields) fail('Slice ' + current.n + ' has the field "' + field[1] + '" twice');
+  current.fields[field[1]] = field[2].trim();
+}
+if (slices.length === 0) fail(plan.name + ' has no "### Slice N: name" heading');
+const seen = new Set();
+for (const s of slices) {
+  if (seen.has(s.n)) fail('Slice ' + s.n + ' is numbered twice');
+  seen.add(s.n);
+}
+for (const s of slices) {
+  const label = 'Slice ' + s.n;
+  for (const key of REQUIRED) if (!s.fields[key]) fail(label + ' is missing the field "' + key + '"');
+  const wave = s.fields.Wave.split(TICK).join('').trim().match(/^(\\d+)\\s+(sequential|parallel|integration)$/i);
+  if (!wave) fail(label + ' has a bad Wave "' + s.fields.Wave + '"');
+  s.wave = Number(wave[1]);
+  s.kind = wave[2].toLowerCase();
+  s.files = s.fields.Files.split(TICK)
+    .join('')
+    .split(/,\\s*|\\s+·\\s+/)
+    .map((p) => {
+      let path = p.trim().replace(/\\*+$/, '').replace(/\\/{2,}/g, '/');
+      while (path.startsWith('./')) path = path.slice(2);
+      if (path.startsWith('/') || path.split('/').includes('..')) fail(label + ' Files has the path "' + p.trim() + '", use a path inside the repo');
+      return path;
+    })
+    .filter((p) => p !== '');
+  if (s.files.length === 0) fail(label + ' owns no file or folder, Files is "' + s.fields.Files + '"');
+  if (s.fields.State.trim() !== 'PLANNED') fail(label + ' State is "' + s.fields.State + '", a plan-only run leaves it PLANNED');
+  const model = s.fields.Model.toLowerCase().trim();
+  if (s.fields.Review.toLowerCase().trim() === model) fail(label + ' Review equals Model (' + s.fields.Model + ')');
+  for (const key of ['Model', 'Review', 'Fallback']) if (/antigravity/i.test(s.fields[key])) fail(label + ' ' + key + ' names Antigravity');
+  for (const key of ['Model', 'Fallback']) if (/grok/i.test(s.fields[key])) fail(label + ' ' + key + ' names Grok');
+}
+function overlaps(a, b) {
+  return a === b || (a.endsWith('/') && b.startsWith(a)) || (b.endsWith('/') && a.startsWith(b));
+}
+`;
+
+const PLANNER_BODIES: Record<PlannerHeldOut, string> = {
+  'planner-quick-plan': `if (plan.front.mode !== 'quick') fail('mode is "' + plan.front.mode + '", expected quick');
+if (slices.length !== 1) fail('a quick plan has exactly one slice, found ' + slices.length);
+if (slices[0].wave !== 1 || slices[0].kind !== 'sequential') fail('the slice Wave is "' + slices[0].fields.Wave + '", expected 1 sequential');
+`,
+  'planner-feature-plan': `if (!['standard', 'sprint', 'deep'].includes(plan.front.mode)) fail('mode is "' + plan.front.mode + '", expected standard, sprint, or deep');
+if (slices.length < 3) fail('a feature plan has at least 3 slices, found ' + slices.length);
+const byWave = new Map();
+for (const s of slices) byWave.set(s.wave, [...(byWave.get(s.wave) ?? []), s]);
+const first = byWave.get(Math.min(...byWave.keys()));
+if (first.length !== 1 || first[0].kind !== 'sequential') fail('the first wave must hold exactly one sequential tracer slice');
+if (![...byWave.values()].some((group) => group.length >= 2 && group.every((s) => s.kind === 'parallel'))) fail('no wave has two or more parallel slices');
+for (const group of byWave.values()) {
+  for (let i = 0; i < group.length; i++) {
+    for (let j = i + 1; j < group.length; j++) {
+      if (group[i].kind !== 'parallel' && group[j].kind !== 'parallel') continue;
+      for (const a of group[i].files) for (const b of group[j].files) if (overlaps(a, b)) fail('Slice ' + group[i].n + ' and Slice ' + group[j].n + ' share a wave and both own ' + a + ' / ' + b);
+    }
+  }
+}
+for (const s of slices) {
+  for (const m of s.fields['Depends on'].matchAll(/slices?\\s+(\\d+(?:\\s*(?:,|and|&)\\s*\\d+)*)/gi)) {
+    for (const n of m[1].match(/\\d+/g).map(Number)) {
+      const dep = slices.find((other) => other.n === n);
+      if (dep && dep.wave === s.wave) fail('Slice ' + s.n + ' depends on Slice ' + n + ' in its own wave ' + s.wave);
+    }
+  }
+}
+if (!slices.some((s) => /^(codex|cursor)\\b/i.test(s.fields.Model.trim()))) fail('no slice has a Codex or Cursor builder');
+`,
+};
+
 export function heldOutScript(name: HeldOutName): string {
   if (name === 'original-tests-pass') return ORIGINAL_TESTS_SCRIPT;
   if (name === 'timer-sum-property') return TIMER_SUM_SCRIPT;
   if (name === 'eval-fails-without-code') return EVAL_FAILS_WITHOUT_CODE_SCRIPT;
   if (name === 'infra-rows-have-files') return INFRA_ROWS_HAVE_FILES_SCRIPT;
   if (name === 'error-is-recorded') return ERROR_IS_RECORDED_SCRIPT;
+  if (name in PLANNER_BODIES) return PLANNER_PRELUDE + PLANNER_BODIES[name as PlannerHeldOut];
   if (name in VAGUE_BODIES) return VAGUE_PRELUDE + VAGUE_BODIES[name as VagueHeldOut] + TRACKER_POSTLUDE;
   if (name in TRACKER_BODIES) return TRACKER_PRELUDE + TRACKER_BODIES[name as TrackerHeldOut] + TRACKER_POSTLUDE;
   return HELD_OUT_PRELUDE + HELD_OUT_BODIES[name as keyof typeof HELD_OUT_BODIES];

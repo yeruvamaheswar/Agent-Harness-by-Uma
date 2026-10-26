@@ -239,9 +239,9 @@ Grok Bot's cloud computer is not covered. It needs its own install and has no lo
 
 ## Shared skills and visibility
 
-The live copies of the shared skills are in `~/.agents/skills/`. Claude Code reaches them through symlinks in `~/.claude/skills/`. Codex reads the folder directly.
+The live copies of the shared skills are in `~/.agents/skills/`. Claude Code reaches them through symlinks in `~/.claude/skills/`. Codex reads the folder directly. `npm run harness -- skills install NAME` makes both, with a backup and a receipt; `skills status` shows drift between the sources and the live copies.
 
-Three skills stay visible on every platform: `grill-me`, `html-explainer`, and `render-rules`. The engineering policy names them. An agent can load them without being asked.
+Four skills stay visible on every platform: `grill-me`, `html-explainer`, `render-rules`, and `multi-agent-planning`. The engineering policy names them (the planner from release 1.5.0). An agent can load them without being asked, once they are installed: the planner needs `skills install multi-agent-planning`.
 
 Every other shared skill loads only when you call it by name. This keeps the start context small and stops two skills from claiming the same request.
 
@@ -254,9 +254,9 @@ Each hidden skill needs two flags:
 
 Set both. Codex does not read the `SKILL.md` flag. A Codex session loaded `unslop` on every task while only that flag was set.
 
-An update of a third-party skill can replace its files and remove the flags. After a skill update, run `npm run harness -- context audit`. Compare the visible lists with the three names above.
+An update of a third-party skill can replace its files and remove the flags. After a skill update, run `npm run harness -- context audit`. Compare the visible lists with the four names above.
 
-The sources of the three named skills live in `tools/agents/skills/`. Keep them identical to the live copies.
+The sources of the named skills live in `tools/agents/skills/`. Keep them identical to the live copies: `skills status` lists each mismatch, and `skills install NAME --replace` updates a copy after a backup.
 
 Not tested: whether Cursor's CLI honors `disable-model-invocation`. Cursor's docs describe the flag. No session was run for it.
 
