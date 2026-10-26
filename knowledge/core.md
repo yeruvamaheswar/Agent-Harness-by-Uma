@@ -28,4 +28,5 @@ Bugs: reproduce, fix the cause, verify the regression. Refactors: change one bou
 - When you create or configure another agent, give it this policy. Mark setup incomplete until a fresh session confirms it loads.
 ## On-demand skills
 - `html-explainer`: plans, audits, reviews, reports, and contracts: one `.md` per task, built into a page.
+- `multi-agent-planning`: work with 2+ slices, agent and model routing, or parallel agents. Plan only unless execution is asked.
 - `render-rules`: deploying to Render or editing `render.yaml`.

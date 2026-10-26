@@ -10,6 +10,7 @@ import {scanRules} from './rules.ts';
 import {contextAudit} from './context.ts';
 import {evalCommand} from './evals.ts';
 import {controlsInstall,controlsVerify,controlsUninstall,loadControls} from './controls.ts';
+import {skillsStatus,skillsInstall,skillsVerify,skillsUninstall} from './skills.ts';
 import {previewRules,applyRules,undoRules,verifyRules,retireRule,ignoreFinding,unignoreFinding} from './rules-apply.ts';
 import {loadEnv,harnessRoot,CODE_ROOT} from './env.ts';
 import {importNotion,importPluginExport} from './notion.ts';
@@ -63,6 +64,16 @@ try {
       else throw new Error('Unknown controls command. Run help.');
       break;
     }
+    case 'skills': {
+      const at=args.indexOf('--repo'), repo=at<0?undefined:required(args[at+1]?.startsWith('--')?undefined:args[at+1],'--repo PATH');
+      const names=args.slice(2).filter((a,i,rest)=>!a.startsWith('--')&&rest[i-1]!=='--repo'), opts={repo,replace:args.includes('--replace')};
+      if(args[1]==='status')output(await skillsStatus(root,names,opts));
+      else if(args[1]==='install')output(await skillsInstall(root,names,opts));
+      else if(args[1]==='verify'){const v=await skillsVerify(root,names,opts);output(v);if(v.some(x=>!x.configurationVerified))process.exitCode=1;}
+      else if(args[1]==='uninstall')output(await skillsUninstall(root,names,opts));
+      else throw new Error('Unknown skills command. Run help.');
+      break;
+    }
     case 'catalog': if(args[1]!=='build')throw new Error('Unknown catalog command. Run help.');output(await buildCatalog(root));break;
     case 'rules': {
       const ids=args.slice(2).filter((a,i,all)=>a!=='--approve-sha'&&all[i-1]!=='--approve-sha');
@@ -87,6 +98,6 @@ try {
     }
     case 'search': {const r=option('--release')?await readRelease(root,option('--release')!):await current(root);output({mode:'local-keyword',release:r.version,results:localSearch(r,required(args[1],'query'),5,option('--domain'))});break;}
     case 'get-document': {const r=option('--release')?await readRelease(root,option('--release')!):await current(root);const d=r.documents.find(d=>d.id===args[1]);if(!d)throw new Error('Document not found in this release.');output({release:r.version,...d});break;}
-    default: console.log(`Agentic Harness\n\npreview\nimport-notion\nimport-notion-export FILE\nexport-chunks VERSION\nindex VERSION --embeddings FILE\nsearch-vector VERSION MODEL VECTOR_JSON_FILE [--domain engineering]\npublish VERSION --approve-sha DIGEST [--bootstrap]\nactivate VERSION\ninstall codex|claude|cursor-files|generic [--version VERSION]\nverify PLATFORM\nuninstall PLATFORM\nconfirm cursor-user-rules [--version VERSION]\nrepo install PATH [--version VERSION] [--adopt] [--pointer] [--dry-run]\nrepo verify PATH\nrepo uninstall PATH [--dry-run]\nrepo bar PATH\ncontrols list\ncontrols install|verify|uninstall claude\npack add AUTHOR/ID@VERSION --platform claude|codex|cursor [--approve-sha DIGEST]\npack remove AUTHOR/ID --platform claude|codex|cursor\npack list\ncatalog build\nrules scan [--show-ignored]\nrules preview PROPOSAL_ID...\nrules apply PROPOSAL_ID... --approve-sha DIGEST\nrules undo RECEIPT_ID|APPLY_ID\nrules verify\nrules retire RECEIPT_ID --reason TEXT\nrules ignore FINDING_ID --reason TEXT\nrules unignore FINDING_ID\ncontext audit [--save] [--claude-context FILE]\neval list\neval run --platform claude|codex|cursor --case ID [--keep] [--no-log] [--trials N]\neval results [--case ID] [--platform P] [--last N]\neval compare VERSION_A [VERSION_B] [--platform P]\nstatus\nsearch "QUERY" [--release VERSION] [--domain engineering]\nget-document ID [--release VERSION]\nrollback VERSION\n\nRun from anywhere: node --experimental-strip-types "${join(CODE_ROOT,'src/cli.ts')}" [--root DIR] COMMAND\nRead README.md for cloud setup and limitations.`);
+    default: console.log(`Agentic Harness\n\npreview\nimport-notion\nimport-notion-export FILE\nexport-chunks VERSION\nindex VERSION --embeddings FILE\nsearch-vector VERSION MODEL VECTOR_JSON_FILE [--domain engineering]\npublish VERSION --approve-sha DIGEST [--bootstrap]\nactivate VERSION\ninstall codex|claude|cursor-files|generic [--version VERSION]\nverify PLATFORM\nuninstall PLATFORM\nconfirm cursor-user-rules [--version VERSION]\nrepo install PATH [--version VERSION] [--adopt] [--pointer] [--dry-run]\nrepo verify PATH\nrepo uninstall PATH [--dry-run]\nrepo bar PATH\ncontrols list\ncontrols install|verify|uninstall claude\nskills status [NAME...] [--repo PATH]\nskills install NAME... [--repo PATH] [--replace]\nskills verify [NAME...] [--repo PATH]\nskills uninstall NAME... [--repo PATH]\npack add AUTHOR/ID@VERSION --platform claude|codex|cursor [--approve-sha DIGEST]\npack remove AUTHOR/ID --platform claude|codex|cursor\npack list\ncatalog build\nrules scan [--show-ignored]\nrules preview PROPOSAL_ID...\nrules apply PROPOSAL_ID... --approve-sha DIGEST\nrules undo RECEIPT_ID|APPLY_ID\nrules verify\nrules retire RECEIPT_ID --reason TEXT\nrules ignore FINDING_ID --reason TEXT\nrules unignore FINDING_ID\ncontext audit [--save] [--claude-context FILE]\neval list\neval run --platform claude|codex|cursor --case ID [--keep] [--no-log] [--trials N]\neval results [--case ID] [--platform P] [--last N]\neval compare VERSION_A [VERSION_B] [--platform P]\nstatus\nsearch "QUERY" [--release VERSION] [--domain engineering]\nget-document ID [--release VERSION]\nrollback VERSION\n\nRun from anywhere: node --experimental-strip-types "${join(CODE_ROOT,'src/cli.ts')}" [--root DIR] COMMAND\nRead README.md for cloud setup and limitations.`);
   }
 } catch(e){console.error((e as Error).message);process.exitCode=1;}

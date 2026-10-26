@@ -1,0 +1,3 @@
+interface:
+  display_name: "Multi-Agent-Planning"
+  short_description: "Plan verified slices and route each to an agent, model, and effort"
