@@ -1,0 +1,5 @@
+interface:
+  display_name: "Autonomous engineering"
+  short_description: "Execute, review, and recover a slice plan with recorded evidence"
+policy:
+  allow_implicit_invocation: false
