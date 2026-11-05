@@ -10,6 +10,12 @@ Do not edit anything in this folder by hand. To change the policy, publish a new
 
 | Version | Created (UTC) | Source | Digest (SHA-256, first 12) |
 | --- | --- | --- | --- |
+| [1.5.5](1.5.5/) | 2026-11-05 | Local files (`--bootstrap`) | `69ed4a6d71c8` |
+| [1.5.4](1.5.4/) | 2026-11-05 | Local files (`--bootstrap`) | `0da09b780120` |
+| [1.5.3](1.5.3/) | 2026-11-04 | Local files (`--bootstrap`) | `9d8a085e7195` |
+| [1.5.2](1.5.2/) | 2026-11-04 | Local files (`--bootstrap`) | `160fb20e810e` |
+| [1.5.1](1.5.1/) | 2026-10-26 | Local files (`--bootstrap`) | `7e31fc1ad442` |
+| [1.5.0](1.5.0/) | 2026-10-26 | Local files (`--bootstrap`) | `edeee3f30da8` |
 | [1.4.3](1.4.3/) | 2026-10-13 | Local files (`--bootstrap`) | `eb3efd7bd143` |
 | [1.4.2](1.4.2/) | 2026-10-13 | Notion export, 2026-10-13 | `a14e2c1eb560` |
 | [1.4.1](1.4.1/) | 2026-10-05 | Notion export, 2026-10-05 | `bb160e9b41d0` |
@@ -24,6 +30,23 @@ The full digest and provenance of each release are in its `release.json` and its
 
 ### What changed
 
+- **1.5.5**
+  - The verification rule in "Before changing code" adds a guardrail. Ask the user before any sign-up, payment, email to a real person, or use of production data.
+- **1.5.4**
+  - "Working principles" adds an ID rule. When you name an ID, such as R1 or A7, say what it means at its first use in each message.
+  - "Working principles" adds a decision rule. Explain each item under an approval request: what it is, what it changes, and the options.
+  - "Working principles" adds a thread rule. Keep thread messages short. Put a whole plan, report, or log in a file and give the path.
+  - "Before changing code" adds a verification rule. Ask how to make the change fully verifiable, prefer the real artifact, and name the evidence you will keep.
+- **1.5.3**
+  - The screenshot fallback now applies whenever you cannot record, not only when no recorder exists.
+  - The UI video rule gains a second fallback. If you cannot take screenshots, say so and list the UI states in a table.
+- **1.5.2**
+  - "Working principles" adds a visual rule. Lead each plan, progress, handoff, and final report with one diagram, rendered in the host or as a Mermaid block.
+  - "Working principles" adds a UI video rule. Show a video mock before UI work and a browser preview recording after it. Serve local files on 127.0.0.1 only for the recording.
+- **1.5.1**
+  - The "On-demand skills" section names `subagent-budget`. Load it before any subagent, `delegate_task`, or parallel fan-out. It caps the count, the model, and the effort.
+- **1.5.0**
+  - The "On-demand skills" section names `multi-agent-planning`. Use it for work with 2 or more slices, agent and model routing, or parallel agents. It plans only unless execution is asked.
 - **1.4.3**
   - A new product, or an ambiguous or significant request, goes to the `grill-me` skill first: before code and before any design or build skill. If no one can answer, the agent writes its questions and stops.
   - The "On-demand skills" section no longer lists `grill-me`, because the rule above names it. The `html-explainer` line now covers plans, audits, reviews, reports, and contracts.
