@@ -3,13 +3,14 @@ import { existsSync, lstatSync, readdirSync, readFileSync, realpathSync } from '
 import { basename, dirname, join, relative, resolve, sep } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { buildReport, renderReport } from './report.ts';
+import { createCharter, runStop } from './run.ts';
 import { chooseTarget, intensity, parseModelRef } from './dispatch.ts';
 import { assessSlice, DEFAULT_POLICY, parsePolicy, parseSnapshot } from './usage.ts';
 import type { Caps } from './dispatch.ts';
 import { checkPath, classifyCommand, findControls, loadControls, redact } from './guard.ts';
 import {
   AUTHORITY, FIX_BUDGET, MAX_CHECKPOINTS, PROFILES, awaiting, closeStaleHandoffs, handoffOpen, createJournal, evidenceLine, failureSignature, failures, fingerprint, inspectLock, journalPath, loadJournal, move,
-  nextBatch, outputTail, profileForMode, promoteReady, recordFailure, refuseSymlinks, saveJournal, settled, syncJournal, within, withLock, writeAtomic,
+  nextBatch, orphanTempFiles, outputTail, profileForMode, promoteReady, recordFailure, refuseSymlinks, saveJournal, settled, syncJournal, within, withLock, writeAtomic,
 } from './journal.ts';
 import type { Attempt, Checkpoint, Evidence, Handoff, Journal, ProfileName, SliceRecord } from './journal.ts';
 import { parsePlan, setSliceFields, verifyCommand } from './plan.ts';
@@ -19,21 +20,21 @@ import type { Plan, Slice } from './plan.ts';
 // JSON on stdout. Errors on stderr with exit 1. `check` exits 0 for allow and 2 for ask or deny.
 
 export type Deps = { cwd: string; now?: () => Date };
-type Args = { command: string; plan: string; slice?: string; flags: Map<string, string>; cmd?: string; path?: string };
+type Args = { command: string; plan: string; slice?: string; flags: Map<string, string>; caps?: string[]; cmd?: string; path?: string };
 // Files the engine itself rewrites, as canonical repo paths: real root to real plan folder. They never count toward a slice fingerprint.
 const engineOwned = (root: string, planPath: string, jfile: string) => {
   const realRoot = realpathSync(root), dir = realpathSync(dirname(planPath));
-  return new Set([planPath, planPath.replace(/\.md$/, '.html'), jfile, jfile + '.bak', jfile + '.lock'].map(p => relative(realRoot, join(dir, basename(p)))));
+  return new Set([planPath, planPath.replace(/\.md$/, '.html'), jfile, jfile + '.bak', jfile + '.lock', ...orphanTempFiles(planPath, jfile)].map(p => relative(realRoot, join(dir, basename(p)))));
 };
 type Base = { args: Args; plan: Plan; now: Date; root: string; planPath: string; cwd: string; jfile: string };
 type Ctx = Base & { journal: Journal; slice: (id: string | undefined) => { s: Slice; rec: SliceRecord } };
 type Result = Record<string, unknown>;
 
-const COMMANDS = ['init', 'status', 'next', 'start', 'finish', 'block', 'fail', 'review', 'verify', 'unblock', 'integrate', 'check', 'dispatch', 'handoff', 'recover', 'usage', 'checkpoint', 'prepare', 'transfer', 'report'];
+const COMMANDS = ['init', 'status', 'next', 'start', 'finish', 'block', 'fail', 'review', 'verify', 'unblock', 'integrate', 'check', 'dispatch', 'handoff', 'recover', 'usage', 'checkpoint', 'prepare', 'transfer', 'report', 'charter'];
 const USAGE = `usage: ae.ts <command> PLAN [SLICE] [flags]\n       ae.ts check [PLAN] -- CMD | --path P\ncommands: ${COMMANDS.join(', ')}`;
 const FLAGS = ['allow', 'profile', 'provider', 'model', 'effort', 'task-id', 'summary', 'reason', 'by', 'note', 'timeout', 'ref', 'manual', 'caps', 'host', 'apply', 'reject',
-  'snapshot', 'policy', 'agent', 'remaining', 'to', 'lead', 'done', 'next', 'json'];
-const BOOLEAN = ['manual', 'apply', 'reject', 'json'];
+  'snapshot', 'policy', 'agent', 'remaining', 'to', 'lead', 'done', 'next', 'json', 'approval', 'deadline', 'cap', 'branch', 'grant', 'replace'];
+const BOOLEAN = ['manual', 'apply', 'reject', 'json', 'replace'];
 // Free text that the journal, the plan, or the output can hold. It is redacted when it is read, before anything stores it.
 const FREE_TEXT = ['summary', 'reason', 'by', 'note', 'ref', 'task-id', 'provider', 'model', 'effort', 'agent', 'to', 'lead', 'done', 'next'];
 const HOSTS = ['t3', 'claude-code', 'other'];
@@ -59,6 +60,7 @@ function parseArgs(argv: string[]): Args {
   const [plan, ...rest] = tail;
   if (!plan || plan.startsWith('--')) throw new Error(`${command}: PLAN path is required`);
   const flags = new Map<string, string>();
+  const caps: string[] = [];
   let slice: string | undefined;
   for (let i = 0; i < rest.length; i++) {
     const a = rest[i];
@@ -68,9 +70,11 @@ function parseArgs(argv: string[]): Args {
     if (BOOLEAN.includes(name)) { flags.set(name, 'true'); continue; }
     const v = rest[++i];
     if (v === undefined || v.startsWith('--')) throw new Error(`flag --${name} needs a value`);
+    if (name === 'cap') caps.push(v);
+    else if (['approval', 'deadline', 'branch', 'grant'].includes(name) && flags.has(name)) throw new Error(`duplicate flag --${name}`);
     flags.set(name, FREE_TEXT.includes(name) ? redact(v) : v);
   }
-  return { command, plan, slice, flags };
+  return { command, plan, slice, flags, caps };
 }
 
 const need = (a: Args, name: string) => {
@@ -286,13 +290,26 @@ const handlers: Record<string, (c: Ctx) => Promise<Result> | Result> = {
     return { plan: c.journal.plan, profile: c.journal.profile, authority: c.journal.authority, counts, done: c.plan.slices.every(s => settled(c.journal.slices[s.id].state)), slices };
   },
 
+  charter(c) {
+    const f = c.args.flags;
+    if (c.journal.run && (!f.has('replace') || !f.get('reason')?.trim())) throw new Error('charter already exists; replacement requires --replace --reason');
+    if (f.has('replace')) need(c.args, 'reason');
+    c.journal.run = createCharter({ root: c.root, cwd: c.cwd, approval: need(c.args, 'approval'), deadline: need(c.args, 'deadline'), caps: c.args.caps ?? [],
+      branch: f.get('branch'), grant: f.get('grant'), reason: f.get('reason'), now: c.now });
+    return { run: c.journal.run };
+  },
+
   next(c) {
+    const stop = runStop(c.journal, c.now);
+    if (stop) return { ...stop, batch: [], done: c.plan.slices.every(s => settled(c.journal.slices[s.id].state)) };
     const promoted = promoteReady(c.journal, c.plan, c.now), { batch, waiting, deferred, slots, running } = nextBatch(c.journal, c.plan);
     return { profile: c.journal.profile, slots, running, promoted, batch: batch.map(s => brief(s, c.journal.slices[s.id])), waiting, deferred, ...awaiting(c.journal, c.plan), done: c.plan.slices.every(s => settled(c.journal.slices[s.id].state)) };
   },
 
   start(c) {
     const { s, rec } = c.slice(c.args.slice), from = rec.state;
+    const stop = runStop(c.journal, c.now);
+    if (stop) return { ...stop, slice: s.id, state: rec.state };
     expect(rec, s.id, 'READY');
     const unmet = s.dependsOn.filter(d => !settled(c.journal.slices[d].state));
     if (unmet.length) throw new Error(`slice ${s.id} depends on unverified slice ${unmet.join(', ')}`);
@@ -336,12 +353,15 @@ const handlers: Record<string, (c: Ctx) => Promise<Result> | Result> = {
     // every worker that wrote this slice is a builder, also one that handed it off
     const builders = new Set(rec.attempts.filter(a => a.kind === 'work' && a.taskId).map(a => a.taskId));
     if (builders.has(by)) throw new Error(`reviewer "${by}" is a builder's task for this slice; the reviewer must be independent`);
+    const at = c.now.toISOString(), f = c.args.flags;
+    const attempt: Attempt = { n: rec.attempts.length + 1, kind: 'review', at, provider: f.get('provider'), model: f.get('model'), effort: f.get('effort') };
     if (reject) {
-      const at = c.now.toISOString(), attempt: Attempt = { n: rec.attempts.length + 1, kind: 'review', at, signature: failureSignature(note) };
+      attempt.signature = failureSignature(note);
       const out = recordFailure(rec, attempt, at, `review rejected by ${by}: ${note}`);
       return { ...fromTo(rec, s.id, from), failures: failures(rec).length, why: out.why, next: rec.state === 'READY' ? 'dispatch again: the attempt ladder picks the target' : 'FAILED: only unblock --reason (a user decision) restarts it' };
     }
-    rec.review = { by, note, at: c.now.toISOString() };
+    rec.attempts.push({ ...attempt, outcome: 'finished', endedAt: at, summary: note });
+    rec.review = { by, note, at };
     move(rec, 'REVIEWED', `reviewed by ${by}`, rec.review.at);
     return { ...fromTo(rec, s.id, from), next: 'verify' };
   },
@@ -469,7 +489,7 @@ const handlers: Record<string, (c: Ctx) => Promise<Result> | Result> = {
       if (h.to === to.label) return { slice: s.id, state: rec.state, unchanged: true, handoff: h };
       self(h.from.label);
       h.history.push({ at, phase: h.phase, note: `lead ${lead} changed the replacement from ${h.to} to ${to.label}: ${reason}` });
-      h.to = to.label; h.lead = lead;
+      h.to = to.label; h.lead = lead; h.reason = reason;
       return { slice: s.id, state: rec.state, handoff: h, next: h.phase === 'CHECKPOINTED' ? 'ae transfer, ae handoff, delegate, ae transfer --task-id' : 'ae checkpoint' };
     }
     const open = openAttempt(rec), from = currentLabel(s, rec);
@@ -502,12 +522,12 @@ const handlers: Record<string, (c: Ctx) => Promise<Result> | Result> = {
     const cp = rec.checkpoints!.at(-1)!, now = fingerprint(c.root, s.files, engineOwned(c.root, c.planPath, c.jfile));
     if (now !== cp.fingerprint) throw new Error(`transfer refused: slice ${s.id} files changed after the checkpoint (${cp.fingerprint} -> ${now}). The old worker may still be writing. Stop it, run ae checkpoint again, then transfer. Nothing was written`);
     const old = openAttempt(rec);
-    if (old) { old.outcome = 'handed-off'; old.endedAt = at; old.reason = `usage handoff to ${h.to}`; }
+    if (old) { old.outcome = 'handed-off'; old.endedAt = at; old.reason = h.reason; }
     const idx = rec.handoffs!.length - 1;
     rec.attempts.push({ n: rec.attempts.length + 1, kind: 'work', at, provider: f.get('provider'), model: f.get('model'), effort: f.get('effort'), ...(taskId ? { taskId } : {}), handoff: idx });
     h.phase = 'TRANSFERRED'; h.lead = lead; if (taskId) h.taskId = taskId;
     h.history.push({ at, phase: 'TRANSFERRED', note: `lead ${lead} transferred to ${h.to}${taskId ? `, task ${taskId}` : '; no task yet'}` });
-    rec.history.push({ at, from: 'IN_PROGRESS', to: 'IN_PROGRESS', reason: `usage handoff: ${h.from.label} -> ${h.to} (lead ${lead}); not a failed attempt` });
+    rec.history.push({ at, from: 'IN_PROGRESS', to: 'IN_PROGRESS', reason: `handoff: ${h.from.label} -> ${h.to} (lead ${lead}): ${h.reason}; not a failed attempt` });
     return { slice: s.id, state: rec.state, handoff: h, failures: failures(rec).length, next: taskId ? 'the replacement continues; finish, review, and verify as usual' : 'ae handoff for the note, delegate it, then ae transfer --task-id ID' };
   },
 };
@@ -601,6 +621,7 @@ async function recover(b: Base, text: string): Promise<Result> {
     const found = changedFiles(root), changed = found ?? [];
     const engineFiles = engineOwned(root, planPath, jfile);
     const ownedBy = (p: string) => plan.slices.some(s => s.files.some(f => within(p, f)));
+    const tempFiles = orphanTempFiles(planPath, jfile).map(p => relative(root, p));
     const unowned = changed.filter(p => !engineFiles.has(p) && !/^BLOCKED[^/]*\.md$/.test(p) && !ownedBy(p));
 
     let applied: Result[] = [];
@@ -629,7 +650,7 @@ async function recover(b: Base, text: string): Promise<Result> {
       plan: journal.plan, readOnly: !apply, ...(l.recoveredFromBackup ? { recoveredFromBackup: true } : {}),
       lock: lockBefore && { pid: lockBefore.pid, alive: lockBefore.alive, stale: lockBefore.stale, note: lockBefore.stale ? (apply ? 'stale lock (dead pid) taken over' : 'stale lock (dead pid); a writing command takes it over') : 'held by a live process; this report may be out of date' },
       ...(apply && lockBefore?.stale ? { staleLockTakenOver: true } : {}),
-      synced, planDrift, staleEvidence, inProgress, handoffs, ...awaiting(journal, plan), blockedFiles,
+      synced, planDrift, staleEvidence, inProgress, handoffs, tempFiles, ...awaiting(journal, plan), blockedFiles,
       git: { branch: git(root, 'symbolic-ref', '--short', '-q', 'HEAD') ?? 'detached or none', head: git(root, 'rev-parse', 'HEAD') ?? 'none', changedFiles: found, unowned },
       filesProblems: problems.map(p => p.text),
       next: { batch: nb.batch.map(s => s.id), running: nb.running, waiting: nb.waiting, deferred: nb.deferred },
@@ -680,7 +701,7 @@ export async function main(argv: string[], deps: Deps): Promise<Result> {
   if (args.command === 'recover') return recover(base, text);
   if (READ_ONLY.includes(args.command)) {
     const l = loadJournal(jfile);
-    if (args.command === 'report') return { ...buildReport({ journal: l.journal, journalFile: jfile, root, planText: text }), ...(l.recoveredFromBackup ? { recoveredFromBackup: true } : {}) };
+    if (args.command === 'report') return { ...buildReport({ journal: l.journal, journalFile: jfile, root, planText: text, now }), ...(l.recoveredFromBackup ? { recoveredFromBackup: true } : {}) };
     syncJournal(l.journal, plan, now); // in memory only
     closeStaleHandoffs(l.journal, now.toISOString());
     assertFiles(plan, root, l.journal.authority.allow);

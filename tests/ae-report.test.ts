@@ -10,7 +10,7 @@ import type { buildReport } from '../tools/agents/skills/autonomous-engineering/
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const ae = join(root, 'tools/agents/skills/autonomous-engineering/scripts/ae.ts');
-const fixture = () => {
+const fixture = ({ gitRepo = true, history = true } = {}) => {
   const dir = realpathSync(mkdtempSync(join(tmpdir(), 'ae-report-')));
   mkdirSync(join(dir, 'plans'));
   const plan = 'plans/p.md', jfile = join(dir, 'plans/p.run.json');
@@ -32,9 +32,9 @@ const fixture = () => {
 `).join('\n');
   writeFileSync(join(dir, plan), text);
   const git = (...args: string[]) => execFileSync('git', ['-C', dir, ...args], { encoding: 'utf8' }).trim();
-  git('init', '-q');
+  if (gitRepo) git('init', '-q');
   const commit = (message: string) => git('-c', 'user.name=Fixture', '-c', 'user.email=fixture@example.invalid', '-c', 'commit.gpgsign=false', '-c', 'core.hooksPath=/dev/null', 'commit', '--allow-empty', '-qm', message);
-  commit('baseline');
+  if (gitRepo && history) commit('baseline');
   const cli = (...args: string[]) => {
     const p = spawnSync(process.execPath, ['--experimental-strip-types', '--no-warnings', ae, ...args], { cwd: dir, encoding: 'utf8' });
     assert.equal(p.status, 0, p.stderr);
@@ -69,7 +69,9 @@ test('morning report reads a real CLI run, redacts output, and leaves every fixt
   const out = r.cli('report', r.plan), json = r.cli('report', r.plan, '--json');
   const report: ReturnType<typeof buildReport> = JSON.parse(json);
   assert.match(out, /^Morning report\n/);
-  assert.equal(out.slice('Morning report\n'.length).trim(), json.trim());
+  assert.doesNotMatch(out, /\{\s*"plan"/);
+  assert.deepEqual(out.match(/^## .+$/gm), ['## Verified with engine evidence', '## Claims', '## Failures', '## Blocked', '## Handoffs', '## Commits', '## Charter and stop', '## Journal']);
+  for (const fact of ['echo checked', 'exitCode: 0', 'gitHead:', 'fingerprint:', 'missing assertion', 'needs account access', sha, r.jfile]) assert.ok(out.includes(fact), fact);
   assert.deepEqual(report.counts, { VERIFIED: 1, READY: 1, BLOCKED: 1 });
   assert.equal(report.goal, 'Ship the morning report');
   const journal = JSON.parse(raw);
@@ -84,7 +86,7 @@ test('morning report reads a real CLI run, redacts output, and leaves every fixt
   assert.match(report.slices[1].failures[0].reason ?? '', /missing assertion/);
   assert.equal(report.slices[2].blocker?.reason, 'needs account access');
   assert.deepEqual(report.commits, [{ sha, slice: '1' }]);
-  assert.deepEqual(report.attempts, [{ provider: 'codex', model: 'auto', effort: 'medium', count: 3 }]);
+  assert.deepEqual(report.attempts, [{ provider: 'codex', model: 'auto', effort: 'medium', count: 3 }, { provider: 'unknown', model: 'unknown', effort: 'unknown', count: 1 }]);
   for (const output of [out, json]) {
     assert.ok(!output.includes('synthetic-secret'));
     assert.match(output, /\[REDACTED\]/);
@@ -109,7 +111,46 @@ test('report preserves recorded state when the plan definition changes, and iden
   assert.deepEqual(readFileSync(r.jfile + '.bak'), journal);
 });
 
-test('overnight reference contains only the morning report section', () => {
-  const text = readFileSync(join(root, 'tools/agents/skills/autonomous-engineering/references/overnight.md'), 'utf8');
-  assert.deepEqual(text.match(/^#+ .+$/gm), ['## Morning report']);
+test('report distinguishes unborn HEAD from no Git, and handles a journal with no attempts', () => {
+  for (const [gitRepo, gitHistory] of [[true, 'empty'], [false, 'unavailable']] as const) {
+    const r = fixture({ gitRepo, history: false });
+    r.cli('init', r.plan);
+    const before = readFileSync(r.jfile);
+    const report: ReturnType<typeof buildReport> = JSON.parse(r.cli('report', r.plan, '--json'));
+    assert.equal(report.gitHistory, gitHistory);
+    assert.deepEqual(report.attempts, []);
+    assert.deepEqual(report.commits, []);
+    assert.deepEqual(report.claims, []);
+    assert.deepEqual(report.handoffs, []);
+    assert.equal(report.charter, null);
+    assert.equal(report.stop, null);
+    const out = r.cli('report', r.plan);
+    assert.match(out, /## Verified with engine evidence\n- none/);
+    assert.deepEqual(readFileSync(r.jfile), before);
+  }
+});
+
+test('JSON and text separate worker claims from verified evidence and include handoff facts', () => {
+  const r = fixture();
+  r.cli('init', r.plan); r.cli('next', r.plan);
+  r.cli('charter', r.plan, '--approval', `${r.plan}:10`, '--deadline', '2099-11-05T19:00:00-06:00', '--cap', 'codex/auto/auto=2');
+  r.cli('start', r.plan, '1', '--provider', 'codex', '--model', 'auto', '--effort', 'auto');
+  r.cli('prepare', r.plan, '1', '--lead', 'Claude (opus/high)', '--to', 'Codex (auto, fresh session)', '--reason', 'provider outage');
+  r.cli('checkpoint', r.plan, '1', '--done', 'Partial patch saved.');
+  r.cli('transfer', r.plan, '1', '--lead', 'Claude (opus/high)', '--provider', 'codex', '--model', 'auto', '--effort', 'auto');
+  r.cli('finish', r.plan, '1', '--summary', 'worker says complete');
+  const before = readFileSync(r.jfile);
+  const report: ReturnType<typeof buildReport> = JSON.parse(r.cli('report', r.plan, '--json'));
+  assert.deepEqual(report.counts, { AGENT_FINISHED: 1, READY: 2 });
+  assert.equal(report.claims[0].slice, '1');
+  assert.equal(report.claims[0].claims[0].summary, 'worker says complete');
+  assert.equal(report.handoffs[0].reason, 'provider outage');
+  assert.equal(report.handoffs[0].slice, '1');
+  assert.equal(report.stop?.stop, 'budget');
+  const text = r.cli('report', r.plan);
+  assert.match(text, /## Verified with engine evidence\n- none/);
+  assert.match(text, /## Claims\n- Slice 1 \(AGENT_FINISHED\): .*worker says complete/);
+  assert.match(text, /## Handoffs\n- .*provider outage/);
+  assert.match(text, /Stop: stop: budget/);
+  assert.deepEqual(readFileSync(r.jfile), before);
 });

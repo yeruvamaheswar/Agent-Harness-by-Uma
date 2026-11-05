@@ -1,9 +1,10 @@
 import { createHash, randomBytes } from 'node:crypto';
 import { closeSync, existsSync, lstatSync, openSync, readdirSync, readFileSync, readlinkSync, renameSync, statSync, unlinkSync, writeFileSync } from 'node:fs';
-import { join, posix } from 'node:path';
+import { basename, dirname, join, posix } from 'node:path';
 import { protectedRel, redact } from './guard.ts';
 import { definitionDigest } from './plan.ts';
 import type { Plan, Slice, State } from './plan.ts';
+import type { RunCharter } from './run.ts';
 
 // Run journal: plans/<slug>.run.json. The journal is canonical for the engine (DEC-4).
 
@@ -77,7 +78,7 @@ export type Handoff = {
 export type Journal = {
   schemaVersion: 1; plan: string; profile: ProfileName;
   authority: { allow: string[]; grantedBy: 'user'; at: string };
-  createdAt: string; updatedAt: string;
+  createdAt: string; updatedAt: string; run?: RunCharter;
   slices: Record<string, SliceRecord>; removed?: Record<string, SliceRecord>;
 };
 
@@ -162,6 +163,21 @@ export function saveJournal(file: string, journal: Journal, now: Date = new Date
 
 export function pidAlive(pid: number): boolean {
   try { process.kill(pid, 0); return true; } catch (e) { return (e as NodeJS.ErrnoException).code === 'EPERM'; }
+}
+
+// Leftovers from a crashed atomic write are reported, never removed or read.
+export function orphanTempFiles(...files: string[]): string[] {
+  return files.flatMap(file => {
+    const prefix = basename(file) + '.';
+    return readdirSync(dirname(file)).flatMap(name => {
+      if (!name.startsWith(prefix)) return [];
+      const match = /^(\d+)\.([a-f0-9]+)\.tmp$/i.exec(name.slice(prefix.length));
+      if (!match) return [];
+      const pid = Number(match[1]), full = join(dirname(file), name);
+      if (!Number.isSafeInteger(pid) || pid <= 0 || pidAlive(pid)) return [];
+      try { return lstatSync(full).isFile() ? [full] : []; } catch { return []; }
+    });
+  }).sort();
 }
 
 const YOUNG_MS = 10_000;
