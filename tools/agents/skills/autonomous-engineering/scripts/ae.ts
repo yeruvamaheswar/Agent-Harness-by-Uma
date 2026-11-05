@@ -2,6 +2,7 @@ import { execFileSync, spawn } from 'node:child_process';
 import { existsSync, lstatSync, readdirSync, readFileSync, realpathSync } from 'node:fs';
 import { basename, dirname, join, relative, resolve, sep } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { buildReport, renderReport } from './report.ts';
 import { chooseTarget, intensity, parseModelRef } from './dispatch.ts';
 import { assessSlice, DEFAULT_POLICY, parsePolicy, parseSnapshot } from './usage.ts';
 import type { Caps } from './dispatch.ts';
@@ -28,15 +29,15 @@ type Base = { args: Args; plan: Plan; now: Date; root: string; planPath: string;
 type Ctx = Base & { journal: Journal; slice: (id: string | undefined) => { s: Slice; rec: SliceRecord } };
 type Result = Record<string, unknown>;
 
-const COMMANDS = ['init', 'status', 'next', 'start', 'finish', 'block', 'fail', 'review', 'verify', 'unblock', 'integrate', 'check', 'dispatch', 'handoff', 'recover', 'usage', 'checkpoint', 'prepare', 'transfer'];
+const COMMANDS = ['init', 'status', 'next', 'start', 'finish', 'block', 'fail', 'review', 'verify', 'unblock', 'integrate', 'check', 'dispatch', 'handoff', 'recover', 'usage', 'checkpoint', 'prepare', 'transfer', 'report'];
 const USAGE = `usage: ae.ts <command> PLAN [SLICE] [flags]\n       ae.ts check [PLAN] -- CMD | --path P\ncommands: ${COMMANDS.join(', ')}`;
 const FLAGS = ['allow', 'profile', 'provider', 'model', 'effort', 'task-id', 'summary', 'reason', 'by', 'note', 'timeout', 'ref', 'manual', 'caps', 'host', 'apply', 'reject',
-  'snapshot', 'policy', 'agent', 'remaining', 'to', 'lead', 'done', 'next'];
-const BOOLEAN = ['manual', 'apply', 'reject'];
+  'snapshot', 'policy', 'agent', 'remaining', 'to', 'lead', 'done', 'next', 'json'];
+const BOOLEAN = ['manual', 'apply', 'reject', 'json'];
 // Free text that the journal, the plan, or the output can hold. It is redacted when it is read, before anything stores it.
 const FREE_TEXT = ['summary', 'reason', 'by', 'note', 'ref', 'task-id', 'provider', 'model', 'effort', 'agent', 'to', 'lead', 'done', 'next'];
 const HOSTS = ['t3', 'claude-code', 'other'];
-const READ_ONLY = ['dispatch', 'handoff', 'usage'];
+const READ_ONLY = ['dispatch', 'handoff', 'usage', 'report'];
 const DEFAULT_TIMEOUT_S = 600;
 
 function parseCheck(rest: string[]): Args {
@@ -679,6 +680,7 @@ export async function main(argv: string[], deps: Deps): Promise<Result> {
   if (args.command === 'recover') return recover(base, text);
   if (READ_ONLY.includes(args.command)) {
     const l = loadJournal(jfile);
+    if (args.command === 'report') return { ...buildReport({ journal: l.journal, journalFile: jfile, root, planText: text }), ...(l.recoveredFromBackup ? { recoveredFromBackup: true } : {}) };
     syncJournal(l.journal, plan, now); // in memory only
     closeStaleHandoffs(l.journal, now.toISOString());
     assertFiles(plan, root, l.journal.authority.allow);
@@ -705,7 +707,7 @@ export async function main(argv: string[], deps: Deps): Promise<Result> {
 
 if (process.argv[1] && realpathSync(process.argv[1]) === fileURLToPath(import.meta.url)) {
   main(process.argv.slice(2), { cwd: process.cwd() }).then(
-    r => { console.log(JSON.stringify(r, null, 2)); if (process.argv[2] === 'check' && typeof r.exitCode === 'number') process.exitCode = r.exitCode; },
+    r => { console.log(process.argv[2] === 'report' && !process.argv.includes('--json') ? renderReport(r) : JSON.stringify(r, null, 2)); if (process.argv[2] === 'check' && typeof r.exitCode === 'number') process.exitCode = r.exitCode; },
     e => { process.stderr.write(`error: ${e instanceof Error ? e.message : String(e)}\n`); process.exitCode = 1; },
   );
 }
