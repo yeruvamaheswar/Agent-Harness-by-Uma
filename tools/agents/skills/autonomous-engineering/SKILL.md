@@ -1,8 +1,7 @@
 ---
 name: autonomous-engineering
-description: Execute, review, and recover a multi-agent-planning plan to VERIFIED slices, with an engine that records state and evidence and refuses unsafe commands. Use only when the user names this skill.
+description: Execute, review, and recover a multi-agent-planning plan to VERIFIED slices, with an engine that records state and evidence and refuses unsafe commands. Use when the user asks to run a plan overnight, unattended, or autonomously while they are away. Not for planning a task or a single small fix.
 compatibility: Needs Node 24 or later and Git. T3 Code delegation is optional.
-disable-model-invocation: true
 ---
 
 # Autonomous engineering
@@ -23,6 +22,7 @@ When two rules conflict, the stricter rule wins. This skill never grants itself 
 |---|---|
 | `references/engine.md` | Before your first engine command, and when an engine result is unclear |
 | `references/authority.md` | Before you ask for authority, and before any command outside the engine |
+| `references/overnight.md` | In OVERNIGHT mode, before preflight, and when a wait, limit, crash, or stop comes up |
 | `../multi-agent-planning/references/slice-format.md` | For states, the handoff note, and `BLOCKED.md` |
 
 ## The engine
@@ -60,8 +60,18 @@ When two rules conflict, the stricter rule wins. This skill never grants itself 
 7. When verify fails and the slice is READY, run `ae dispatch` again. It follows the attempt ladder: builder fix, escalation, then the Fallback.
 8. Repeat from step 1 until `done` is true, or a stop condition applies.
 
-- Never commit, push, merge, or deploy. `ae integrate` needs the user's approval and a real ref.
+- Never commit except under the OVERNIGHT mode commit grant (references/overnight.md). Never push, merge, or deploy. `ae integrate` needs the user's approval and a real ref.
 - `ae unblock` records a user decision. Run it only after the user decides.
+
+## OVERNIGHT mode
+A session that received an `ae` handoff note is a worker. It runs the note and `ae check` only, never this mode.
+Use this mode when the user asks for a run while away. Read `references/overnight.md` first.
+1. Preflight: one question batch, plan approval, and cleared permission prompts, before the user leaves.
+2. The charter command records the deadline, caps, run branch, and the user's approval line. Nothing runs before it.
+3. Then run EXECUTE, REVIEW, USAGE, and RECOVER with one fresh child per slice. End the turn to wait. Never poll.
+4. The commit grant lets the commit command commit one VERIFIED slice on the run branch. Nothing else.
+5. `ae next` stops on a deadline or a cap. Write the report from the report command.
+6. A crash or restart does not resume the run by itself. Say so, and use RECOVER mode.
 
 ## USAGE mode
 Claude is always the lead. Only a Claude lead picks a replacement. A Codex, Cursor, or Grok coordinator stops and hands that decision to a Claude lead.
@@ -75,11 +85,10 @@ Claude is always the lead. Only a Claude lead picks a replacement. A Codex, Curs
 A login or outage error is a provider error: try the agent's CLI first (`multi-agent-planning` routing). A usage limit is not: the CLI shares the account.
 
 ## REVIEW mode
-1. Pick a reviewer from a different model family than the builder, where one is available.
-2. The reviewer reads the actual diff, not the worker's summary.
-3. Record the result: `ae review PLAN N --by REVIEWER --note TEXT`. The reviewer is never the builder's task.
+1. Pick a reviewer from a different model family than the builder, where one is available. The reviewer reads the actual diff, not the worker's summary.
+2. Record the result: `ae review PLAN N --by REVIEWER --note TEXT`. The reviewer is never the builder's task.
    - When the reviewer finds a defect, run `ae review PLAN N --reject --by REVIEWER --note TEXT`. The slice returns to READY on the attempt ladder.
-4. For a product contract, tell the user to run the `verify` skill in a fresh session.
+3. For a product contract, tell the user to run the `verify` skill in a fresh session.
 
 ## RECOVER mode
 1. Run `ae recover PLAN`. Read what it lists.
@@ -90,18 +99,15 @@ A login or outage error is a provider error: try the agent's CLI first (`multi-a
 
 ## Stop conditions
 Stop and report when one of these is true:
-- `ae next` gives `done: true`.
+- `ae next` gives `done: true`, or a stop reason (deadline or budget).
 - Every remaining slice is BLOCKED, FAILED, or waits on one.
-- A command needs authority the user did not grant.
-- The engine reports an error that you cannot fix inside your authority.
+- A command needs authority the user did not grant, or the engine reports an error you cannot fix.
 - The user asks you to stop.
 
 ## Report at the end
-- What changed, why, what was verified, what is still open, and what needs the user's decision.
-- The state counts from `ae status`.
+- What changed, why, what was verified, what is still open, and what needs the user's decision. Add the state counts from `ae status`.
 - For each VERIFIED slice: the evidence line (command, exit code, Git head, fingerprint).
-- For each BLOCKED or FAILED slice: the reason and the decision needed.
-- What waits on the user: approvals, commits, integration.
+- For each BLOCKED or FAILED slice: the reason and the decision needed. What waits on the user: approvals, commits, integration.
 
 ## Never
 - Mark a slice VERIFIED or ACCEPTED by hand.
