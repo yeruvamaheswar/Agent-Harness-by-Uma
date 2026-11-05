@@ -1,12 +1,12 @@
 # Subagent budget
 
-`subagent-budget` is a harness skill. Load it before any child agent. It caps how many children start at once, and which model and effort they use, so one fan-out does not spend the session limit.
+`subagent-budget` is a harness skill. Load it before any child agent. There is no fixed cap. The parent decides how many children to run, and which model and effort best fit each one, so usage goes where it pays.
 
 Source: `tools/agents/skills/subagent-budget/SKILL.md`.
 
 ## Rule
 
-At most 3 children at a time. Fact-finding, page reading, and local probes use Sonnet or Haiku at medium effort. Opus at medium is only the final synthesis, after the notes exist. `high`, `xhigh`, `max`, and `ultrathink` apply only to the one task you name in that conversation.
+There is no fixed cap on subagent count. The parent decides how many to run. Pick the model and effort that best fit each child. Use `high`, `xhigh`, `max`, or `ultrathink` only when you name that task, or when a failure justifies one step up.
 
 A blanket "ultrathink" in the parent brief is not permission to set that effort on every child. A catalog default of high is not a cheap default.
 
@@ -25,4 +25,4 @@ npm run harness -- skills verify subagent-budget
 
 `skills install` copies the skill to `~/.agents/skills/subagent-budget/` and links it from `~/.claude/skills/subagent-budget`. Codex reads the first path. Claude Code and the Cursor CLI read the link.
 
-Before a fan-out of more than one child, the agent tells you the count, the model, and the effort. After a failed check it raises one child by one rung and says why. It does not raise the others. Three attempts, then it stops and asks.
+Before a fan-out of more than one child, the agent tells you the count, the models, and the efforts. After a failed check it raises one child by one rung, or switches that child to the next-best provider, and says why. It does not raise the others. After three failed attempts on one task, it stops and asks.

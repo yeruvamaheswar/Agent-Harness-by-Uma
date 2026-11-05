@@ -30,7 +30,7 @@ Add a mode word when you want one: `quick`, `standard`, `sprint`, or `deep`. Wit
 
 1. Ask for a plan. The skill writes `plans/<slug>.md` and builds the page with `~/.agents/bin/md-view.sh`. Every slice is `PLANNED`. No worker starts. No worktree is made.
 2. Read the page. Check the model matrix, the waves, and the first action.
-3. Ask for execution: "execute the plan in plans/<slug>.md". The skill loads `subagent-budget` before any worker: at most 3 at once, and fact-finding at medium effort. It runs the tracer slice first, checks it, then runs parallel slices.
+3. Ask for execution: "execute the plan in plans/<slug>.md". The skill loads `subagent-budget` before any worker. There is no fixed cap: the parent decides how many to run, and each child gets the model and effort that best fit. High effort only when you name that task, or a failure justifies one step up. It runs the tracer slice first, checks it, then runs parallel slices.
 4. In T3 Code, the skill delegates with `delegate_task`. A worker gets a worktree only when the last commit holds its verified dependencies. Otherwise the coordinator applies the verified diffs to the shared checkout (`git apply`, no commit) and runs the next slice there. In Claude Code, it can use its own subagents for Claude slices. Where it cannot launch an agent, it prints the handoff prompt for you to paste. It says so. It never claims that a printed prompt started a worker.
 
 ## How it picks agents, models, and effort
