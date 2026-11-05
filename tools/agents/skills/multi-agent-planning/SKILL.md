@@ -64,7 +64,7 @@ Understand → Design → Slice → Implement → Test → Review → Integrate 
 
 ## Capability discovery
 - Discover what the host offers before you name a Claude model. `references/routing.md` gives the method per host.
-- Never invent model IDs, quotas, usage, or costs. Codex and Cursor stay `Codex (auto)` and `Cursor (auto)`. Record discovery results in Existing state, not in `Model:`.
+- Never invent model IDs, quotas, usage, or costs. Codex and Cursor stay `Codex (auto)` and `Cursor (auto)`. Exception: pstack panels in Cursor use the named models in `~/.cursor/rules/pstack-models.mdc`. Record discovery results in Existing state, not in `Model:`.
 - A subscription price is not API credit. Do not assume unlimited concurrency. Use no separately billed API without the user's authorization.
 
 ## Execution (only when authorized)

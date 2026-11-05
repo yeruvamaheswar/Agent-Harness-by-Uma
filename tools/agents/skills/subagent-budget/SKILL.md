@@ -34,6 +34,7 @@ Checked 2026-10-26 against `delegate_task` and `orchestrator_capabilities`.
 3. On T3, set `target.model` and `target.options` on that child. Do not leave effort to inheritance.
 4. On Claude Code, pass that model and effort on the Agent tool. Do not spawn a matching Opus child for every topic.
 5. Codex and Cursor stay `auto`. Do not override their model. This rule still caps how many run at once.
+   - Exception: pstack panels in Cursor (arena, architect, interrogate, and the arena cross-judge pool) use the named models in `~/.cursor/rules/pstack-models.mdc`. A cross-family judge needs named models.
 6. Tell the user the count, the model, and the effort before a fan-out of more than one child.
 
 ## After a failed check

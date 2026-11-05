@@ -17,7 +17,7 @@ description: Use whenever the user asks to build, write, make, or update a plan,
 - Template changes only when the user asks. Build them as `~/.agents/bin/md-view.template.sample.html` (impeccable allowed then). Promote only after the user approves.
 - Show the user: the goal, what waits on them, progress, how each step is checked, and what is still unknown.
 - Hide nothing. Record failed checks and skipped steps. For a done step, write the observed result in the check field.
-- Use tables for comparisons. Use a ```mermaid block for 3+ interacting parts. No images or video unless the user asks.
+- Use tables for comparisons. Use a ```mermaid block for 3+ interacting parts. No images or video unless the user asks or the core UI rule calls for a video or screenshots.
 
 ## Commands
 ```bash
