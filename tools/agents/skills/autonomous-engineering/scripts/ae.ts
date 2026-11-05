@@ -33,7 +33,7 @@ type Result = Record<string, unknown>;
 const COMMANDS = ['init', 'status', 'next', 'start', 'finish', 'block', 'fail', 'review', 'verify', 'unblock', 'integrate', 'check', 'dispatch', 'handoff', 'recover', 'usage', 'checkpoint', 'prepare', 'transfer', 'report', 'charter'];
 const USAGE = `usage: ae.ts <command> PLAN [SLICE] [flags]\n       ae.ts check [PLAN] -- CMD | --path P\ncommands: ${COMMANDS.join(', ')}`;
 const FLAGS = ['allow', 'profile', 'provider', 'model', 'effort', 'task-id', 'summary', 'reason', 'by', 'note', 'timeout', 'ref', 'manual', 'caps', 'host', 'apply', 'reject',
-  'snapshot', 'policy', 'agent', 'remaining', 'to', 'lead', 'done', 'next', 'json', 'approval', 'deadline', 'cap', 'branch', 'grant', 'replace'];
+  'snapshot', 'policy', 'agent', 'remaining', 'to', 'lead', 'done', 'next', 'json', 'approval', 'deadline', 'cap', 'branch', 'replace'];
 const BOOLEAN = ['manual', 'apply', 'reject', 'json', 'replace'];
 // Free text that the journal, the plan, or the output can hold. It is redacted when it is read, before anything stores it.
 const FREE_TEXT = ['summary', 'reason', 'by', 'note', 'ref', 'task-id', 'provider', 'model', 'effort', 'agent', 'to', 'lead', 'done', 'next'];
@@ -71,7 +71,7 @@ function parseArgs(argv: string[]): Args {
     const v = rest[++i];
     if (v === undefined || v.startsWith('--')) throw new Error(`flag --${name} needs a value`);
     if (name === 'cap') caps.push(v);
-    else if (['approval', 'deadline', 'branch', 'grant'].includes(name) && flags.has(name)) throw new Error(`duplicate flag --${name}`);
+    else if (['approval', 'deadline', 'branch'].includes(name) && flags.has(name)) throw new Error(`duplicate flag --${name}`);
     flags.set(name, FREE_TEXT.includes(name) ? redact(v) : v);
   }
   return { command, plan, slice, flags, caps };
@@ -295,7 +295,7 @@ const handlers: Record<string, (c: Ctx) => Promise<Result> | Result> = {
     if (c.journal.run && (!f.has('replace') || !f.get('reason')?.trim())) throw new Error('charter already exists; replacement requires --replace --reason');
     if (f.has('replace')) need(c.args, 'reason');
     c.journal.run = createCharter({ root: c.root, cwd: c.cwd, approval: need(c.args, 'approval'), deadline: need(c.args, 'deadline'), caps: c.args.caps ?? [],
-      branch: f.get('branch'), grant: f.get('grant'), reason: f.get('reason'), now: c.now });
+      branch: f.get('branch'), reason: f.get('reason'), now: c.now });
     return { run: c.journal.run };
   },
 

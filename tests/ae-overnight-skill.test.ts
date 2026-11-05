@@ -54,9 +54,10 @@ test('OVERNIGHT mode has at most 12 lines and opens with the worker rule', () =>
   assert.match(body.join('\n'), /references\/overnight\.md/);
 });
 
-test('the commit rule names the grant and keeps push, merge, and deploy off', () => {
-  assert.match(skill, /Never commit except under the OVERNIGHT mode commit grant \(references\/overnight\.md\)\. Never push, merge, or deploy\./);
-  assert.equal(skill.match(/Never commit, push, merge, or deploy/), null, 'the old absolute line is gone');
+test('the skill and overnight reference refuse commit authority', () => {
+  assert.match(skill, /Never commit, push, merge, or deploy\./);
+  assert.doesNotMatch(skill + over, /ae commit|grant commit|commit grant/);
+  assert.match(over, /No commits during the run/);
 });
 
 test('overnight.md has the 11 sections in order', () => {
@@ -127,15 +128,15 @@ test('section 10 and 7 record the observed runtime facts', () => {
   assert.match(section(over, 1), /7 hours/);
 });
 
-test('every ae command overnight.md names is in the engine, or is charter or commit', () => {
+test('every ae command overnight.md names is in the engine', () => {
   const src = readFileSync(join(dir, 'scripts/ae.ts'), 'utf8');
   const list = src.match(/^const COMMANDS = \[([^\]]*)\]/m);
   assert.ok(list, 'ae.ts has a COMMANDS list');
   const engine = [...list[1].matchAll(/'([a-z]+)'/g)].map(m => m[1]);
   const names = named(over);
   assert.ok(names.length >= 12, 'overnight.md names the engine commands');
-  assert.deepEqual([...new Set(names.filter(n => ![...engine, 'charter', 'commit'].includes(n)))], [], 'unknown ae commands');
-  for (const c of ['status', 'check', 'charter', 'next', 'commit', 'report', 'recover', 'usage', 'prepare', 'checkpoint', 'transfer', 'handoff']) {
+  assert.deepEqual([...new Set(names.filter(n => !engine.includes(n)))], [], 'unknown ae commands');
+  for (const c of ['status', 'check', 'charter', 'next', 'report', 'recover', 'usage', 'prepare', 'checkpoint', 'transfer', 'handoff']) {
     assert.ok(names.includes(c), `overnight.md names ae ${c}`);
   }
 });

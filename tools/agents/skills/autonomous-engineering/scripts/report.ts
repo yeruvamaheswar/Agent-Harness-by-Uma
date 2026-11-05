@@ -1,7 +1,7 @@
 import { execFileSync } from 'node:child_process';
 import { relative } from 'node:path';
 import { redact } from './guard.ts';
-import type { Journal } from './journal.ts';
+import { settled, type Journal } from './journal.ts';
 import { runStop } from './run.ts';
 import type { State } from './plan.ts';
 
@@ -56,7 +56,7 @@ export function buildReport({ journal, journalFile, root, planText, now = new Da
   const goal = /^Goal:\s*(.+)$/m.exec(planText)?.[1] ?? /^- Outcome:\s*(.+)$/m.exec(planText)?.[1] ?? 'not recorded';
   const report = {
     plan: journal.plan, goal, period: { start: journal.createdAt, end: journal.updatedAt },
-    counts, slices, attempts: [...attempts.values()], commits, gitHistory,
+    counts, settled: slices.filter(s => settled(s.state)).length, done: slices.every(s => settled(s.state)), slices, attempts: [...attempts.values()], commits, gitHistory,
     claims: slices.filter(s => s.state === 'AGENT_FINISHED' || s.state === 'REVIEWED').map(s => ({ slice: s.id, state: s.state, claims: s.claims })),
     handoffs: slices.flatMap(s => s.handoffs.map(h => ({ slice: s.id, ...h }))),
     charter: journal.run ?? null, stop: runStop(journal, now),
@@ -83,8 +83,9 @@ export function renderReport(report: Record<string, unknown>): string {
   const slices = rows(report.slices);
   return [
     'Morning report',
-    `Goal: ${describe(report.goal)}\nPeriod: ${describe(report.period)}\nStates: ${describe(report.counts)}`,
+    `Goal: ${describe(report.goal)}\nPeriod: ${describe(report.period)}\nStates: ${describe(report.counts)}\nSettled: ${describe(report.settled)}; done: ${describe(report.done)}`,
     section('Verified with engine evidence', slices.filter(s => s.state === 'VERIFIED' || s.state === 'INTEGRATED').map(s => `Slice ${s.id} (${s.state}): ${describe(s.evidence)}`)),
+    section('Accepted by manual sign-off', slices.filter(s => s.state === 'ACCEPTED').map(s => `Slice ${s.id} (${s.state}): ${describe(s.evidence)}`)),
     section('Claims', rows(report.claims).map(c => `Slice ${c.slice} (${c.state}): ${describe(c.claims)}`)),
     section('Failures', slices.flatMap(s => rows(s.failures).map(f => `Slice ${s.id}: ${describe(f)}`))),
     section('Blocked', slices.filter(s => s.blocker).map(s => `Slice ${s.id}: ${describe(s.blocker)}`)),

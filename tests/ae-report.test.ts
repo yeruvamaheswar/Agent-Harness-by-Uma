@@ -70,7 +70,7 @@ test('morning report reads a real CLI run, redacts output, and leaves every fixt
   const report: ReturnType<typeof buildReport> = JSON.parse(json);
   assert.match(out, /^Morning report\n/);
   assert.doesNotMatch(out, /\{\s*"plan"/);
-  assert.deepEqual(out.match(/^## .+$/gm), ['## Verified with engine evidence', '## Claims', '## Failures', '## Blocked', '## Handoffs', '## Commits', '## Charter and stop', '## Journal']);
+  assert.deepEqual(out.match(/^## .+$/gm), ['## Verified with engine evidence', '## Accepted by manual sign-off', '## Claims', '## Failures', '## Blocked', '## Handoffs', '## Commits', '## Charter and stop', '## Journal']);
   for (const fact of ['echo checked', 'exitCode: 0', 'gitHead:', 'fingerprint:', 'missing assertion', 'needs account access', sha, r.jfile]) assert.ok(out.includes(fact), fact);
   assert.deepEqual(report.counts, { VERIFIED: 1, READY: 1, BLOCKED: 1 });
   assert.equal(report.goal, 'Ship the morning report');
@@ -152,5 +152,28 @@ test('JSON and text separate worker claims from verified evidence and include ha
   assert.match(text, /## Claims\n- Slice 1 \(AGENT_FINISHED\): .*worker says complete/);
   assert.match(text, /## Handoffs\n- .*provider outage/);
   assert.match(text, /Stop: stop: budget/);
+  assert.deepEqual(readFileSync(r.jfile), before);
+});
+
+test('report counts ACCEPTED as settled and separates manual sign-off from engine verification', () => {
+  const r = fixture();
+  writeFileSync(join(r.dir, r.plan), readFileSync(join(r.dir, r.plan), 'utf8').replaceAll('- Verify: `echo checked`', '- Verify: person inspects the result'));
+  r.cli('init', r.plan); r.cli('next', r.plan);
+  for (const id of ['1', '2', '3']) {
+    r.cli('start', r.plan, id, '--provider', 'codex', '--model', 'auto', '--effort', 'auto');
+    r.cli('finish', r.plan, id, '--summary', 'ready for sign-off');
+    r.cli('review', r.plan, id, '--by', 'independent-review', '--note', 'diff inspected');
+    r.cli('verify', r.plan, id, '--manual', '--by', 'Owner', '--note', 'visual result approved');
+  }
+  const before = readFileSync(r.jfile);
+  const report: ReturnType<typeof buildReport> = JSON.parse(r.cli('report', r.plan, '--json'));
+  assert.deepEqual(report.counts, { ACCEPTED: 3 });
+  assert.equal(report.settled, 3);
+  assert.equal(report.done, true);
+  assert.deepEqual(report.claims, []);
+  const text = r.cli('report', r.plan);
+  assert.match(text, /## Verified with engine evidence\n- none/);
+  assert.match(text, /Settled: 3; done: true/);
+  assert.match(text, /## Accepted by manual sign-off\n- Slice 1 \(ACCEPTED\): .*by: Owner; note: visual result approved/);
   assert.deepEqual(readFileSync(r.jfile), before);
 });

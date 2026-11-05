@@ -60,7 +60,7 @@ When two rules conflict, the stricter rule wins. This skill never grants itself 
 7. When verify fails and the slice is READY, run `ae dispatch` again. It follows the attempt ladder: builder fix, escalation, then the Fallback.
 8. Repeat from step 1 until `done` is true, or a stop condition applies.
 
-- Never commit except under the OVERNIGHT mode commit grant (references/overnight.md). Never push, merge, or deploy. `ae integrate` needs the user's approval and a real ref.
+- Never commit, push, merge, or deploy. `ae integrate` needs the user's approval and a real ref.
 - `ae unblock` records a user decision. Run it only after the user decides.
 
 ## OVERNIGHT mode
@@ -69,9 +69,8 @@ Use this mode when the user asks for a run while away. Read `references/overnigh
 1. Preflight: one question batch, plan approval, and cleared permission prompts, before the user leaves.
 2. The charter command records the deadline, caps, run branch, and the user's approval line. Nothing runs before it.
 3. Then run EXECUTE, REVIEW, USAGE, and RECOVER with one fresh child per slice. End the turn to wait. Never poll.
-4. The commit grant lets the commit command commit one VERIFIED slice on the run branch. Nothing else.
-5. `ae next` stops on a deadline or a cap. Write the report from the report command.
-6. A crash or restart does not resume the run by itself. Say so, and use RECOVER mode.
+4. `ae next` stops on a deadline or a cap. Write the report from the report command.
+5. A crash or restart does not resume the run by itself. Say so, and use RECOVER mode.
 
 ## USAGE mode
 Claude is always the lead. Only a Claude lead picks a replacement. A Codex, Cursor, or Grok coordinator stops and hands that decision to a Claude lead.

@@ -7,13 +7,13 @@ import type { Journal } from './journal.ts';
 export type RunCap = { provider: string; model: string; effort: string; limit: number };
 export type RunCharter = {
   at: string; approval: { path: string; line: number; text: string }; deadline: string;
-  caps: RunCap[]; branch?: string; grants: 'commit'[]; reason?: string;
+  caps: RunCap[]; branch?: string; reason?: string;
 };
 export type RunStop = { stop: 'deadline'; deadline: string } | { stop: 'budget'; cap: RunCap; used: number };
 
-export function createCharter({ root, cwd, approval, deadline, caps, branch, grant, reason, now }: {
+export function createCharter({ root, cwd, approval, deadline, caps, branch, reason, now }: {
   root: string; cwd: string; approval: string; deadline: string; caps: string[];
-  branch?: string; grant?: string; reason?: string; now: Date;
+  branch?: string; reason?: string; now: Date;
 }): RunCharter {
   const pointer = /^(.+):([1-9]\d*)$/.exec(approval);
   if (!pointer) throw new Error('charter: --approval must be PATH:LINE');
@@ -29,7 +29,6 @@ export function createCharter({ root, cwd, approval, deadline, caps, branch, gra
   if (!/T\d{2}:\d{2}(?::\d{2}(?:\.\d+)?)?(?:Z|[+-]\d{2}:\d{2})$/i.test(deadline) || !Number.isFinite(Date.parse(deadline))) {
     throw new Error('charter: --deadline must be ISO time with a UTC offset (Z or ±HH:MM)');
   }
-  if (grant !== undefined && grant !== 'commit') throw new Error('charter: --grant accepts commit only');
   if (branch !== undefined) {
     if (redact(branch) !== branch) throw new Error('charter: branch contains secret-like text');
     try { execFileSync('git', ['check-ref-format', `refs/heads/${branch}`], { stdio: 'ignore' }); }
@@ -46,7 +45,7 @@ export function createCharter({ root, cwd, approval, deadline, caps, branch, gra
   return {
     at: now.toISOString(), approval: { path: path.split(sep).join('/'), line, text: redact(lines[line - 1]) },
     deadline: new Date(deadline).toISOString(), caps: parsed, ...(branch !== undefined ? { branch } : {}),
-    grants: grant === 'commit' ? ['commit'] : [], ...(reason ? { reason: redact(reason) } : {}),
+    ...(reason ? { reason: redact(reason) } : {}),
   };
 }
 

@@ -51,16 +51,15 @@ const initialized = async () => {
   return r;
 };
 
-test('charter CLI stores the repo approval line, deadline, repeated caps, optional branch and explicit commit grant', async () => {
+test('charter CLI stores the repo approval line, deadline, repeated caps, optional branch', async () => {
   const r = await initialized();
-  const out = r.cli('charter', r.plan, '--approval', 'approval.md:2', '--deadline', DEADLINE, '--branch', 'overnight/test', '--grant', 'commit', '--cap', 'claude/opus/high=8', '--cap', 'codex/auto/auto=4');
+  const out = r.cli('charter', r.plan, '--approval', 'approval.md:2', '--deadline', DEADLINE, '--branch', 'overnight/test', '--cap', 'claude/opus/high=8', '--cap', 'codex/auto/auto=4');
   assert.equal(out.status, 0, out.stderr);
   const run = r.journal().run;
   assert.ok(run);
   assert.deepEqual(run.approval, { path: 'approval.md', line: 2, text: 'Local commits on the run branch are approved.' });
   assert.equal(run.deadline, '2030-11-06T01:00:00.000Z');
   assert.equal(run.branch, 'overnight/test');
-  assert.deepEqual(run.grants, ['commit']);
   assert.deepEqual(run.caps, [{ provider: 'claude', model: 'opus', effort: 'high', limit: 8 }, { provider: 'codex', model: 'auto', effort: 'auto', limit: 4 }]);
   assert.equal(r.journal().authority.allow.includes('commit'), false);
   const before = readFileSync(r.jfile);
@@ -69,7 +68,6 @@ test('charter CLI stores the repo approval line, deadline, repeated caps, option
   await assert.rejects(r.charter('--reason', 'new scope'), /--replace --reason/);
   assert.deepEqual(readFileSync(r.jfile), before);
   await r.charter('--replace', '--reason', 'user reduced scope');
-  assert.deepEqual(r.journal().run?.grants, [], 'branch or approval alone never grants commit');
   assert.equal(r.journal().run?.reason, 'user reduced scope');
   assert.equal(r.journal().run?.branch, undefined);
 });
@@ -89,7 +87,7 @@ test('invalid approval pointers, unsafe paths, deadlines, caps and grants leave 
     await assert.rejects(r.charter('--cap', cap), /--cap/);
   }
   await assert.rejects(r.charter('--cap', 'claude/opus/high=1', '--cap', 'CLAUDE/opus/high=2'), /duplicate cap/);
-  await assert.rejects(r.charter('--grant', 'push'), /commit only/);
+  await assert.rejects(r.charter('--grant', 'push'), /unknown flag --grant/);
   await assert.rejects(r.charter('--branch', '../main'), /branch name/);
   assert.deepEqual(readFileSync(r.jfile), before);
 });
@@ -216,4 +214,29 @@ test('recover retains orphan temp files, takes over a dead lock on apply, preser
   assert.equal(existsSync(r.jfile + '.lock'), false);
   const next = await r.run('next', r.plan);
   assert.equal(JSON.stringify(next.batch).includes('"id":"1"'), false);
+});
+
+test('charter refuses --grant commit', async () => {
+  const r = await initialized(), before = readFileSync(r.jfile);
+  const out = r.cli('charter', r.plan, '--approval', 'approval.md:2', '--deadline', DEADLINE, '--grant', 'commit');
+  assert.equal(out.status, 1);
+  assert.match(out.stderr, /unknown flag --grant/);
+  assert.deepEqual(readFileSync(r.jfile), before);
+  assert.equal(r.journal().run, undefined);
+});
+
+test('charter completion stop treats ACCEPTED as settled', async () => {
+  const r = fixture();
+  writeFileSync(join(r.dir, r.plan), readFileSync(join(r.dir, r.plan), 'utf8').replaceAll('- Verify: `echo checked`', '- Verify: person inspects the result'));
+  await r.run('init', r.plan); await r.run('next', r.plan); await r.charter();
+  assert.equal((await r.run('next', r.plan)).done, false);
+  for (const id of ['1', '2', '3']) {
+    await r.start(id); await r.finish(id); await r.review(id);
+    assert.equal((await r.run('verify', r.plan, id, '--manual', '--by', 'Owner', '--note', 'inspected')).state, 'ACCEPTED');
+  }
+  const before = readFileSync(r.jfile);
+  const next = await r.run('next', r.plan);
+  assert.equal(next.done, true);
+  assert.deepEqual(next.batch, []);
+  assert.deepEqual(readFileSync(r.jfile), before);
 });

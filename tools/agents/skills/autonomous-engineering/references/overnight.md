@@ -23,12 +23,12 @@ Read this file when the user asks for a run while they are away. The Claude lead
 | One `delegate_task` probe for each planned provider | Child launches, and the usage state |
 
 4. Start `caffeinate -i -t SECONDS` for the run length, so idle sleep cannot stall it (section 7).
-5. Ask for plan approval last. The user types it in the thread. Then run `ae charter` with the approval row, the deadline, the caps, the branch, and the grants (section 2). Nothing runs before the charter.
+5. Ask for plan approval last. The user types it in the thread. Then run `ae charter` with the approval row, the deadline, the caps, and the branch (section 2). Nothing runs before the charter.
 
 ## 2. Charter rows and defaults
 The charter is the user's written limit for the run. Record it with:
 
-`ae charter PLAN --approval PATH:LINE --deadline ISO --cap provider/model/effort=N --branch NAME --grant commit`
+`ae charter PLAN --approval PATH:LINE --deadline ISO --cap provider/model/effort=N --branch NAME`
 
 | Flag | Rule |
 |---|---|
@@ -36,7 +36,6 @@ The charter is the user's written limit for the run. Record it with:
 | `--deadline` | An ISO time with a UTC offset, such as `2026-11-05T19:00:00-06:00`. A time with no offset is refused |
 | `--cap` | A limit on attempts for one provider, model, and effort. It counts work and review attempts |
 | `--branch` | The local run branch. Never a default branch. Creating it needs the user's `branches` grant (`references/authority.md`, level B) |
-| `--grant commit` | Lets `ae commit` commit a VERIFIED slice on the run branch. Add it only when the user approved commits |
 
 A second charter needs `--replace --reason`. Defaults for the ten areas, when the user did not decide:
 
@@ -44,7 +43,7 @@ A second charter needs `--replace --reason`. Defaults for the ten areas, when th
 |---|---|---|
 | Code edits | Allowed inside the slice's Files only | The plan |
 | Dependencies | No install. Needs `--allow deps` from the user | The user |
-| Branches and commits | Work on the run branch. `ae commit` commits a VERIFIED slice, once, when the charter holds `--grant commit`. Without the grant, no commit | The user |
+| Branches and commits | Work on the run branch. No commits during the run | The user |
 | Pull requests | Never | Nobody in this run |
 | External APIs | None. A call to a service outside the repo needs the user's approval | The user |
 | Spending | None. Never buy usage and never switch to a paid API | The user |
@@ -53,14 +52,14 @@ A second charter needs `--replace --reason`. Defaults for the ten areas, when th
 | Destructive operations | Never. This includes `reset --hard`, `clean -f`, force-push, and `rm -r` of a path outside the repo | Nobody in this run |
 | Migrations | Local only, and only with `--allow migrations`. Never a remote or production database | The user |
 
-A typed `git commit`, push, merge, rebase, or PR command stays level C. The commit grant covers `ae commit` and nothing else.
+A typed `git commit`, push, merge, rebase, or PR command stays level C. The charter gives no authority for these commands.
 
 ## 3. The loop
 One fresh child owns one slice. The lead keeps the plan, the journal, and the report.
 
 ```text
 ae next -> dispatch + handoff -> child builds -> finish (a claim)
-        -> review (a different session) -> verify (the evidence) -> commit -> ae next
+        -> review (a different session) -> verify (the evidence) -> ae next
 ```
 
 | Step | Mode in SKILL.md | Rule here |
@@ -70,9 +69,7 @@ ae next -> dispatch + handoff -> child builds -> finish (a claim)
 | USAGE | USAGE | Write a snapshot only from numbers a provider showed. A reached limit starts section 5 |
 | RECOVER | RECOVER | After a crash or a new thread, run `ae recover PLAN` first |
 
-- After `ae verify` passes, run `ae commit PLAN N`. Check the trailer first: a slice that already has an `AE-Slice:` commit needs no second one.
 - Ask the user nothing during the run. A decision need gets `ae block` with a reason. Then continue other safe slices.
-- Commit paths that the slice owns. Never use `-a`, `--amend`, or `--no-verify`.
 
 ## 4. Waits
 - End the turn while children run. Their completion wakes a T3 lead.
@@ -117,7 +114,6 @@ A thread becomes unreliable by symptoms you can see. Act on a signal you observe
 | The Mac sleeps from idle | Assumed: a sleeping Mac stalls a run (not observed) | Run `caffeinate -i -t SECONDS` at preflight. It ends by itself |
 | A process dies during a write | The journal has a lock, a temp file, or an IN_PROGRESS slice | `ae recover PLAN` lists them. Redo no VERIFIED slice |
 
-- `ae recover` lists `needsCommit` for a VERIFIED slice with no commit. Run `ae commit PLAN N` for each.
 - A supervisor service that restarts a lead is not built. Do not claim one.
 - Unverified: a restart after an app crash, and a restart after a Mac restart.
 
@@ -140,6 +136,7 @@ Attempts are grouped by recorded provider, model, and effort. Missing labels app
 The report includes the journal path and redacts secrets from all output strings.
 It takes no lock and changes no journal or plan bytes. It does not sync plan changes or recheck evidence freshness.
 A VERIFIED state is the journal's recorded result. Worker completion remains a claim.
+ACCEPTED counts as settled, and appears separately with the person's sign-off. It is not engine verification.
 Unavailable Git history is reported explicitly. A backup journal is identified when used.
 
 Add lead notes after the report: waits, provider events, budget used, and what stays unverified.
