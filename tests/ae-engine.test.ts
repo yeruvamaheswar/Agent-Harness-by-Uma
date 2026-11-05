@@ -68,7 +68,8 @@ test('parsePlan reads slices, deps, files and mode', () => {
   assert.deepEqual(p.slices[0].files, ['a.ts', 'b/']);
   assert.deepEqual(p.slices[1].files, ['c.ts', 'd/']);
   assert.deepEqual(p.slices[0].outOfScope, ['src/']);
-  assert.equal(STATES.length, 9);
+  assert.equal(STATES.length, 10);
+  assert.ok(STATES.includes('ACCEPTED'));
 });
 
 test('parsePlan reads the real autonomous-engineering plan format', () => {
@@ -512,10 +513,89 @@ test('a manual Verify step needs --manual --by --note and records manual evidenc
   await assert.rejects(r.run('verify', r.plan, '1'), /manual Verify step/);
   await assert.rejects(r.run('verify', r.plan, '1', '--manual', '--by', 'Uma'), /--note is required/);
   const out = await r.run('verify', r.plan, '1', '--manual', '--by', 'Uma', '--note', 'title reads Hello');
-  assert.equal(out.state, 'VERIFIED');
+  assert.equal(out.state, 'ACCEPTED', 'a person\'s sign-off is ACCEPTED, never VERIFIED');
+  assert.equal(out.verified, false);
+  assert.equal(r.journal().slices['1'].history.at(-1)!.reason, "accepted on a person's note: manual check by Uma");
+  assert.equal(r.parsed().slices[0].state, 'ACCEPTED');
+  assert.deepEqual((await r.run('status', r.plan)).counts, { ACCEPTED: 1 }, 'status shows ACCEPTED apart from VERIFIED');
   const [e] = r.journal().slices['1'].evidence;
   assert.deepEqual([e.kind, e.by, e.note], ['manual', 'Uma', 'title reads Hello']);
   assert.match(r.parsed().slices[0].evidence, /manual check by Uma: title reads Hello/);
+});
+
+test('ACCEPTED: a manual sign-off satisfies a dependency and can integrate', async () => {
+  const r = repo([{ n: 1, verify: 'a person reads the page' }, { n: 2, deps: 'slice 1', wave: '2 sequential', files: 'g.txt' }]);
+  await r.run(...initArgs(r));
+  await r.run('next', r.plan);
+  await r.run('start', r.plan, '1'); await r.run('finish', r.plan, '1'); await r.run('review', r.plan, '1', '--by', 'rev', '--note', 'ok');
+  await r.run('next', r.plan);
+  assert.equal(r.state('2'), 'PLANNED', 'REVIEWED does not satisfy a dependency');
+  assert.equal((await r.run('verify', r.plan, '1', '--manual', '--by', 'Uma', '--note', 'page reads right')).state, 'ACCEPTED');
+  const n = await r.run('next', r.plan);
+  assert.deepEqual(n.batch.map((b: any) => b.id), ['2'], 'the dependent becomes READY');
+  assert.equal(r.state('2'), 'READY');
+  const i = await r.run('integrate', r.plan, '1', '--ref', 'main@abc');
+  assert.equal(i.state, 'INTEGRATED');
+  assert.deepEqual(r.journal().slices['1'].history.map(h => h.to), ['READY', 'IN_PROGRESS', 'AGENT_FINISHED', 'REVIEWED', 'ACCEPTED', 'INTEGRATED']);
+});
+
+test('ACCEPTED: a CI-reviewed manual slice is ACCEPTED from AGENT_FINISHED; the plan claim imports as AGENT_FINISHED', async () => {
+  const r = repo([{ n: 1, review: 'CI', verify: 'a person checks the build' }]);
+  await r.run(...initArgs(r));
+  await r.run('next', r.plan);
+  await r.run('start', r.plan, '1'); await r.run('finish', r.plan, '1');
+  assert.equal((await r.run('verify', r.plan, '1', '--manual', '--by', 'Uma', '--note', 'fine')).state, 'ACCEPTED');
+  const c = repo([{ n: 1, state: 'ACCEPTED' }]);
+  await c.run(...initArgs(c));
+  assert.equal(c.state('1'), 'AGENT_FINISHED', 'a claimed ACCEPTED needs a fresh sign-off');
+  assert.equal(c.journal().slices['1'].history.at(-1)!.claim!.state, 'ACCEPTED');
+});
+
+test('ACCEPTED is reachable only from AGENT_FINISHED or REVIEWED', async () => {
+  const { canTransition } = await import('../tools/agents/skills/autonomous-engineering/scripts/journal.ts');
+  const from = STATES.filter(s => canTransition(s, 'ACCEPTED'));
+  assert.deepEqual(from, ['AGENT_FINISHED', 'REVIEWED']);
+  assert.deepEqual(STATES.filter(s => canTransition('ACCEPTED', s)), ['AGENT_FINISHED', 'INTEGRATED']);
+  for (const s of ['FAILED', 'READY', 'PLANNED', 'IN_PROGRESS', 'BLOCKED', 'VERIFIED', 'INTEGRATED'] as const) assert.equal(canTransition(s, 'ACCEPTED'), false, s);
+  // through the CLI: verify --manual from READY or FAILED is refused and nothing moves
+  const r = repo([{ n: 1, verify: 'a person reads the page' }]);
+  await r.run(...initArgs(r));
+  await r.run('next', r.plan);
+  await assert.rejects(r.run('verify', r.plan, '1', '--manual', '--by', 'Uma', '--note', 'x'), /is READY; this command needs/);
+  await r.run('start', r.plan, '1');
+  await r.run('fail', r.plan, '1', '--reason', 'r1'); await r.run('start', r.plan, '1');
+  await r.run('fail', r.plan, '1', '--reason', 'r1'); await r.run('start', r.plan, '1');
+  await r.run('fail', r.plan, '1', '--reason', 'r1');
+  if (r.state('1') === 'FAILED') await assert.rejects(r.run('verify', r.plan, '1', '--manual', '--by', 'Uma', '--note', 'x'), /is FAILED; this command needs/);
+  assert.notEqual(r.state('1'), 'ACCEPTED');
+});
+
+test('property: after any sequence of ae commands, a VERIFIED slice has no manual evidence', async () => {
+  // a small seeded random walk over the commands, for a manual slice and a command slice
+  let seed = 1; // mulberry32: deterministic, and every command gets picked. The coverage check below fails loudly if a change makes the walk vacuous
+  const rand = (n: number) => { seed = (seed + 0x6d2b79f5) | 0; let x = Math.imul(seed ^ (seed >>> 15), 1 | seed); x = (x + Math.imul(x ^ (x >>> 7), 61 | x)) ^ x; return (((x ^ (x >>> 14)) >>> 0) % n); };
+  const r = repo([{ n: 1, verify: 'a person reads the page', review: 'CI' }, { n: 2, files: 'g.txt' }, { n: 3, verify: 'a person looks', files: 'h.txt' }]);
+  await r.run(...initArgs(r));
+  const cmds: string[][] = [];
+  // forward commands are listed three times, so the walk also reaches the late states
+  for (const id of ['1', '2', '3']) for (let k = 0; k < 3; k++) cmds.push(
+    ['next'], ['start', id], ['finish', id], ['review', id, '--by', 'rev', '--note', 'ok'], ['verify', id], ['verify', id, '--manual', '--by', 'Uma', '--note', 'ok'],
+    ...(k ? [] : [['review', id, '--reject', '--by', 'rev', '--note', 'bad'], ['fail', id, '--reason', 'x'], ['block', id, '--reason', 'x'],
+      ['unblock', id, '--reason', 'y'], ['integrate', id, '--ref', 'r'], ['recover', '--apply']]));
+  const seen = new Set<string>();
+  for (let i = 0; i < 300; i++) {
+    const [cmd, ...rest] = cmds[rand(cmds.length)];
+    try { await r.run(cmd, r.plan, ...rest); } catch { /* refused commands are part of the walk */ }
+    if (rand(10) === 0) r.put(['f1.txt', 'g.txt', 'h.txt'][rand(3)], `edit ${i}`);
+    for (const [id, rec] of Object.entries(r.journal().slices)) {
+      seen.add(rec.state);
+      if (rec.state !== 'VERIFIED') continue;
+      const live = rec.evidence.filter(e => !e.stale).at(-1)!;
+      assert.equal(live.kind, 'command', `slice ${id} is VERIFIED on ${live.kind} evidence at step ${i}`);
+      assert.notEqual(rec.history.filter(h => h.to === 'VERIFIED').at(-1)!.reason.includes('accepted'), true);
+    }
+  }
+  for (const s of ['VERIFIED', 'ACCEPTED', 'INTEGRATED']) assert.ok(seen.has(s), `the walk reached ${s}: ${[...seen]}`);
 });
 
 test('VERIFIED requires REVIEWED unless Review is CI', async () => {

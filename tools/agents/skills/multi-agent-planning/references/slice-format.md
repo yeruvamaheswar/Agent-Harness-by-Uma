@@ -44,7 +44,7 @@ One `### Slice N: name` heading per slice. One field per line, in this order.
 | `Review:` | yes | The independent reviewer. Never the builder's session. `CI` is allowed for a mechanical slice. Grok is allowed only here, as an optional critic |
 | `Fallback:` | yes | The new owner after the escalation step fails. Not a higher-effort rerun of the builder. A different agent or session from `Review:` |
 | `Wave:` | yes | `N sequential`, `N parallel`, or `N integration` |
-| `Depends on:` | yes | `none`, or the slices that must be `VERIFIED` first: `slice 1`, `slice 1, slice 2`, or `slices 1 and 2` |
+| `Depends on:` | yes | `none`, or the slices that must be `VERIFIED` (or `ACCEPTED`) first: `slice 1`, `slice 1, slice 2`, or `slices 1 and 2` |
 | `Files:` | yes | The files or folders this slice owns. Separate with `, `. A folder ends in `/`. See "Overlap" |
 | `Out of scope:` | no | Files the builder must not touch |
 | `Accept:` | yes | The acceptance criterion, written so a stranger can check it |
@@ -67,22 +67,24 @@ One `### Slice N: name` heading per slice. One field per line, in this order.
 | State | Meaning | Set by |
 |---|---|---|
 | `PLANNED` | Written in the plan | planner |
-| `READY` | Every dependency is `VERIFIED` | coordinator |
+| `READY` | Every dependency is `VERIFIED`, `ACCEPTED`, or `INTEGRATED` | coordinator |
 | `IN_PROGRESS` | A worker has it | coordinator |
 | `AGENT_FINISHED` | The worker returned work. This is a claim | coordinator |
 | `BLOCKED` | The worker wrote its blocked file | coordinator |
 | `FAILED` | Its check failed and the attempt budget is spent | coordinator |
 | `REVIEWED` | An independent reviewer read the diff | reviewer |
 | `VERIFIED` | `Verify:` ran and passed. `Evidence:` quotes the output | coordinator, from output that the reviewer, the coordinator, or CI observed |
+| `ACCEPTED` | A person signed off on a manual `Verify:` step. Nobody observed command output. `Evidence:` names the person and quotes the note | coordinator, from the person's note. Only for a slice whose `Verify:` has no command |
 | `INTEGRATED` | Merged into the target branch, with approval where required | integrator |
 
-- Forward path: `PLANNED` → `READY` → `IN_PROGRESS` → `AGENT_FINISHED` → `REVIEWED` → `VERIFIED` → `INTEGRATED`.
+- Forward path: `PLANNED` → `READY` → `IN_PROGRESS` → `AGENT_FINISHED` → `REVIEWED` → `VERIFIED` → `INTEGRATED`. A manual check goes `REVIEWED` → `ACCEPTED` → `INTEGRATED` instead.
 - `BLOCKED` and `FAILED` are side states. `BLOCKED` returns to `IN_PROGRESS` only after the user unblocks it. Exception: a provider error in the host; see "Provider error" in `routing.md`.
 - A plan-only run leaves every slice `PLANNED`.
 - Attempt budget: three. First, one bounded fix by the builder. Second, the escalation step. Third, the `Fallback:` owner. The next failure sets `FAILED`.
 - `AGENT_FINISHED` is never `VERIFIED`.
+- A person's sign-off gives `ACCEPTED`, never `VERIFIED`. `ACCEPTED` satisfies a dependency and may become `INTEGRATED`. Reports list it apart from `VERIFIED`. When its files change after the sign-off, it returns to `AGENT_FINISHED`.
 - `Evidence:` for `VERIFIED` quotes `Verify:` output that the reviewer, the coordinator, or CI observed. The worker's summary is not evidence.
-- `VERIFIED` and `INTEGRATED` need an `Evidence:` pointer.
+- `VERIFIED`, `ACCEPTED`, and `INTEGRATED` need an `Evidence:` pointer.
 
 ## Waves
 - Wave 1 is the tracer bullet: one `sequential` slice through every layer.

@@ -47,7 +47,7 @@ if re.search(r"(?m)^planner:[ \t]*[\"'`]?multi-agent-(?:planning|slice-planner)[
         return out
     def hit(a, b):
         return a == b or (a.endswith("/") and b.startswith(a)) or (b.endswith("/") and a.startswith(b))
-    states = {"PLANNED", "READY", "IN_PROGRESS", "AGENT_FINISHED", "BLOCKED", "FAILED", "REVIEWED", "VERIFIED", "INTEGRATED"}
+    states = {"PLANNED", "READY", "IN_PROGRESS", "AGENT_FINISHED", "BLOCKED", "FAILED", "REVIEWED", "VERIFIED", "ACCEPTED", "INTEGRATED"}
     need = ("Goal:", "Review:", "Fallback:", "Wave:", "Accept:", "Verify:", "State:", "Evidence:")
     slices, waves = [], {}
     for m in re.finditer(r"^### (Slice[^\n]*)\n(.*?)(?=^#{1,3} |\Z)", text, re.S | re.M):
@@ -60,7 +60,7 @@ if re.search(r"(?m)^planner:[ \t]*[\"'`]?multi-agent-(?:planning|slice-planner)[
             elif found and not found[0].strip(): print(f"warn: {heading}: empty {k}")
         state, evidence = field(body, "State:"), field(body, "Evidence:")
         if state is not None and state not in states: print(f"warn: {heading}: bad State: {state}")
-        if state in ("VERIFIED", "INTEGRATED") and (evidence is None or evidence.lower() in ("", "none", "unknown")):
+        if state in ("VERIFIED", "ACCEPTED", "INTEGRATED") and (evidence is None or evidence.lower() in ("", "none", "unknown")):
             shown = "missing" if evidence is None else (evidence if evidence else "empty")
             print(f"warn: {heading}: {state} Evidence: {shown}")
         model, review = field(body, "Model:"), field(body, "Review:")

@@ -48,7 +48,7 @@ Understand → Design → Slice → Implement → Test → Review → Integrate 
 1. Understand. Read the repo instructions, code, tests, and `git status`. Separate facts, assumptions, and unknowns. Write each unknown as `unknown`.
 2. Design. Pick the simplest design that reuses existing patterns. Define each shared interface (route, schema, type) before any parallel wave.
 3. Slice.
-   - Wave 1 is the tracer bullet: one complete happy path through every layer. Later waves start only after wave 1 is `VERIFIED`. On a plan-only turn, the tracer stays `PLANNED` and is not run.
+   - Wave 1 is the tracer bullet: one complete happy path through every layer. Later waves start only after wave 1 is `VERIFIED` (or `ACCEPTED` after a person's sign-off). On a plan-only turn, the tracer stays `PLANNED` and is not run.
    - Aim for about one hour of focused agent work per slice. This is a heuristic, not a rule.
    - Give each slice one observable result. Do not hide unbuilt work behind a mock. Name each mock in `Accept:` and in Risks.
    - Fill every required field in `references/slice-format.md`. Make each `Verify:` check all of its `Accept:`.
@@ -75,16 +75,16 @@ Understand → Design → Slice → Implement → Test → Review → Integrate 
 5. Delegate the tracer to its `Model:` worker. The coordinator does not build it.
 6. The `Review:` agent, in another session, reads the diff and runs `Verify:`. Set `REVIEWED` from that review.
 7. Set `VERIFIED` only from `Verify:` output that the reviewer, the coordinator, or CI observed. The worker's report is not evidence.
-8. Start a slice only when all its `Depends on:` slices are `VERIFIED`. Track each worker in the Worker tracking table.
+8. Start a slice only when all its `Depends on:` slices are `VERIFIED`, or `ACCEPTED` after a person's sign-off on a manual check. Track each worker in the Worker tracking table.
 9. Integrate under an owner who did not build the combined slices. Run the final checks. Record real evidence.
 
 Worktrees (none during planning):
 - Give each concurrent coding worker its own worktree. A worktree starts from the last commit, so it does not contain uncommitted work.
-- Create a dependent slice's worktree only from a commit that contains its `VERIFIED` dependencies. When the user has not approved that commit, run dependent slices one at a time in the shared checkout after the coordinator applies the VERIFIED dependency diff to it (`git apply`, no commit), or ask the user.
+- Create a dependent slice's worktree only from a commit that contains its `VERIFIED` or `ACCEPTED` dependencies. When the user has not approved that commit, run dependent slices one at a time in the shared checkout after the coordinator applies the VERIFIED dependency diff to it (`git apply`, no commit), or ask the user.
 
 Delegation:
 - Delegate as "Delegation per host" in `references/routing.md` says.
-- Launch or print a slice only when its base contains its `VERIFIED` dependencies: a worktree from a commit that holds them, or the shared checkout. Without that commit, the coordinator first applies each `VERIFIED` dependency diff to the shared checkout (`git apply`, no commit), then releases one slice at a time there, and says which handoffs are withheld.
+- Launch or print a slice only when its base contains its `VERIFIED` or `ACCEPTED` dependencies: a worktree from a commit that holds them, or the shared checkout. Without that commit, the coordinator first applies each `VERIFIED` dependency diff to the shared checkout (`git apply`, no commit), then releases one slice at a time there, and says which handoffs are withheld.
 - Without delegation, print only the handoffs released by that rule. Say plainly that nothing was launched.
 - Never claim that a written prompt launched an agent.
 - No auto-merge, push, or deploy.

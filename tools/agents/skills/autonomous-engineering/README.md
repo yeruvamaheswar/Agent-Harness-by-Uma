@@ -1,6 +1,6 @@
 # autonomous-engineering
 
-A hidden skill that executes, reviews, and recovers a plan written by `multi-agent-planning`. A small engine (`scripts/ae.ts`) records each slice's state and evidence. A slice becomes VERIFIED only when the engine ran its Verify command and saw exit 0.
+A hidden skill that executes, reviews, and recovers a plan written by `multi-agent-planning`. A small engine (`scripts/ae.ts`) records each slice's state and evidence. A slice becomes VERIFIED only when the engine ran its Verify command and saw exit 0. A manual Verify step that a person signs off becomes ACCEPTED, not VERIFIED.
 
 The skill runs only when you name it. No agent starts it on its own.
 

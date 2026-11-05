@@ -205,8 +205,8 @@ test("planner lint warns when State is not a lifecycle state", () => {
   assert.deepEqual(b.warns, ["warn: Slice 1: tracer: bad State: planned"]);
 });
 
-test("planner lint warns when VERIFIED or INTEGRATED has no evidence", () => {
-  for (const state of ["VERIFIED", "INTEGRATED"]) {
+test("planner lint warns when VERIFIED, ACCEPTED, or INTEGRATED has no evidence", () => {
+  for (const state of ["VERIFIED", "ACCEPTED", "INTEGRATED"]) {
     for (const [evidence, shown] of [["none", "none"], ["unknown", "unknown"], ["", "empty"]] as [string, string][]) {
       const b = build("evidence.md", plannerPage("standard", sliceBody("Slice 1: tracer", "", { "State:": state, "Evidence:": evidence })));
       assert.equal(b.r.status, 0);

@@ -4,7 +4,7 @@ import { basename } from 'node:path';
 // Plan reader for the multi-agent-planning format (references/slice-format.md).
 // It reads slice blocks and rewrites only the State and Evidence lines of one block.
 
-export const STATES = ['PLANNED', 'READY', 'IN_PROGRESS', 'AGENT_FINISHED', 'BLOCKED', 'FAILED', 'REVIEWED', 'VERIFIED', 'INTEGRATED'] as const;
+export const STATES = ['PLANNED', 'READY', 'IN_PROGRESS', 'AGENT_FINISHED', 'BLOCKED', 'FAILED', 'REVIEWED', 'VERIFIED', 'ACCEPTED', 'INTEGRATED'] as const;
 export type State = typeof STATES[number];
 export type WaveKind = 'sequential' | 'parallel' | 'integration';
 export type Slice = {

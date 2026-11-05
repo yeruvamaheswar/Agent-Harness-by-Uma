@@ -88,9 +88,11 @@ const hex12 = (text: string) => createHash('sha256').update(text).digest('hex').
 const ALLOWED: Record<State, State[]> = {
   PLANNED: ['READY'], READY: ['IN_PROGRESS'],
   IN_PROGRESS: ['AGENT_FINISHED', 'BLOCKED', 'READY', 'FAILED'],
-  AGENT_FINISHED: ['REVIEWED', 'VERIFIED', 'READY', 'FAILED'],
-  REVIEWED: ['VERIFIED', 'READY', 'FAILED'],
+  AGENT_FINISHED: ['REVIEWED', 'VERIFIED', 'ACCEPTED', 'READY', 'FAILED'],
+  REVIEWED: ['VERIFIED', 'ACCEPTED', 'READY', 'FAILED'],
   BLOCKED: ['IN_PROGRESS'], FAILED: ['READY'], VERIFIED: ['INTEGRATED', 'AGENT_FINISHED'], INTEGRATED: [],
+  // ACCEPTED: a person signed off on a manual Verify step; the engine observed nothing.
+  ACCEPTED: ['INTEGRATED', 'AGENT_FINISHED'],
 };
 export const canTransition = (from: State, to: State) => ALLOWED[from].includes(to);
 
@@ -206,7 +208,7 @@ export function createJournal(plan: Plan, profile: ProfileName, allow: string[],
     rec.state = s.state;
     // Plan states are claims. In-flight work restarts. Finished-or-later work needs a verify run.
     if (s.state === 'IN_PROGRESS') move(rec, 'READY', 'imported in-progress claim; restart', at, true);
-    else if (['AGENT_FINISHED', 'REVIEWED', 'VERIFIED', 'INTEGRATED'].includes(s.state)) move(rec, 'AGENT_FINISHED', 'imported claim; needs verify', at, true, { state: s.state, evidence: redact(s.evidence) });
+    else if (['AGENT_FINISHED', 'REVIEWED', 'VERIFIED', 'ACCEPTED', 'INTEGRATED'].includes(s.state)) move(rec, 'AGENT_FINISHED', 'imported claim; needs verify', at, true, { state: s.state, evidence: redact(s.evidence) });
     slices[s.id] = rec;
   }
   return { schemaVersion: 1, plan: plan.path.split('/').pop()!, profile, authority: { allow, grantedBy: 'user', at }, createdAt: at, updatedAt: at, slices };
@@ -314,7 +316,8 @@ export function evidenceLine(rec: SliceRecord): string {
 // True when `path` is `owned` or inside it.
 export const within = (path: string, owned: string) => { const p = normPath(path), o = normPath(owned); return o === '' || p === o || p.startsWith(o + '/'); };
 export const overlap = (a: string[], b: string[]) => a.some(x => b.some(y => within(x, y) || within(y, x)));
-export const settled = (s: State) => s === 'VERIFIED' || s === 'INTEGRATED';
+// ACCEPTED counts for dependencies and done, so a manual-check slice does not block the plan.
+export const settled = (s: State) => s === 'VERIFIED' || s === 'ACCEPTED' || s === 'INTEGRATED';
 
 // Finished work that waits for the coordinator after an interruption: review first, then verify.
 export function awaiting(journal: Journal, plan: Plan) {

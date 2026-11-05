@@ -373,8 +373,10 @@ const handlers: Record<string, (c: Ctx) => Promise<Result> | Result> = {
       evidence = { kind: 'command', command: redact(command), exitCode: 0, durationMs: run.durationMs, outputTail: tail, by: 'engine', ...evidenceBase() };
     }
     rec.evidence.push(evidence);
-    move(rec, 'VERIFIED', evidence.kind === 'manual' ? `manual check by ${evidence.by}` : 'verify command exit 0', evidence.at);
-    return { ...fromTo(rec, s.id, from), verified: true, evidence, ...(command ? controls.report : {}) };
+    // VERIFIED only from a command the engine ran. A person's sign-off is ACCEPTED.
+    if (evidence.kind === 'manual') move(rec, 'ACCEPTED', `accepted on a person's note: manual check by ${evidence.by}`, evidence.at);
+    else move(rec, 'VERIFIED', 'verify command exit 0', evidence.at);
+    return { ...fromTo(rec, s.id, from), verified: evidence.kind === 'command', evidence, ...(command ? controls.report : {}) };
   },
 
   // BLOCKED returns to IN_PROGRESS (the worker continues). FAILED returns to READY. Both restart the fix budget.
@@ -396,7 +398,7 @@ const handlers: Record<string, (c: Ctx) => Promise<Result> | Result> = {
 
   integrate(c) {
     const { s, rec } = c.slice(c.args.slice), from = rec.state, ref = need(c.args, 'ref');
-    expect(rec, s.id, 'VERIFIED');
+    expect(rec, s.id, 'VERIFIED', 'ACCEPTED');
     rec.integratedRef = ref;
     move(rec, 'INTEGRATED', `integrated at ${ref}`, c.now.toISOString());
     return fromTo(rec, s.id, from);
@@ -524,7 +526,7 @@ function initJournal(c: Base, jfile: string): Journal {
 const NEEDS_CHECK = 'check task_status, then ae fail or ae finish';
 
 // Report drift between journal, plan, Git, and files. Without --apply it writes nothing and takes no lock.
-// With --apply it demotes stale VERIFIED slices to AGENT_FINISHED, then reconciles the plan lines.
+// With --apply it demotes stale VERIFIED and ACCEPTED slices to AGENT_FINISHED, then reconciles the plan lines.
 async function recover(b: Base, text: string): Promise<Result> {
   const { args, plan, now, root, planPath, jfile } = b, apply = args.flags.has('apply'), at = now.toISOString();
   const lockBefore = inspectLock(jfile);
@@ -545,7 +547,7 @@ async function recover(b: Base, text: string): Promise<Result> {
     const planDrift: Result[] = [];
     for (const s of plan.slices) {
       const rec = journal.slices[s.id], line = evidenceLine(rec);
-      if (s.state !== rec.state) planDrift.push({ slice: s.id, field: 'State', plan: s.state, journal: rec.state, ...(['VERIFIED', 'INTEGRATED'].includes(s.state) && !settled(rec.state) ? { note: `plan claims ${s.state} but the journal has no verify evidence` } : {}) });
+      if (s.state !== rec.state) planDrift.push({ slice: s.id, field: 'State', plan: s.state, journal: rec.state, ...(['VERIFIED', 'ACCEPTED', 'INTEGRATED'].includes(s.state) && !settled(rec.state) ? { note: `plan claims ${s.state} but the journal has no verify evidence` } : {}) });
       if (s.evidence !== line) planDrift.push({ slice: s.id, field: 'Evidence', plan: redact(s.evidence), journal: line });
     }
 
@@ -553,16 +555,17 @@ async function recover(b: Base, text: string): Promise<Result> {
     // a path that now runs through a link may point outside the repo or at a protected file.
     const problems = filesProblems(plan, root, journal.authority.allow), unchecked = new Set(problems.map(p => p.id));
 
-    // VERIFIED slices whose files changed after the evidence was recorded
+    // VERIFIED and ACCEPTED slices whose files changed after the evidence was recorded
     const staleEvidence: Result[] = [];
     for (const s of plan.slices) {
       const rec = journal.slices[s.id];
-      if (rec.state !== 'VERIFIED') continue;
+      if (rec.state !== 'VERIFIED' && rec.state !== 'ACCEPTED') continue;
       // Files that fail validation are never read, and their evidence cannot be trusted: report it as stale.
       if (unchecked.has(s.id)) { staleEvidence.push({ slice: s.id, recorded: 'unchecked', current: null, note: 'Files fail validation; not fingerprinted' }); continue; }
       const e = rec.evidence.filter(x => !x.stale).at(-1), cur = fingerprint(root, s.files, engineOwned(root, planPath, jfile));
-      if (!e) staleEvidence.push({ slice: s.id, recorded: null, current: cur, note: 'VERIFIED without live evidence' });
+      if (!e) staleEvidence.push({ slice: s.id, recorded: null, current: cur, note: `${rec.state} without live evidence` });
       else if (e.fingerprint !== cur) staleEvidence.push({ slice: s.id, recorded: e.fingerprint, current: cur, verifiedAt: e.at, gitHead: e.gitHead });
+      else if (rec.state === 'VERIFIED' && e.kind === 'manual') staleEvidence.push({ slice: s.id, recorded: e.fingerprint, current: cur, verifiedAt: e.at, gitHead: e.gitHead, legacyManual: true, note: "VERIFIED on a person's note (journal from an older engine); sign off again to reach ACCEPTED" });
     }
 
     // IN_PROGRESS slices: the worker may be gone or done; the engine cannot tell
@@ -601,14 +604,14 @@ async function recover(b: Base, text: string): Promise<Result> {
 
     let applied: Result[] = [];
     if (apply) {
-      // every stale VERIFIED slice, also one with no live evidence at all (recorded: null)
+      // every stale VERIFIED or ACCEPTED slice, also one with no live evidence at all (recorded: null)
       applied = staleEvidence.map(x => {
-        const rec = journal.slices[x.slice as string];
+        const rec = journal.slices[x.slice as string], was = rec.state;
         for (const e of rec.evidence) e.stale = true;
         delete rec.review;
-        const reason = x.recorded === null ? 'evidence stale: no live evidence' : x.current === null ? 'evidence stale: Files fail validation' : 'evidence stale: files changed';
+        const reason = x.legacyManual ? "VERIFIED on a person's note: demoted; sign off again to reach ACCEPTED" : x.recorded === null ? 'evidence stale: no live evidence' : x.current === null ? 'evidence stale: Files fail validation' : 'evidence stale: files changed';
         move(rec, 'AGENT_FINISHED', reason, at);
-        return { slice: x.slice, from: 'VERIFIED', to: 'AGENT_FINISHED', reason };
+        return { slice: x.slice, from: was, to: 'AGENT_FINISHED', reason };
       });
     }
     const sim = structuredClone(journal);
@@ -630,7 +633,7 @@ async function recover(b: Base, text: string): Promise<Result> {
       filesProblems: problems.map(p => p.text),
       next: { batch: nb.batch.map(s => s.id), running: nb.running, waiting: nb.waiting, deferred: nb.deferred },
       done: plan.slices.every(s => settled(journal.slices[s.id].state)),
-      ...(apply ? { applied } : { hint: 'read-only: nothing was written. recover --apply demotes stale VERIFIED slices and reconciles the plan lines' }),
+      ...(apply ? { applied } : { hint: 'read-only: nothing was written. recover --apply demotes stale VERIFIED and ACCEPTED slices and reconciles the plan lines' }),
       ...(planChanged ? { rebuild: `~/.agents/bin/md-view.sh ${args.plan}` } : {}),
     };
   };

@@ -100,7 +100,7 @@ Rules:
 ## Delegation per host
 | Host | Delegation |
 |---|---|
-| T3 Code | `delegate_task` with a target from `orchestrator_capabilities`. Keep each `taskId`. Use `isolation: "worktree"` only when the last local commit contains every `VERIFIED` dependency of the slice; uncommitted files are not copied. Otherwise apply the `VERIFIED` dependency diffs to the shared checkout first (`git apply`, no commit), then use the shared checkout, one slice at a time. Give the plan's absolute path. Before you hand a slice to another worker, `task_cancel` the old task and tell the user: a retry of the old child from the T3 UI runs in the same workspace |
+| T3 Code | `delegate_task` with a target from `orchestrator_capabilities`. Keep each `taskId`. Use `isolation: "worktree"` only when the last local commit contains every `VERIFIED` or `ACCEPTED` dependency of the slice; uncommitted files are not copied. Otherwise apply the `VERIFIED` dependency diffs to the shared checkout first (`git apply`, no commit), then use the shared checkout, one slice at a time. Give the plan's absolute path. Before you hand a slice to another worker, `task_cancel` the old task and tell the user: a retry of the old child from the T3 UI runs in the same workspace |
 | Claude Code | The Agent tool, with the slice's model. A worktree for a concurrent coding worker, under the same commit rule as T3 Code |
 | Other hosts | None known. Print the released handoff notes only (see "Delegation" in `SKILL.md`) |
 

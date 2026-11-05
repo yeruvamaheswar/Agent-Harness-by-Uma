@@ -745,6 +745,43 @@ test('engine files are excluded by their canonical path: a repo reached through 
   assert.deepEqual((await run('recover', plan)).staleEvidence, []);
 });
 
+test('recover --apply demotes a stale ACCEPTED slice like a stale VERIFIED one; a new sign-off is ACCEPTED again', async () => {
+  const r = repo([{ n: 1, files: 'a.txt', verify: 'a person reads a.txt' }]);
+  r.put('a.txt', 'one');
+  await r.init();
+  await r.run('start', r.plan, '1'); await r.run('finish', r.plan, '1'); await r.review('1');
+  assert.equal((await r.run('verify', r.plan, '1', '--manual', '--by', 'Uma', '--note', 'reads right')).state, 'ACCEPTED');
+  assert.deepEqual((await r.run('recover', r.plan)).staleEvidence, [], 'fresh after the sign-off');
+  r.put('a.txt', 'changed after the sign-off');
+  const rep = await r.run('recover', r.plan);
+  assert.deepEqual(rep.staleEvidence.map((x: any) => x.slice), ['1']);
+  assert.equal(r.journal().slices['1'].state, 'ACCEPTED', 'read-only changes nothing');
+  const applied = await r.run('recover', r.plan, '--apply');
+  assert.deepEqual(applied.applied, [{ slice: '1', from: 'ACCEPTED', to: 'AGENT_FINISHED', reason: 'evidence stale: files changed' }]);
+  assert.equal(r.parsed().slices[0].state, 'AGENT_FINISHED');
+  assert.ok(r.journal().slices['1'].evidence.every(e => e.stale));
+  await r.review('1');
+  assert.equal((await r.run('verify', r.plan, '1', '--manual', '--by', 'Uma', '--note', 'reads right again')).state, 'ACCEPTED');
+});
+
+test('recover --apply demotes a VERIFIED slice that rests on manual evidence (a journal from an older engine); a new sign-off is ACCEPTED', async () => {
+  const r = repo([{ n: 1, files: 'a.txt', verify: 'a person reads a.txt' }]);
+  r.put('a.txt', 'one');
+  await r.init();
+  await r.run('start', r.plan, '1'); await r.run('finish', r.plan, '1'); await r.review('1');
+  assert.equal((await r.run('verify', r.plan, '1', '--manual', '--by', 'Uma', '--note', 'reads right')).state, 'ACCEPTED');
+  const planted = r.journal();
+  planted.slices['1'].state = 'VERIFIED';
+  writeFileSync(r.jfile, JSON.stringify(planted, null, 2));
+  const rep = await r.run('recover', r.plan);
+  assert.deepEqual(rep.staleEvidence.map((x: any) => [x.slice, x.legacyManual]), [['1', true]], 'fresh files do not hide manual evidence on a VERIFIED slice');
+  assert.equal(r.journal().slices['1'].state, 'VERIFIED', 'read-only changes nothing');
+  const applied = await r.run('recover', r.plan, '--apply');
+  assert.deepEqual(applied.applied, [{ slice: '1', from: 'VERIFIED', to: 'AGENT_FINISHED', reason: "VERIFIED on a person's note: demoted; sign off again to reach ACCEPTED" }]);
+  await r.review('1');
+  assert.equal((await r.run('verify', r.plan, '1', '--manual', '--by', 'Uma', '--note', 'reads right again')).state, 'ACCEPTED');
+});
+
 test('recover --apply demotes a VERIFIED slice that has no live evidence (a planted journal)', async () => {
   const r = repo([{ n: 1 }]);
   await r.init();
