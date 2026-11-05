@@ -5,7 +5,8 @@ import { basename, dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { skillMeta } from '../src/context.ts';
 
-// EVAL-1 (REQ-1): the autonomous-engineering skill text is valid, hidden, small, and loads references on demand.
+// EVAL-1 (REQ-1): the autonomous-engineering skill text is valid, small, and loads references on demand.
+// Overnight slice 4 made the skill load for overnight requests in Claude and Cursor. Codex stays hidden (see openai.yaml).
 const root = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const dir = join(root, 'tools/agents/skills/autonomous-engineering');
 const skill = readFileSync(join(dir, 'SKILL.md'), 'utf8');
@@ -29,15 +30,16 @@ test('front matter is valid per the Agent Skills spec', () => {
   assert.ok(meta.name.length >= 1 && meta.name.length <= 64);
   assert.equal(meta.name, basename(dir), 'name equals the folder name');
   assert.ok(meta.description.length >= 1 && meta.description.length <= 400, `description is ${meta.description.length} chars`);
-  assert.match(meta.description, /only when the user names this skill/);
+  assert.match(meta.description, /Use when the user asks to run a plan overnight/);
+  assert.match(meta.description, /Not for /);
   if (meta.compatibility) assert.ok(meta.compatibility.length <= 500);
   const keys = frontMatterKeys(skill);
   assert.deepEqual(keys.filter(k => !FIELDS.includes(k)), [], 'only spec fields plus disable-model-invocation');
   assert.equal(new Set(keys).size, keys.length, 'no duplicate keys');
 });
 
-test('both hide flags are set', () => {
-  assert.equal(skillMeta(skill)['disable-model-invocation'], 'true');
+test('Claude and Cursor may auto-load the skill, and Codex may not', () => {
+  assert.equal(skillMeta(skill)['disable-model-invocation'], undefined);
   const yaml = readFileSync(join(dir, 'agents/openai.yaml'), 'utf8');
   assert.match(yaml, /^policy:\n(?:[ \t]+.*\n)*?[ \t]+allow_implicit_invocation: false$/m);
 });
@@ -58,7 +60,7 @@ test('every relative file path in SKILL.md exists', () => {
 
 test('references stay one level deep and are not inlined in SKILL.md', () => {
   const entries = readdirSync(refs);
-  assert.deepEqual(entries.sort(), ['authority.md', 'engine.md']);
+  assert.deepEqual(entries.sort(), ['authority.md', 'engine.md', 'overnight.md']);
   for (const e of entries) {
     assert.ok(statSync(join(refs, e)).isFile(), `${e} is a file, not a folder`);
     const text = readFileSync(join(refs, e), 'utf8');
