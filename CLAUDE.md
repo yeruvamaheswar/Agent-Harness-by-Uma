@@ -36,3 +36,11 @@ Agent harness and plan system for coordinated multi-platform work.
 ## After editing plans
 1. Rebuild with `~/.agents/bin/md-view.sh`.
 2. Check `--check` prints `fresh`.
+
+## Portfolio ship notes
+
+This project appears on Uma's portfolio site (repo `uma-portfolio`, page `/work/how-i-build-with-agents`). When you ship something significant here, add an entry at the top of `SHIPPED.md` in this repo, in the same commit or the next one.
+
+Significant means: a release or tag; a new user-facing feature live in production; a new public link (demo, video, live URL); or a change that makes the portfolio's claims about this project wrong (status, stack, limits, links, screenshots). Not: refactors, fixes, tests, docs, or dependency bumps.
+
+Write facts only, with evidence (commit SHA, release, URL, or test output). Do not edit `uma-portfolio` from this repo. Uma runs the portfolio update, or its weekly scan picks the entry up. The format is in `SHIPPED.md`.
