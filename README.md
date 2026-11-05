@@ -13,6 +13,10 @@ How the assistants use this repo, in plain words: [plans/system-design.md](plans
 - `install` writes the policy into each agent's global instruction file. It backs up the old file first and records a receipt in `.state/`.
 - `repo install PATH` writes the policy block into a project's `AGENTS.md` for cloud agents, and `CLAUDE.md` imports it with the line `@AGENTS.md`. See [Repo scope for cloud agents](docs/platforms.md#repo-scope-for-cloud-agents).
 - `controls install claude` writes enforced deny and ask rules from `controls/controls.json` into Claude Code settings, so the platform blocks force-push, secret reads, and edits to its own controls, and asks you before a push to `main`, a `--force-with-lease` push, or a production deploy.
+- `skills install NAME` installs a harness skill from `tools/agents/skills/` for Claude Code, Codex, and Cursor, with a backup and a receipt. `--repo PATH` puts it inside a project for cloud agents.
+- The `multi-agent-planning` skill turns a request into small verified slices, each routed to an agent, model, and effort. See [docs/multi-agent-planning.md](docs/multi-agent-planning.md).
+- The `subagent-budget` skill caps a fan-out at 3 children. Fact-finding uses Sonnet or Haiku at medium effort. High effort needs you to name that one task. See [docs/subagent-budget.md](docs/subagent-budget.md).
+- The `make-it-verifiable` skill plans how to prove a change works before any code. It waits for your "go", reports each check as pass, fail, or unknown with evidence, and ends with a prompt for a second reviewer. Type `/make-it-verifiable <change>`. It does not load by itself.
 - A read-only MCP server lets agents search the reference documents.
 - `rules scan`, `rules preview`, `rules apply`, and `rules undo` scan the other global rules in Cursor, Claude Code, and Codex. They find drift between agents and apply only the changes you approve, with backups and undo.
 
@@ -36,13 +40,13 @@ Prerequisites: Node.js 24 or later, npm, and Git. Notion, Supabase, and embeddin
 
 3. Choose one path. `preview` prints a digest. You approve that exact digest.
 
-   Path A: use the rules as shipped. Release `1.4.3` is already in `releases/`.
+   Path A: use the rules as shipped. Release `1.5.3` is already in `releases/`.
 
    ```sh
-   npm run harness -- activate 1.4.3
+   npm run harness -- activate 1.5.3
    ```
 
-   Expect `"active": "1.4.3"`.
+   Expect `"active": "1.5.3"`.
 
    Path B: publish your own rules. Edit `knowledge/core.md` and the files in `knowledge/references/` to match your own engineering rules. The shipped text is a working example. Then choose a version number that is not in `releases/`, such as `2.0.0`.
 
@@ -94,6 +98,8 @@ node --experimental-strip-types "<path-to-clone>/src/cli.ts" search 'tracer bull
 | [Global rules](docs/platforms.md#global-rules-beyond-the-harness-policy) | Scanning other global rules, drift findings, preview, apply, undo |
 | [Operations](docs/README.md) | Commands, versions, backups, recovery, limits |
 | [Platforms](docs/platforms.md) | Codex, Claude Code, Cursor, Grok Bot, custom agents |
+| [Multi-Agent Planning](docs/multi-agent-planning.md) | The multi-agent slice planner skill: invocation, routing, states, install |
+| [Subagent budget](docs/subagent-budget.md) | The fan-out cap: count, model, effort, and install |
 | [Lavish review tool](docs/platforms.md#lavish-review-tool) | Visual review install, telemetry, verification, upgrade, recovery, limits |
 | [Add-on packs](docs/packs.md) | Category rule packs, catalog format, add/remove/list, trust model, limits |
 | [Notion](docs/notion.md) | Bringing your own page IDs, imports |
