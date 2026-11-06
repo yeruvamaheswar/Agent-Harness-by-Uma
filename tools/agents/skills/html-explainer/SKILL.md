@@ -1,6 +1,6 @@
 ---
 name: html-explainer
-description: Use whenever the user asks to build, write, make, or update a plan, audit, review, report, or comparison, in any repo, and as the running explainer of a nontrivial build. Always write plans/<slug>.md in the plan-page format and build plans/<slug>.html with ~/.agents/bin/md-view.sh. Reply with the page path and a short summary, not the whole plan in chat. The page template is fixed, so do not load a design skill to build the page.
+description: Write plans, audits, reviews, reports, and comparisons as a plan-page Markdown file and build its HTML page with md-view.sh. Use whenever the user asks to build, write, make, or update a plan, audit, review, report, or comparison, in any repo, and as the running explainer of a nontrivial build. Always write plans/<slug>.md in the plan-page format and build plans/<slug>.html with ~/.agents/bin/md-view.sh. Reply with the page path and a short summary, not the whole plan in chat. The page template is fixed, so do not load a design skill to build the page.
 ---
 
 # HTML explainer

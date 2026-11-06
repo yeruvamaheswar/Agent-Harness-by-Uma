@@ -175,7 +175,11 @@ const openAttempt = (rec: SliceRecord) => [...rec.attempts].reverse().find(a => 
 
 const readJsonFlag = (c: Ctx, name: string): unknown => {
   const file = resolve(c.cwd, c.args.flags.get(name)!);
-  try { return JSON.parse(readFileSync(file, 'utf8')); } catch (e) { throw new Error(`cannot read --${name} ${file}: ${e instanceof Error ? e.message : String(e)}`); }
+  try { return JSON.parse(readFileSync(file, 'utf8')); } catch (e) {
+    const position = e instanceof SyntaxError ? e.message.match(/\bat position (\d+)(?: \(line \d+ column \d+\))?$/)?.[1] : undefined;
+    const reason = e instanceof SyntaxError ? `not valid JSON${position ? ` at position ${position}` : ''}` : e instanceof Error ? e.message : String(e);
+    throw new Error(redact(`cannot read --${name} ${file}: ${reason}`));
+  }
 };
 function hostOpts(c: Ctx) {
   const host = c.args.flags.get('host') ?? 'other';

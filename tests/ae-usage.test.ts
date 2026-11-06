@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { execFileSync } from 'node:child_process';
+import { execFileSync, spawnSync } from 'node:child_process';
 import { mkdtempSync, mkdirSync, readFileSync, realpathSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
@@ -142,6 +142,27 @@ async function started() {
   await r.run('start', r.plan, '1', '--provider', 'codex', '--task-id', 'codex-task-1');
   r.put('svc/a.ts', 'export const a = 1;\n');
   return r;
+}
+
+for (const flag of ['snapshot', 'policy', 'caps']) {
+  test(`usage: malformed --${flag} JSON never exposes file contents on stderr`, async () => {
+    const r = repo();
+    const engine = fileURLToPath(new URL('../tools/agents/skills/autonomous-engineering/scripts/ae.ts', import.meta.url));
+    const cli = (...args: string[]) => spawnSync(process.execPath, ['--experimental-strip-types', engine, ...args], { cwd: r.dir, encoding: 'utf8' });
+    const init = cli('init', r.plan);
+    assert.equal(init.status, 0, init.stderr);
+    await r.run('next', r.plan);
+    const invalid = join(r.dir, 'invalid.json');
+    writeFileSync(invalid, 'token: hunter2pass');
+    const snapshot = r.file('snapshot', { agents: {} });
+    const result = cli('usage', r.plan, '1', '--snapshot', flag === 'snapshot' ? invalid : snapshot,
+      ...(flag === 'snapshot' ? [] : [`--${flag}`, invalid]));
+    assert.equal(result.status, 1, result.stderr);
+    assert.match(result.stderr, new RegExp(`--${flag}`));
+    assert.match(result.stderr, /not valid JSON/);
+    assert.doesNotMatch(result.stderr, /hunter2pass/);
+    assert.doesNotMatch(result.stderr, /token:/);
+  });
 }
 async function prepared(r: Awaited<ReturnType<typeof started>>) {
   await r.run('prepare', r.plan, '1', '--to', 'Cursor (auto)', '--lead', LEAD, '--reason', 'Codex quota 88% and the rest will not fit');

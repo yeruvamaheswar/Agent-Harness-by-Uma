@@ -13,6 +13,18 @@ const cli=(root:string,...flags:string[])=>spawnSync(process.execPath,
   ['--experimental-strip-types',join(repo,'src/cli.ts'),'--root',root,'skills','catalog',...flags],{encoding:'utf8'});
 const section=(name:string)=>`## ${name}\nGroup: Planning\nStatus: beta\nNeeds: A task.\nExample: /${name}\nResult: A plan.\n`;
 const source=(name:string)=>`---\nname: ${name}\ndescription: Plan a task. Ask for details.\ndisable-model-invocation: true\n---\n# ${name}\n`;
+test('html-explainer description states its purpose first and keeps its load triggers',async()=>{
+  const skill=await readFile(join(repo,'tools/agents/skills/html-explainer/SKILL.md'),'utf8');
+  const description=skill.match(/^description: (.+)$/m)?.[1];
+  assert.ok(description);
+  // The catalog shows the first sentence as the purpose, so it must not be trigger text.
+  assert.doesNotMatch(description,/^Use /);
+  assert.match(description,/^Write plans, audits, reviews, reports, and comparisons/);
+  // The triggers that make the skill load stay in the description.
+  assert.match(description,/Use whenever the user asks to build, write, make, or update a plan, audit, review, report, or comparison, in any repo, and as the running explainer of a nontrivial build\./);
+  assert.match(description,/Always write plans\/<slug>\.md in the plan-page format/);
+  assert.ok(description.length<=1024,`description is ${description.length} chars`);
+});
 async function fixture(t:{after:(fn:()=>Promise<void>)=>void}) {
   const root=await mkdtemp(join(tmpdir(),'skills-catalog-'));
   t.after(()=>rm(root,{recursive:true,force:true}));
