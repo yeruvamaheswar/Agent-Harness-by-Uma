@@ -1,6 +1,6 @@
 # Operations and maintenance
 
-Run all examples from the root of your harness clone. They work regardless of the location of your application repositories.
+Start with the [README](../README.md) for install and quick start, and [workflows](workflows.md) for worked examples. Run all examples from the root of your harness clone. They work regardless of the location of your application repositories.
 
 ### Separate content folder
 
@@ -28,6 +28,7 @@ HARNESS_ROOT=~/my-harness npm run harness -- preview
 | `install claude` | Backs up and installs global Claude Code rules in `~/.claude/CLAUDE.md`; MCP is registered with `claude mcp add` (see platforms) |
 | `install cursor-files` | Registers the MCP server in `~/.cursor/mcp.json`. It writes no rule file, and it retires the rule file of an earlier install. The policy itself is a manual paste into Cursor User Rules; see [platforms](platforms.md#cursor) |
 | `confirm cursor-user-rules [--version VERSION]` | Records that you pasted the active release (or `VERSION`) into Cursor User Rules. It stores the version, digest, and time in `.state/manual-steps.json`. No tool can read User Rules, so this is your statement, not proof |
+| `skills catalog [--write\|--check]` | Checks `docs/skills.md` and the generated skill blocks in `README.md` and `docs/project-explainer.html` against `tools/agents/skills/`. `--write` regenerates the blocks. Without a flag it checks only. Exit code 1 and a message that names the file and skill on a difference |
 | `install generic` | Writes a generic global package for custom-agent use |
 | `verify codex` | Checks the harness-owned instructions/settings and global override conflicts; unrelated settings can change |
 | `status` | Reports active release, installed configuration, rule receipts, Notion mapping, and pending connections. `manualSteps` holds the Cursor User Rules step: `needed`, `confirmedVersion`, `activeVersion`, and `instruction`. `publish`, `activate`, `rollback`, and `install cursor-files` print the same entry while `needed` is `true` |

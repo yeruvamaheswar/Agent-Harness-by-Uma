@@ -121,3 +121,4 @@ This writes `PATH/.agents/skills/multi-agent-planning/` and a relative link `PAT
 - Cursor CLI reads `~/.claude/skills/`, not `~/.agents/skills/` (observed 2026-10-26), so the Claude link is what makes the skill visible to Cursor.
 - Cloud agents need the repo-scope install. A relative `.claude/skills` link in a cloud checkout is untested.
 - The skill cannot see subscription usage. It plans with the agents you have, not with quotas.
+- The skill's own "Parallel rules" text in `tools/agents/skills/multi-agent-planning/SKILL.md` still says "At most 3 children at once". That contradicts `subagent-budget`, which sets no fixed cap and is the rule step 3 above follows. Finding F5 in [the audit](audits/production-readiness-audit.md) tracks it.
