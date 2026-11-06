@@ -9,7 +9,7 @@ Configuration files, environment variables, and the test and eval commands. For 
 | `harness.config.json` | The core policy path, the reference documents, and the optional Notion page IDs |
 | `knowledge/core.md`, `knowledge/references/` | The policy source |
 | `releases/<version>/` | Immutable releases. Never edit by hand |
-| `controls/controls.json` | The enforced Claude Code deny and ask rules: `no-force-push`, `ask-push-main`, `ask-force-with-lease`, `no-secret-reads`, `ask-deploys`, `no-self-edit` |
+| `controls/controls.json` | The enforced Claude Code deny and ask rules: `no-force-push`, `ask-push-main`, `ask-force-with-lease`, `no-secret-reads`, `ask-deploys`, `no-home-delete`, `no-self-edit` |
 | `.state/` | Private backups, receipts, and manual-step records. Ignored by Git |
 | `--root DIR` or `HARNESS_ROOT` | Keeps harness content in a different folder from the code. `--root` wins |
 | `evals/cases.jsonl`, `evals/results/` | Behavior cases and logged run rows |
