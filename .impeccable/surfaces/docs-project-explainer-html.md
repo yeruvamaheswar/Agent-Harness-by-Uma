@@ -38,3 +38,6 @@ FINISH: unreviewed and undocumented is unfinished; this build ends with the fini
 
 ## Unresolved
 - The public repo name and the public page URL.
+
+## Draft build (2026-11-06, awaiting owner approval)
+The page is built with 13 plates in three parts (The rules, Execution, Use it) and a new lead line, from the defaults in `docs/design/explainer-design-spec.md`. The direction contract above is unchanged until the owner approves the amendment. Draft items and proposed wording: `docs/design/explainer-drafts.md`.
