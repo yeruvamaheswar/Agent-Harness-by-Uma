@@ -5,7 +5,7 @@ Seven workflows, from setting up a project to an overnight run. Each one has a l
 - `runnable`: every command in its shell blocks ran in a clean clone, with a temporary home and no tokens, and exited 0.
 - `concept`: the workflow needs a live agent session or a provider. The page says what could not be run and why. Concept blocks are plain text, not shell blocks.
 
-Run the runnable blocks in order, from the root of your clone, after `npm ci` and `activate` (see the [README](../README.md#install)). They share one scratch project in `${TMPDIR:-/tmp}/harness-demo`, and they use only a throwaway plan. To keep your real settings untouched, run `export HOME=$(mktemp -d)` first.
+Run the runnable blocks in order, from the root of your clone, after `npm ci` and `activate` (see [install.md](install.md)). They share one scratch project in `${TMPDIR:-/tmp}/harness-demo`, and they use only a throwaway plan. To keep your real settings untouched, run `export HOME=$(mktemp -d)` first.
 
 Not released, so not shown: thread-continuity slices 2 to 6, Supabase semantic search, add-on packs, and the Grok export.
 
@@ -202,17 +202,5 @@ The rules for a run while you are away are in `tools/agents/skills/autonomous-en
 
 Label: `concept`.
 
-Design OS is a separate project, `designOS-by-Uma`, with its own plugin and skills (`design-os:brief`, `design-os:direction`, `design-os:specification`, `design-os:visual-review`, `design-os:handoff`). This repository does not install it. The repo shows two contact points:
-
-- `repo install` keeps a Design OS block in a project's `AGENTS.md` intact, through install, upgrade, and uninstall. `tests/repo.test.ts` covers this.
-- [design/explainer-design-spec.md](design/explainer-design-spec.md) records a Design OS consultation for this repo's explainer page, including a skill that failed to run.
-
-What you would do in a frontend project:
-
-```text
-1. Install Design OS from its own repository (not part of this harness).
-2. Install the harness policy:  npm run harness -- repo install <your-project>
-3. In a session, run the Design OS skills in order: brief, direction, specification, then visual-review on the rendered page.
-```
-
-Not run: steps 1 and 3. They need the Design OS plugin and a live agent session.
+Design OS is a separate project of design skills (`design-os:brief`, `design-os:direction`, `design-os:specification`, `design-os:visual-review`, `design-os:handoff`). It lives in its own repository, `designOS-by-Uma`, which may be private; this repository does not install it.
+This repo uses it only for its own pages: their design context is under `docs/design/` ([design/README.md](design/README.md)). Not run: the Design OS skills, which need its plugin and a live agent session.
