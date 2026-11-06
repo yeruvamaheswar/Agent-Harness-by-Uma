@@ -150,7 +150,7 @@ Rules:
 - **Verify:** `repo verify PATH` reads only the receipt and the target files. It works in a clone with no `releases/` folder. It prints `matches` per file, `release`, `configurationVerified`, and `behaviorVerified: false`. The exit code is non-zero when a block does not match.
 - **Upgrade:** after a new release, run `repo install PATH` again. It replaces the block in place and updates the receipt. `--version VERSION` selects a release other than the active one.
 - **Text outside the block:** your own text is preserved byte for byte. You can edit it at any time.
-- **DesignOS:** a DesignOS block (`<!-- BEGIN UMA DESIGN OS -->`) in the same file is preserved, before or after the Harness block, whichever tool ran first.
+- **DesignOS:** a DesignOS block (`<!-- BEGIN UMA DESIGN OS -->`) in the same file is preserved, before or after the Harness block, whichever tool ran first. `tests/repo.test.ts` checks this with a fixture block and runs without Design OS. The test that runs the real Design OS installer lives in the designOS-by-Uma repo (`tests/test_harness_coexistence.py`).
 - **Edited block:** if the Harness block differs from the receipt, `repo install` and `repo uninstall` refuse. Restore the block. Or delete `.agentic-harness/manifest.json` and run `repo install PATH --adopt`.
 - **`--adopt`:** a Harness block with no receipt, for example a hand copy, stops the install. `--adopt` replaces that block and owns it from then on. Malformed or duplicate markers always stop the install.
 - **Symlinks:** if `AGENTS.md` is a symlink to `CLAUDE.md` in the same folder, or the reverse, the command writes the real file once and records the other as an alias. Any other symlink stops the command.

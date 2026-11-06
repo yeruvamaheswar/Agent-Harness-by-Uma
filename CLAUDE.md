@@ -22,9 +22,9 @@ Agent harness and plan system for coordinated multi-platform work.
 - `plans/*.html`: generated views for users. Built by `~/.agents/bin/md-view.sh`.
 - `~/.agents/bin/md-view.sh` + `md-view.template.html`: shared builder for all repos. Works for any `<slug>.md`.
 - `tools/agents/`: sources of the skills and the page builder. Installed copies live in `~/.agents/`.
-- `design/`: impeccable redesign context (`DESIGN.md`, `PRODUCT.md`, `.impeccable/`). Agents do not read it for rebuilds.
+- `docs/design/plan-pages/`: impeccable redesign context of the plan-page template (`DESIGN.md`, `PRODUCT.md`, `.impeccable/`). Agents do not read it for rebuilds.
 - `plans/system-design.md`: how the assistants use the harness.
-- `docs/project-explainer.html`: the public explainer, hand-built with DesignOS. `md-view.sh` does not generate it. Its design context is `PRODUCT.md`, `DESIGN.md`, and `.impeccable/`. The plan-page design context stays in `design/`.
+- `docs/project-explainer.html`: the public explainer, hand-built with DesignOS. `md-view.sh` does not generate it. Its design context is `PRODUCT.md`, `DESIGN.md`, and `.impeccable/` in `docs/design/explainer/`. The plan-page design context is in `docs/design/plan-pages/`. See `docs/design/README.md`.
 - This repo is `Agent-Harness-by-Uma`.
 
 ## Commands

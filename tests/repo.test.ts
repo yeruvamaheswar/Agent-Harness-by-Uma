@@ -544,37 +544,37 @@ test('single-file dry runs list the stub and change nothing',async()=>{
  assert.deepEqual(removal.writes,[]);assert.deepEqual(removal.deletes,['AGENTS.md','CLAUDE.md',MANIFEST]);
  assert.deepEqual(await tree(repo),before);assert.deepEqual(await tree(root),installed);
 });
-// Runs the real DesignOS installer, which follows the same convention. It lives in a sibling checkout next to this repo, so CI and a plain clone skip this test.
-const DESIGN_OS=join(code,'..','designOS-by-Uma','scripts','design_os.py');
-const designOsMissing=!await exists(DESIGN_OS)?`DesignOS installer not found at ${DESIGN_OS}`:spawnSync('python3',['--version']).status!==0?'python3 not found':false;
-test('Harness and the real DesignOS installer share one AGENTS.md and one stub, in either install order',{skip:designOsMissing},async()=>{
- const design=(repo:string,action:string,...args:string[])=>spawnSync('python3',[DESIGN_OS,action,'--project',repo,...args],{encoding:'utf8',env:{...process.env,PYTHONDONTWRITEBYTECODE:'1'}});
- const ok=(r:ReturnType<typeof design>)=>assert.equal(r.status,0,r.stderr);
- const DESIGN_BEGIN='<!-- BEGIN UMA DESIGN OS -->',count=(s:string,mark:string)=>s.split(mark).length-1;
- // harness-lifo removes DesignOS first. The other two remove Harness first.
- for(const order of ['harness','design','harness-lifo']){
-  const {root,repo:made}=await fixture(),repo=await realpath(made);
-  if(order==='design')ok(design(repo,'install','--platform','all'));
+// Contract test with a fixture Design OS block. It spawns nothing outside this repo. The real cross-installer test lives in the designOS-by-Uma repo (tests/test_harness_coexistence.py).
+const DESIGN_BEGIN='<!-- BEGIN UMA DESIGN OS -->',DESIGN_END='<!-- END UMA DESIGN OS -->',count=(s:string,mark:string)=>s.split(mark).length-1;
+test('Harness keeps a Design OS block and the shared stub in AGENTS.md, in either install order (fixture)',async()=>{
+ // Design OS first: its block in AGENTS.md and the stub in CLAUDE.md, as its installer leaves them.
+ {const {root,repo}=await fixture({'AGENTS.md':DESIGN,'CLAUDE.md':STUB});
   await repoInstall(root,repo);
-  if(order!=='design')ok(design(repo,'install','--platform','all'));
-  assert.equal(await text(repo,'CLAUDE.md'),STUB,order);
-  const agents=await text(repo,'AGENTS.md');assert.equal(count(agents,BEGIN),1,order);assert.equal(count(agents,DESIGN_BEGIN),1,order);
-  assert.equal((await manifest(repo)).claudeViaImport,true);assert.equal(JSON.parse(await text(repo,'.design-os/manifest.json')).claude_via_import,true);
-  assert.equal((await repoVerify(repo)).configurationVerified,true,order);ok(design(repo,'status'));
-  if(order==='harness-lifo'){
-   ok(design(repo,'uninstall'));
-   assert.equal(await text(repo,'CLAUDE.md'),STUB);assert.equal((await repoVerify(repo)).configurationVerified,true);
-   await repoUninstall(root,repo);
-  }else{
-   await repoUninstall(root,repo);
-   assert.equal(await text(repo,'CLAUDE.md'),STUB,order);assert.equal(count(await text(repo,'AGENTS.md'),BEGIN),0);ok(design(repo,'status'));
-   ok(design(repo,'uninstall'));
-  }
-  // Every order ends with both files gone. When Harness is first in and first out, DesignOS did not create AGENTS.md; it still deletes
-  // the file it empties because the layout is installer-made (claude_via_import and an exact stub), and the stub goes with it.
-  for(const name of TARGETS)assert.equal(await exists(join(repo,name)),false,`${order}: ${name}`);
-  assert.equal(await exists(join(repo,'.agentic-harness')),false);assert.equal(await exists(join(repo,'.design-os/manifest.json')),false);
- }
+  assert.equal(await text(repo,'CLAUDE.md'),STUB);
+  const agents=await text(repo,'AGENTS.md');
+  assert.equal(count(agents,BEGIN),1);assert.equal(count(agents,DESIGN_BEGIN),1);assert.equal(count(agents,DESIGN_END),1);
+  assert.equal((await manifest(repo)).claudeViaImport,true);
+  assert.equal((await repoVerify(repo)).configurationVerified,true);
+  // Reinstall over the existing Design OS block changes nothing.
+  const strip=async()=>({...await manifest(repo),installedAt:''}),files=async()=>[await text(repo,'AGENTS.md'),await text(repo,'CLAUDE.md')];
+  const beforeFiles=await files(),beforeManifest=await strip();await repoInstall(root,repo);
+  assert.deepEqual(await files(),beforeFiles);assert.deepEqual(await strip(),beforeManifest);
+  // Harness uninstall leaves the Design OS block and the stub.
+  await repoUninstall(root,repo);
+  assert.equal(await text(repo,'AGENTS.md'),DESIGN);assert.equal(await text(repo,'CLAUDE.md'),STUB);
+  assert.equal(await exists(join(repo,'.agentic-harness')),false);}
+ // Harness first, then a fixture Design OS block appended after the Harness block (the other tool installs second).
+ {const {root,repo}=await fixture();
+  await repoInstall(root,repo);
+  assert.equal(await text(repo,'CLAUDE.md'),STUB);
+  await writeFile(join(repo,'AGENTS.md'),(await text(repo,'AGENTS.md'))+DESIGN);
+  const agents=await text(repo,'AGENTS.md');assert.equal(count(agents,BEGIN),1);assert.equal(count(agents,DESIGN_BEGIN),1);
+  assert.equal((await repoVerify(repo)).configurationVerified,true);
+  await repoUninstall(root,repo);
+  const left=await text(repo,'AGENTS.md');
+  assert.equal(count(left,BEGIN),0);assert.equal(count(left,DESIGN_BEGIN),1);assert.ok(left.includes(DESIGN));
+  assert.equal(await text(repo,'CLAUDE.md'),STUB);
+  assert.equal(await exists(join(repo,'.agentic-harness')),false);}
 });
 test('converting keeps an import line that the user appended right after the block on its own line',async()=>{
  const {root,repo}=await fixture({'AGENTS.md':DESIGN,'CLAUDE.md':DESIGN});

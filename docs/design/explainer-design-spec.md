@@ -9,7 +9,7 @@ Labels used in this file:
 - **[Critique]**: the finding comes from the Impeccable `critique` run (Assessment A: design review, or Assessment B: detector and browser evidence).
 - **[derived]**: my own derivation from the brief, the repo, and the evidence above. It is not a Design OS output.
 
-Sources in this repo: `PRODUCT.md`, `DESIGN.md`, `.impeccable/surfaces/docs-project-explainer-html.md`, `docs/project-explainer.html`, `tools/agents/skills/`, `src/skills.ts`, `src/cli.ts`.
+Sources in this repo: `docs/design/explainer/PRODUCT.md`, `docs/design/explainer/DESIGN.md`, `docs/design/explainer/.impeccable/surfaces/docs-project-explainer-html.md`, `docs/project-explainer.html`, `tools/agents/skills/`, `src/skills.ts`, `src/cli.ts`.
 
 ## Consultation log
 

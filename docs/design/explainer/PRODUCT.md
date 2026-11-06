@@ -38,7 +38,7 @@ Rules, locks, proof (confirmed by the owner, 2026-10-12).
 
 ## Brand Commitments
 - Name: Agentic Harness.
-- Visual identity: the "Witnessed Notebook" of the plan pages, recorded in `design/DESIGN.md`. Public surfaces are the same family, expanded with more space, motion, and interactive diagrams (confirmed by the owner, 2026-10-12).
+- Visual identity: the "Witnessed Notebook" of the plan pages, recorded in `docs/design/plan-pages/DESIGN.md`. Public surfaces are the same family, expanded with more space, motion, and interactive diagrams (confirmed by the owner, 2026-10-12).
 - Voice: plain words and short sentences, inspired by ASD-STE100. Every claim says observed or unknown.
 
 ## Evidence on Hand

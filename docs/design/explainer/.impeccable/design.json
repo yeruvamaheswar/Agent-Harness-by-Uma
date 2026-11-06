@@ -6,7 +6,7 @@
     "scope": {
       "surface": "public pages: the project explainer",
       "built": "docs/project-explainer.html",
-      "planPageSystem": "design/DESIGN.md and design/.impeccable/design.json. Not replaced by this file. The two share the colour tokens and the type roles.",
+      "planPageSystem": "docs/design/plan-pages/DESIGN.md and docs/design/plan-pages/.impeccable/design.json. Not replaced by this file. The two share the colour tokens and the type roles.",
       "decided": [
         "The owner, 2026-10-12: public pages are the same family as the plan pages, expanded.",
         "The owner, 2026-10-12: the structure of the explainer is the figure atlas.",

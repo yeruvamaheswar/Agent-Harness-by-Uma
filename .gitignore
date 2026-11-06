@@ -7,8 +7,8 @@ coverage/
 .DS_Store
 *.log
 .claude/settings.local.json
-.impeccable/mocks/
-.impeccable/review/
-.impeccable/questions/
+**/.impeccable/mocks/
+**/.impeccable/review/
+**/.impeccable/questions/
 *.pem
 *.key

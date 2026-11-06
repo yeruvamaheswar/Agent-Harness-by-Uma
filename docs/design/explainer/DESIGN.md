@@ -208,7 +208,7 @@ components:
 
 Scope: public pages. Today that is one page, `docs/project-explainer.html`. It is one static file. Its tokens are CSS custom properties on `:root` with the same names as the keys above (`--paper`, `--form`, ...). The `-dark` keys are the dark values of the same property.
 
-The plan-page system stays in `design/DESIGN.md` and `design/.impeccable/design.json`. This file does not replace it. The two systems share the colour tokens and the type roles. The shared values are equal in both files.
+The plan-page system stays in `docs/design/plan-pages/DESIGN.md` and `docs/design/plan-pages/.impeccable/design.json`. This file does not replace it. The two systems share the colour tokens and the type roles. The shared values are equal in both files.
 
 **Who decided what.**
 - The owner, 2026-10-12: public pages are the same family as the plan pages, expanded.

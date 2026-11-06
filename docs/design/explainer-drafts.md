@@ -54,7 +54,7 @@ A comment at the top of the page marks it as a draft: `<!-- DRAFT (awaiting owne
 
 ## Proposed changes to the surface brief (not applied)
 
-`.impeccable/surfaces/docs-project-explainer-html.md` keeps its approved text. If D1 is approved: THESIS "Nine numbered, interactive plates" becomes "Numbered interactive plates in three parts", and STORY gains the Execution part after "a session" (skills, one plan with many agents, checkpoint and handoff, an unattended run, then one real run). The brief now carries a short "Draft build" note that points here.
+`docs/design/explainer/.impeccable/surfaces/docs-project-explainer-html.md` keeps its approved text. If D1 is approved: THESIS "Nine numbered, interactive plates" becomes "Numbered interactive plates in three parts", and STORY gains the Execution part after "a session" (skills, one plan with many agents, checkpoint and handoff, an unattended run, then one real run). The brief now carries a short "Draft build" note that points here.
 
 ## What was built
 
@@ -145,8 +145,8 @@ Technical readiness: no blocking verified defect remains in scope. Human approva
 ### Handoff
 
 - Scope: slice 7, "Explainer", of the production-readiness plan.
-- Changed files (uncommitted): `docs/project-explainer.html`; `.impeccable/surfaces/docs-project-explainer-html.md` (a draft note only); this file. Not changed: `src/skills-catalog.ts` and `tests/skills-catalog.test.ts` (the generator already emits what the page needs), `PRODUCT.md`, `DESIGN.md`, `README.md`.
-- Inputs: [PRODUCT.md](../../PRODUCT.md), [DESIGN.md](../../DESIGN.md), the surface brief, [explainer-design-spec.md](explainer-design-spec.md).
+- Changed files (uncommitted): `docs/project-explainer.html`; `docs/design/explainer/.impeccable/surfaces/docs-project-explainer-html.md` (a draft note only); this file. Not changed: `src/skills-catalog.ts` and `tests/skills-catalog.test.ts` (the generator already emits what the page needs), `PRODUCT.md`, `DESIGN.md`, `README.md`.
+- Inputs: [PRODUCT.md](explainer/PRODUCT.md), [DESIGN.md](explainer/DESIGN.md), the surface brief, [explainer-design-spec.md](explainer-design-spec.md).
 - Approved: the direction (owner, 2026-10-12 and 2026-10-13), and "build from the spec defaults" (owner, 2026-11-06). Not approved: D1 to D4 and every proposed change above.
 - Reproduce: serve `docs/` on 127.0.0.1 and open `project-explainer.html`. Run `npm run harness -- skills catalog --check`, `npm test`, and `impeccable detect --json docs/project-explainer.html`.
 - Installation and behavior: this is a static page. Nothing is installed. "Configured" and "verified" claims on the page come from the repo, not from this build.
