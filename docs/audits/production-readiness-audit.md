@@ -38,7 +38,7 @@
 - Supabase search, packs, and Grok export (parked; now stated in README.md:195 and `docs/workflows.md:10`). Thread-continuity slices 2 to 6. Live eval campaigns. A policy release. Merging any PR. Cursor User Rules, which only the owner can paste.
 
 **Documented production-readiness criteria**
-- The repository still documents no production-readiness criteria as such. The CI gate it does define (`.github/workflows/checks.yml`) passes locally on this branch, step by step (see Gate results). The mission PR's CI run was pending at writing time.
+- The repository still documents no production-readiness criteria as such. The CI gate it does define (`.github/workflows/checks.yml`) passes locally on this branch, step by step (see Gate results). The mission PR (#10) passed "Harness checks" on commit 6af0139 (2 runs: push and pull request).
 
 ## Verdict
 
@@ -51,7 +51,7 @@ The three strongest reasons:
 
 What still blocks the next, higher verdict level:
 - PR #9 is not merged, so `npm audit` still fails on this branch and `main` CI stays red on gitleaks.
-- The mission PR's CI was pending at writing time.
+- The mission PR (#10) passed "Harness checks" on 6af0139.
 - The behavior of release 1.5.5 is not verified in fresh Codex and Cursor sessions.
 - Cursor User Rules at 1.5.5 are not pasted (owner only).
 - The explainer drafts wait for the owner's approval.
@@ -97,7 +97,7 @@ Dispositions changed from the draft: W4, W5, W10, W12, W15, W16, W17, W28, W29, 
 | W31 | PR #6 (release 1.5.0 branch) | Superseded or intentionally deferred | Its content is on this branch (ecec5a8, effc3c3, d8ae9e4) | Close #6 after the mission PR merges, with a comment naming it |
 | W32 | Engine checkpoints, handoff, recovery | Implemented but incomplete | `ae checkpoint` needs an IN_PROGRESS slice (`tools/agents/skills/autonomous-engineering/references/engine.md:32`). The journal carried 16 slices across model and session changes; `ae status` lists every state (`final-state.md`) | EVAL-10 (`ae report` and `ae handoff` from the journal alone) not run. A wrong failure reason stays in the append-only journal |
 | W33 | Engine command guard and authority grants | Implemented and verified | `ae check` allowed every Verify line and refused a computed `$HOME/...` command name; `ae init` refused the CI path without the `ci` grant (baseline-gates.md). `tests/ae-guard.test.ts` passes | Redaction notes in W6 |
-| W34 | CI "Harness checks" and secret scan | Implemented but incomplete | `.gitleaksignore` with exactly the 2 fixture fingerprints (62ac0d5); the same file is on PR #9 (owner decision D-2026-11-06-3). Gate: gitleaks 8.24.3 over remote refs plus `HEAD`: "43 commits scanned", "no leaks found", exit 0. PR #9 checks: SUCCESS, SUCCESS (`gh pr view 9`, 2026-11-06) | `main` CI stays red until PR #9 or the mission PR merges. Mission PR CI pending at writing time |
+| W34 | CI "Harness checks" and secret scan | Implemented but incomplete | `.gitleaksignore` with exactly the 2 fixture fingerprints (62ac0d5); the same file is on PR #9 (owner decision D-2026-11-06-3). Gate: gitleaks 8.24.3 over remote refs plus `HEAD`: "43 commits scanned", "no leaks found", exit 0. PR #9 checks: SUCCESS, SUCCESS (`gh pr view 9`, 2026-11-06) | `main` CI stays red until PR #9 or the mission PR merges. Mission PR #10: "Harness checks" passed on 6af0139 |
 | W35 | Dependency vulnerabilities | Implemented but incomplete | On this branch `npm audit --omit=dev --audit-level=high`: "7 vulnerabilities (5 moderate, 2 high)", exit 1 (re-run 2026-11-06). PR #9: 0 vulnerabilities on its branch, checks pass, mergeable, not merged | Owner merges PR #9 |
 | W36 | Lint gate | Not implemented | `package.json` scripts: `harness`, `test`, `typecheck`. README.md "Known limitations" states that typecheck is the only static gate | Owner decides: add a linter, or accept typecheck as the only static gate |
 | W37 | Design OS boundary (slices 14, 15) | Implemented but incomplete | Design context moved under `docs/design/` (cd899c3, `docs/design/README.md`). Harness-side contract test with a fixture block in `tests/repo.test.ts`. Real-installer test `tests/test_harness_coexistence.py` on designOS-by-Uma PR #9: CI pass, independent review accept (`docs/audits/designos-test-move.md`, 3693534) | Owner merges designOS-by-Uma PR #9 |
@@ -119,7 +119,7 @@ Dispositions changed from the draft: W4, W5, W10, W12, W15, W16, W17, W28, W29, 
 | REQ-9 | `subagent-budget` says the 2026-10-27 decision | Met, installed | W5 |
 | REQ-10 | Redaction of the 2 gap shapes with tests | Met | W6 |
 | REQ-11 | A new session can continue from plan, journal, run folder | Partly met; EVAL-10 not run | W32 |
-| REQ-12 | PR to main after scans, then the A to I report | In progress (slice 12); scans pass; CI pending at writing time | W34, Gate results |
+| REQ-12 | PR to main after scans, then the A to I report | Done: PR #10 opened after the scans; "Harness checks" passed on 6af0139; the A to I report is in the mission run folder | W34, Gate results |
 | NOT-1 | No push before the scans | Holds | gitleaks gate passed before any push of this branch |
 | NOT-2 | No private plans, paths, or IDs in commits | Holds for `plans/`: the "plans in diff" gate exit 0 | Gate results |
 | NOT-3 | No change to parked features or `knowledge/core.md` | Holds for this mission. `knowledge/core.md` differs from `main` only through d8ae9e4 (releases 1.5.0 to 1.5.5), which predates the mission | `git log origin/main..HEAD -- knowledge/core.md` |
@@ -133,7 +133,7 @@ Finding numbers: F1 to F26 are from the mission's findings note. Slice 9's usage
 |---|---|---|---|
 | Done | W34: gitleaks fixture findings | Done in 62ac0d5 (`.gitleaksignore`, 2 fingerprints); same file added to PR #9 | CI-style scan over remote refs plus `HEAD`: `no leaks found` |
 | P0 | PR #9 not merged: `main` CI red on gitleaks; 2 high `npm audit` findings (body-parser, zod) | Owner reviews and merges PR #9 | `npm audit --omit=dev --audit-level=high` exits 0 on `main`; "Harness checks" passes on `main` |
-| P1 | Mission PR CI | Open the PR after the gates; read the "Harness checks" run | The run passes, or each failure is classified with its log |
+| Done | Mission PR CI | PR #10 opened after the gates; "Harness checks" passed on 6af0139 | The run passes |
 | Done | W17 / REQ-3: skill-list drift check | Done in 1af7086 | `skills catalog --check` exit 0; CI step at `checks.yml:22` |
 | Done | F5: "At most 3 children at once" in multi-agent-planning | Done in 6c2064a | `grep -rniE 'at most 3' tools tests README.md docs --exclude-dir=audits` is empty |
 | P1 | F1: `ae report` lists a manually ACCEPTED, then INTEGRATED, slice as engine-verified | Filter by evidence kind in `report.ts:87`, not only state; add a test | The slice shows under manual sign-off after `ae integrate`; new test passes |
@@ -208,7 +208,7 @@ Baseline: the mission worktree at c8219b2, before slice 1 (baseline-gates.md). D
 | Links (relative links in tracked `.md` outside `plans/`, plus the explainer) | not run | not run | 103 links, 0 missing (auditor's script, 2026-11-06). The coordinator reported 85 over a narrower file set; that run is not in gates.log | none |
 | Explainer (`tools/explainer.ts check`) | not available | not available | exit 0; 60 of 60 (6 checks at 10 viewport and theme cases each) | none |
 | Engine (`ae status`) | not done | 2 of 12 VERIFIED | 15 of 16 VERIFIED; slice 12 in progress | none |
-| CI ("Harness checks" on the mission PR) | not run | `main` failed on gitleaks | pending at writing time (PR not yet opened) | not classified yet |
+| CI ("Harness checks" on the mission PR) | not run | `main` failed on gitleaks | pass on 6af0139 (PR #10, push and pull request runs) | n/a |
 
 ## Audit limitations
 
@@ -227,7 +227,7 @@ Baseline: the mission worktree at c8219b2, before slice 1 (baseline-gates.md). D
 | Codex and Cursor fresh-session checks of the 1.5.5 policy | Not run (only skill loading was probed) | W21 stays "Not implemented" |
 | Eval results after 2026-10-26 | Only in local T3 checkpoint refs, not on any branch | W11 and W14 claims about later eval runs cannot be checked |
 | Digest file contents | Counted, not read | W25 confirms the runs exist, not their quality |
-| Mission PR CI | Not run at writing time | The CI row in Gate results is pending |
+| Mission PR CI | Run after writing: passed on 6af0139 | The audit records it in the gate table |
 
 ## Out of scope
 
