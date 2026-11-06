@@ -19,5 +19,6 @@ jobs:
       # Validates every pack (manifest, digest, lint) and fails if catalog/index.json is stale.
       - run: npm run harness -- catalog build
       - run: git diff --exit-code catalog/index.json
+      - run: npm run harness -- skills catalog --check
       # Scans the full history. The gitleaks action fails on a push that contains the root commit.
       - run: docker run --rm -v "$PWD:/repo" ghcr.io/gitleaks/gitleaks:v8.24.3 git /repo --redact --verbose
