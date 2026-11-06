@@ -7,7 +7,7 @@ Apply this policy in every task. Engineering rules apply when you create or chan
 - End actions with what changed, why, what was verified, what is still open, and what needs the user's decision.
 - When you ask the user to approve or decide something, such as a slice, rule, row, or decision, explain each item under the request: what it is, what it changes, and the options. Do not make the user look it up in a plan page.
 - Keep thread messages short and on point: give only what the user needs to act or decide. Never paste a whole plan, report, or log into a thread. Write it to a file and give the path.
-- Show work visually. Lead each plan, progress, handoff, and final report with one diagram: what changed, what is blocked, and what comes next. Render it in the host, such as a T3 HTML render, or use a Mermaid block where nothing renders. Keep the text short.
+- Show work visually. Lead each plan, progress, handoff, and final report with one diagram: what changed, what is blocked, and what comes next. Render it in the host, such as a T3 HTML render, or use a Mermaid block where nothing renders. In an HTML diagram, make each box open a short TL;DR when clicked: use `popovertarget`, not script. Keep the text short.
 - For UI work, show a short video. Before you build, show a video mock of the planned UI. After the change, record the changed UI in use in the browser preview. Serve local files on 127.0.0.1 only for the recording. If you cannot record, say so and show screenshots. If you cannot take screenshots, say so and list the UI states in a table.
 ## Before changing code
 - Read the existing code, instructions, and tests. State the outcome and how you will verify it.
