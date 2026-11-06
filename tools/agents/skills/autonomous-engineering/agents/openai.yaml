@@ -1,0 +1,6 @@
+# Codex never leads a run. It gets work through an `ae` handoff note, so it must not auto-load this skill.
+interface:
+  display_name: "Autonomous engineering"
+  short_description: "Execute, review, and recover a slice plan with recorded evidence"
+policy:
+  allow_implicit_invocation: false

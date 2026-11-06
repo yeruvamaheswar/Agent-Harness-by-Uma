@@ -1,0 +1,4 @@
+# Synthetic fixtures in the redactor's own test (commit 2529cc1, tests/ae-guard.test.ts).
+# "abcdefghijklmnopqrst" and "synthetic-secret" are not real secrets.
+2529cc143cfadbc62aae28716beb9df19346b0b5:tests/ae-guard.test.ts:curl-auth-header:283
+2529cc143cfadbc62aae28716beb9df19346b0b5:tests/ae-guard.test.ts:curl-auth-header:290

@@ -1,6 +1,6 @@
 ---
 name: html-explainer
-description: Use whenever the user asks to build, write, make, or update a plan, audit, review, report, or comparison, in any repo, and as the running explainer of a nontrivial build. Always write plans/<slug>.md in the plan-page format and build plans/<slug>.html with ~/.agents/bin/md-view.sh. Reply with the page path and a short summary, not the whole plan in chat. The page template is fixed, so do not load a design skill to build the page.
+description: Write plans, audits, reviews, reports, and comparisons as a plan-page Markdown file and build its HTML page with md-view.sh. Use whenever the user asks to build, write, make, or update a plan, audit, review, report, or comparison, in any repo, and as the running explainer of a nontrivial build. Always write plans/<slug>.md in the plan-page format and build plans/<slug>.html with ~/.agents/bin/md-view.sh. Reply with the page path and a short summary, not the whole plan in chat. The page template is fixed, so do not load a design skill to build the page.
 ---
 
 # HTML explainer
@@ -17,7 +17,7 @@ description: Use whenever the user asks to build, write, make, or update a plan,
 - Template changes only when the user asks. Build them as `~/.agents/bin/md-view.template.sample.html` (impeccable allowed then). Promote only after the user approves.
 - Show the user: the goal, what waits on them, progress, how each step is checked, and what is still unknown.
 - Hide nothing. Record failed checks and skipped steps. For a done step, write the observed result in the check field.
-- Use tables for comparisons. Use a ```mermaid block for 3+ interacting parts. No images or video unless the user asks.
+- Use tables for comparisons. Use a ```mermaid block for 3+ interacting parts. No images or video unless the user asks or the core UI rule calls for a video or screenshots.
 
 ## Commands
 ```bash

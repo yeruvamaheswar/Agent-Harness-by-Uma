@@ -150,7 +150,7 @@ Rules:
 - **Verify:** `repo verify PATH` reads only the receipt and the target files. It works in a clone with no `releases/` folder. It prints `matches` per file, `release`, `configurationVerified`, and `behaviorVerified: false`. The exit code is non-zero when a block does not match.
 - **Upgrade:** after a new release, run `repo install PATH` again. It replaces the block in place and updates the receipt. `--version VERSION` selects a release other than the active one.
 - **Text outside the block:** your own text is preserved byte for byte. You can edit it at any time.
-- **DesignOS:** a DesignOS block (`<!-- BEGIN UMA DESIGN OS -->`) in the same file is preserved, before or after the Harness block, whichever tool ran first.
+- **DesignOS:** a DesignOS block (`<!-- BEGIN UMA DESIGN OS -->`) in the same file is preserved, before or after the Harness block, whichever tool ran first. `tests/repo.test.ts` checks this with a fixture block and runs without Design OS. The test that runs the real Design OS installer lives in the designOS-by-Uma repo (`tests/test_harness_coexistence.py`).
 - **Edited block:** if the Harness block differs from the receipt, `repo install` and `repo uninstall` refuse. Restore the block. Or delete `.agentic-harness/manifest.json` and run `repo install PATH --adopt`.
 - **`--adopt`:** a Harness block with no receipt, for example a hand copy, stops the install. `--adopt` replaces that block and owns it from then on. Malformed or duplicate markers always stop the install.
 - **Symlinks:** if `AGENTS.md` is a symlink to `CLAUDE.md` in the same folder, or the reverse, the command writes the real file once and records the other as an alias. Any other symlink stops the command.
@@ -239,9 +239,9 @@ Grok Bot's cloud computer is not covered. It needs its own install and has no lo
 
 ## Shared skills and visibility
 
-The live copies of the shared skills are in `~/.agents/skills/`. Claude Code reaches them through symlinks in `~/.claude/skills/`. Codex reads the folder directly.
+The live copies of the shared skills are in `~/.agents/skills/`. Claude Code reaches them through symlinks in `~/.claude/skills/`. Codex reads the folder directly. `npm run harness -- skills install NAME` makes both, with a backup and a receipt; `skills status` shows drift between the sources and the live copies.
 
-Three skills stay visible on every platform: `grill-me`, `html-explainer`, and `render-rules`. The engineering policy names them. An agent can load them without being asked.
+Five skills stay visible on every platform: `grill-me`, `html-explainer`, `render-rules`, `multi-agent-planning`, and `subagent-budget`. The engineering policy names them (`multi-agent-planning` from release 1.5.0, `subagent-budget` from release 1.5.1). An agent can load them without being asked, once they are installed: `skills install multi-agent-planning` and `skills install subagent-budget`.
 
 Every other shared skill loads only when you call it by name. This keeps the start context small and stops two skills from claiming the same request.
 
@@ -254,9 +254,9 @@ Each hidden skill needs two flags:
 
 Set both. Codex does not read the `SKILL.md` flag. A Codex session loaded `unslop` on every task while only that flag was set.
 
-An update of a third-party skill can replace its files and remove the flags. After a skill update, run `npm run harness -- context audit`. Compare the visible lists with the three names above.
+An update of a third-party skill can replace its files and remove the flags. After a skill update, run `npm run harness -- context audit`. Compare the visible lists with the five names above.
 
-The sources of the three named skills live in `tools/agents/skills/`. Keep them identical to the live copies.
+The sources of the named skills live in `tools/agents/skills/`. Keep them identical to the live copies: `skills status` lists each mismatch, and `skills install NAME --replace` updates a copy after a backup.
 
 Not tested: whether Cursor's CLI honors `disable-model-invocation`. Cursor's docs describe the flag. No session was run for it.
 
