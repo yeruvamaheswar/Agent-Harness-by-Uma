@@ -24,15 +24,15 @@ Rules, locks, proof (confirmed by the owner, 2026-10-12).
 
 ## Operating Context
 - The owner sets it up once. After that the agents read the policy at every session start. The harness does not run during daily work.
-- Daily commands: `preview`, `publish`, `install`, `status`, `eval run`, `rules scan`, `context audit`.
+- Daily commands: `preview`, `publish`, `install`, `skills install`, `skills status`, `status`, `eval run`, `rules scan`, `context audit`.
 - Project repos live anywhere. `repo install` puts the policy into a project for cloud agents, which see only that project.
 - Plans and reports are written as `plans/<slug>.md` and built into pages by `md-view.sh`.
 
 ## Capabilities and Constraints
-- Works today: digest-approved immutable releases; installs for Claude Code, Codex, Cursor (MCP entry), and a generic file; repo-scope install with full and pointer modes; enforced deny and ask rules on Claude Code only; a read-only MCP server with local keyword search; a global rules scanner with preview, apply, undo, and retire; a context audit; a behavior eval runner for Claude Code, Codex, and Cursor with a results log; a benchmark of 10 harder cases with held-out checks, repeated trials, and a release comparison; a product contract format with a warn-only lint.
-- Manual: the Cursor User Rules paste after each release; the four skills and the page builder are copied by hand; Codex cloud needs one sentence per task.
+- Works today: digest-approved immutable releases; installs for Claude Code, Codex, Cursor (MCP entry), and a generic file; repo-scope install with full and pointer modes; enforced deny and ask rules on Claude Code only; a read-only MCP server with local keyword search; a global rules scanner with preview, apply, undo, and retire; a context audit; a behavior eval runner for Claude Code, Codex, and Cursor with a results log; a benchmark of 10 harder cases with held-out checks, repeated trials, and a release comparison; a product contract format with a warn-only lint; a skills installer with status, verify, and undo, and a generated skill list that CI checks; the `ae` engine with slice states, evidence, and a command guard; checkpoint, handoff, transfer, and recover; a charter for unattended runs with a deadline and attempt caps, and no commit grant.
+- Manual: the Cursor User Rules paste after each release; the page builder is copied by hand; Codex cloud needs one sentence per task. Skills install with `npm run harness -- skills install NAME`.
 - Parked (code and tests kept, no new work): Supabase semantic search, add-on rule packs, the Grok Bot export.
-- Not built: controls for Codex and Cursor; a remote MCP server for cloud agents.
+- Not built: controls for Codex and Cursor; a remote MCP server for cloud agents; a recorded unattended overnight run; the later slices of `thread-continuity`.
 - Terms: policy, release, digest, install, receipt, control (lock, ask rule), eval (spot check), session.
 - Instructions guide a model. They cannot force behavior. Every public statement must keep that limit visible.
 
@@ -42,10 +42,10 @@ Rules, locks, proof (confirmed by the owner, 2026-10-12).
 - Voice: plain words and short sentences, inspired by ASD-STE100. Every claim says observed or unknown.
 
 ## Evidence on Hand
-- `evals/cases.jsonl` (17 cases: 7 spot checks and 10 benchmark cases) and `evals/results/2026-10.jsonl` (131 logged runs).
+- `evals/cases.jsonl` and `evals/results/`, the logged runs.
 - The spot-check table and the setup table in `plans/system-design.md`.
-- 232 automated tests; CI with a full-history secret scan.
-- `controls/controls.json` (6 controls, 27 rules) and the 9 frozen releases in `releases/`.
+- `npm test`, which prints its own count; CI with a type check, the catalog checks, and a full-history secret scan.
+- `controls/controls.json` (6 controls, 27 rules) and every frozen release in `releases/`, listed in `releases/README.md`.
 - Absent, never to be invented: adoption numbers, testimonials, benchmarks, comparisons with named products.
 
 ## Product Principles
