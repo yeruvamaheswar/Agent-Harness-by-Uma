@@ -77,3 +77,66 @@ Status: beta
 Needs: A built product, its plans/<product>.contract.md, a fresh independent session, and access to the contract's eval methods.
 Example: Invoke /verify in a session that did not build the product.
 Result: A verification report with coverage, deviations, gaps, and unknowns. It changes no product code or eval definitions and fixes no findings.
+
+## babysit-pr
+Group: Execution
+Status: experimental
+Needs: gh, an authenticated GitHub account, and a PR. In T3 Code it uses watch_pull_request; elsewhere pr-wait needs python3. pr-wait can hang with no review bot or no CI.
+Example: Ask the agent to babysit PR 12 through CI and review.
+Result: One watcher per PR, fixes for real findings, and a ready or blocked report. It never merges unless asked. Vendored from tStack; see docs/vendor/tstack.
+
+## council
+Group: Quality
+Status: experimental
+Needs: Delegation to three different providers, such as T3 delegate_task.
+Example: Ask for a council review of a change.
+Result: Read-only reviews from three models, a summary of findings and disagreements, and scores. Rounds and deadlines are not capped upstream. Vendored from tStack.
+
+## file-pr
+Group: Execution
+Status: beta
+Needs: gh and a branch with a reviewed diff.
+Example: Ask the agent to file a PR.
+Result: A short PR that leads with the problem, checked for secrets, with the model and harness named at the end. Vendored from tStack.
+
+## full-send
+Group: Execution
+Status: experimental
+Needs: gh, an unwatched thread, and your typed /full-send. It grants merge and force-with-lease on the PR branch.
+Example: Type /full-send with a change request.
+Result: A change taken to a merged PR with proof, review, and babysitting. Patched to run only on /full-send. Vendored from tStack.
+
+## full-stop
+Group: Execution
+Status: experimental
+Needs: The same tools as full-send, and your typed /full-stop. It never merges.
+Example: Type /full-stop with a change request.
+Result: A PR that is proven, reviewed, and ready for you to merge, with auto-merge off. Patched to run only on /full-stop. Vendored from tStack.
+
+## leaving-pr-comments
+Group: Communication
+Status: beta
+Needs: gh and a PR comment to post.
+Example: Ask the agent to reply to a review comment.
+Result: A comment with an attribution note, checked for secrets, with the posted URL verified. Vendored from tStack.
+
+## modernize
+Group: Execution
+Status: beta
+Needs: gh, git, and a stale PR.
+Example: Ask the agent to modernize an old PR.
+Result: A MODERNIZE, REWORK, or CLOSE call with evidence, and a rebase pushed with a lease only when it applies. It never merges or closes. Vendored from tStack.
+
+## sol-loop
+Group: Quality
+Status: experimental
+Needs: Delegation to a GPT Sol model, such as T3 delegate_task.
+Example: Ask for a sol loop on a change.
+Result: Up to three review rounds with a ledger of findings and a stop rule. It has no review deadline upstream and sets no effort. Vendored from tStack.
+
+## takeover
+Group: Execution
+Status: beta
+Needs: Access to the source PR, branch, or thread.
+Example: Ask the agent to take over a PR.
+Result: The original goal finished on a new branch with the original authors credited. Vendored from tStack.
