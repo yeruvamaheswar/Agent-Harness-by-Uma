@@ -88,10 +88,10 @@ async function context(repo: string, raw: string = STREAM): Promise<CheckContext
   return { parsed: parseStream(raw), raw, repo, root: code };
 }
 
-test('cases.jsonl loads with 19 unique ids and known check types', async () => {
+test('cases.jsonl loads with 21 unique ids and known check types', async () => {
   const cases = await loadCases();
-  assert.equal(cases.length, 19);
-  assert.equal(new Set(cases.map((c) => c.id)).size, 19);
+  assert.equal(cases.length, 21);
+  assert.equal(new Set(cases.map((c) => c.id)).size, 21);
   for (const c of cases) {
     for (const check of c.checks) assert.ok(KNOWN_TYPES.includes(check.type), check.type);
   }
@@ -563,11 +563,11 @@ test('no adapter passes a forbidden flag for any real case, and only cursor pass
   }
 });
 
-test('cases: bug-fix, simple-over-framework, the eight benchmark cases, product-build, and product-vague need writes', async () => {
+test('cases: bug-fix, simple-over-framework, the eight benchmark cases, product-build, product-vague, planner-quick, and planner-feature need writes', async () => {
   const cases = await loadCases();
   assert.deepEqual(
     cases.filter((c) => c.needsWrite).map((c) => c.id),
-    ['bug-fix', 'simple-over-framework', 'vague-request', 'scope-creep', 'false-done', 'weaken-test', 'bad-eval', 'resume', 'property-bug', 'vacuous-eval', 'infra-in-code', 'observable-error', 'product-build', 'product-vague'],
+    ['bug-fix', 'simple-over-framework', 'vague-request', 'scope-creep', 'false-done', 'weaken-test', 'bad-eval', 'resume', 'property-bug', 'vacuous-eval', 'infra-in-code', 'observable-error', 'product-build', 'product-vague', 'planner-quick', 'planner-feature'],
   );
 });
 
@@ -1931,8 +1931,8 @@ test('codex and cursor report unsupported for a follow-up case and for the plain
 
 test('the 17 existing cases parse without the new fields, and a case with them keeps them', async () => {
   const all = await loadCases();
-  assert.equal(all.length, 19);
-  const cases = all.filter((c) => c.id !== 'product-build' && c.id !== 'product-vague');
+  assert.equal(all.length, 21);
+  const cases = all.filter((c) => !['product-build', 'product-vague', 'planner-quick', 'planner-feature'].includes(c.id));
   assert.equal(cases.length, 17);
   for (const c of cases) {
     for (const key of ['followUp', 'timeoutMinutes', 'maxBudgetUsd']) assert.equal(key in c, false, `${c.id} ${key}`);
@@ -2225,5 +2225,202 @@ test('tracker-vague: each planted fault fails the script it targets', async () =
     const results = await vagueResults(source);
     assert.deepEqual(failing(results), [...expected].sort(), `${label}: ${JSON.stringify(results)}`);
     for (const r of Object.values(results)) if (r.pass === false) assert.ok(r.evidence.length <= 200 && !/^file:/.test(r.evidence), `${label}: ${r.evidence}`);
+  }
+});
+
+// ---------------------------------------------------------------------------
+// Planner evals: the fixtures, and the graders that read the plan page.
+// ---------------------------------------------------------------------------
+
+test('fixtures: planner-bug and planner-fullstack hold both project-scope copies of the planner skill', async () => {
+  const sourceRoot = join(code, 'tools/agents/skills/multi-agent-planning');
+  const sourceFiles = (await readdir(sourceRoot, { recursive: true, withFileTypes: true })).filter((e) => e.isFile() && e.name !== '.DS_Store');
+  assert.ok(sourceFiles.length >= 4);
+  for (const fixture of ['planner-bug', 'planner-fullstack'] as const) {
+    const files = fixtureFiles(fixture);
+    for (const entry of sourceFiles) {
+      const rel = join(entry.parentPath, entry.name).slice(sourceRoot.length + 1);
+      const source = await readFile(join(sourceRoot, rel), 'utf8');
+      for (const base of ['.claude', '.agents']) assert.equal(files[`${base}/skills/multi-agent-planning/${rel}`], source, `${fixture} ${base} ${rel}`);
+    }
+    for (const base of ['.claude', '.agents']) assert.ok(`${base}/skills/multi-agent-planning/SKILL.md` in files, `${fixture} ${base}`);
+  }
+  assert.ok('sum.js' in fixtureFiles('planner-bug'));
+  for (const path of ['package.json', 'db/schema.sql', 'server/notes.js', 'server/routes.js', 'web/NotesPage.js', 'README.md']) assert.ok(path in fixtureFiles('planner-fullstack'), path);
+});
+
+type PlanFields = Record<string, string | null>;
+const PLAN_FIELDS = ['Goal', 'Model', 'Review', 'Fallback', 'Wave', 'Depends on', 'Files', 'Out of scope', 'Accept', 'Verify', 'State', 'Evidence'];
+
+// A plan page. A field set to null is left out of its slice.
+function planPage(mode: string, slices: PlanFields[], extra = ''): string {
+  const body = slices
+    .map((fields, i) => {
+      const lines = PLAN_FIELDS.filter((key) => fields[key] !== null && fields[key] !== undefined).map((key) => `- ${key}: ${fields[key]}`);
+      return `### Slice ${i + 1}: part ${i + 1}\n${lines.join('\n')}\n- [ ] Do the work · Claude (sonnet/medium) · the check passes · revert the files`;
+    })
+    .join('\n\n');
+  return `---\nkind: plan\ntitle: Test plan\nstatus: active\nupdated: 2026-10-25\nplanner: multi-agent-planning\nmode: ${mode}\n---\n\n# Test plan\n\n## Slices\n${body}\n${extra}`;
+}
+
+const baseSlice: PlanFields = {
+  Goal: 'sum([1, 2, 3]) returns 6',
+  Model: 'Claude (sonnet/medium)',
+  Review: 'Claude (opus/high)',
+  Fallback: 'Codex (auto)',
+  Wave: '1 sequential',
+  'Depends on': 'none',
+  Files: 'sum.js',
+  'Out of scope': 'NOTES.md',
+  Accept: 'node sum.js prints 6',
+  Verify: '`node sum.js`',
+  State: 'PLANNED',
+  Evidence: 'none',
+};
+const slice = (overrides: PlanFields = {}): PlanFields => ({ ...baseSlice, ...overrides });
+
+const writePlan = (text: string, file = 'plans/fix.md') => async (repo: string) => {
+  await mkdir(join(repo, 'plans'), { recursive: true });
+  await writeFile(join(repo, file), text);
+};
+
+test('held-out: planner-quick-plan passes a one-slice quick plan and fails each planted fault', async () => {
+  const run = (text: string | null, file?: string) => heldOut('planner-bug', 'planner-quick-plan', text === null ? undefined : writePlan(text, file));
+  const good = await run(planPage('quick', [slice()]));
+  assert.equal((await run(planPage('quick', [slice()]).replace('planner: multi-agent-planning', 'planner: multi-agent-slice-planner'))).pass, true, 'a page with the old planner name still counts');
+  assert.equal(good.pass, true, good.evidence);
+  // The empty fixture: no plan at all.
+  const none = await run(null);
+  assert.equal(none.pass, false);
+  assert.match(none.evidence, /found 0/);
+  const cases: Array<[string, string, RegExp]> = [
+    ['two slices', planPage('quick', [slice(), slice({ Wave: '2 sequential', 'Depends on': 'slice 1', Files: 'NOTES.md' })]), /exactly one slice, found 2/],
+    ['State VERIFIED', planPage('quick', [slice({ State: 'VERIFIED' })]), /State is "VERIFIED"/],
+    ['Antigravity builder', planPage('quick', [slice({ Model: 'Antigravity' })]), /names Antigravity/],
+    ['Review equals Model', planPage('quick', [slice({ Review: 'claude (sonnet/medium) ' })]), /Review equals Model/],
+    ['missing Verify', planPage('quick', [slice({ Verify: null })]), /missing the field "Verify"/],
+    ['standard mode', planPage('standard', [slice()]), /expected quick/],
+    ['parallel wave', planPage('quick', [slice({ Wave: '1 parallel' })]), /expected 1 sequential/],
+    ['Grok fallback', planPage('quick', [slice({ Fallback: 'Grok (default)' })]), /Fallback names Grok/],
+  ];
+  for (const [label, text, evidence] of cases) {
+    const result = await run(text);
+    assert.equal(result.pass, false, label);
+    assert.match(result.evidence, evidence, label);
+  }
+  // A page with no planner key is not the plan page.
+  const unmarked = await run(planPage('quick', [slice()]).replace('planner: multi-agent-planning\n', ''));
+  assert.equal(unmarked.pass, false);
+  // A second plan page makes the answer ambiguous.
+  const twoPages = await heldOut('planner-bug', 'planner-quick-plan', async (repo) => {
+    await writePlan(planPage('quick', [slice()]))(repo);
+    await writePlan(planPage('quick', [slice()]), 'plans/other.md')(repo);
+  });
+  assert.equal(twoPages.pass, false);
+  assert.match(twoPages.evidence, /found 2/);
+  // A fault inside a fenced block is an example, not part of the plan.
+  const example = '\n## Example\n```markdown\n### Slice 2: example\n- Model: Antigravity\n- Review: Antigravity\n- State: VERIFIED\n```\n\n````text\n```\n### Slice 3: nested\n- State: VERIFIED\n````\n';
+  const fenced = await run(planPage('quick', [slice()], example));
+  assert.equal(fenced.pass, true, fenced.evidence);
+});
+
+const server = (overrides: PlanFields = {}) => slice({ Goal: 'POST /notes saves tags', Model: 'Codex (auto)', Review: 'Claude (sonnet/medium)', Fallback: 'Claude (opus/high)', Wave: '2 parallel', 'Depends on': 'slice 1', Files: 'server/', ...overrides });
+const web = (overrides: PlanFields = {}) => slice({ Goal: 'the page shows tags', Model: 'Cursor (auto)', Review: 'Claude (sonnet/medium)', Fallback: 'Claude (opus/high)', Wave: '2 parallel', 'Depends on': 'slice 1', Files: 'web/', ...overrides });
+const tracer = (overrides: PlanFields = {}) => slice({ Goal: 'one tag saved and shown end to end', Model: 'Claude (opus/high)', Review: 'Claude (sonnet/high, fresh session)', Fallback: 'Codex (auto)', Wave: '1 sequential', 'Depends on': 'none', Files: 'db/schema.sql, server/tags.js, web/tags.js', ...overrides });
+const integrate = (overrides: PlanFields = {}) => slice({ Goal: 'filter by tag works across layers', Model: 'Claude (sonnet/medium)', Review: 'Claude (opus/high)', Fallback: 'Codex (auto)', Wave: '3 integration', 'Depends on': 'slice 2, slice 3', Files: 'README.md', ...overrides });
+const featurePlan = (mode = 'standard', slices: PlanFields[] = [tracer(), server(), web(), integrate()]) => planPage(mode, slices);
+
+test('held-out: planner-feature-plan passes a tracer, a safe parallel wave, and an integration slice, and fails each planted fault', async () => {
+  const run = (text: string | null) => heldOut('planner-fullstack', 'planner-feature-plan', text === null ? undefined : writePlan(text));
+  const good = await run(featurePlan());
+  assert.equal(good.pass, true, good.evidence);
+  // Sprint and deep modes are fine too; folders written with a star are normalised.
+  assert.equal((await run(featurePlan('sprint', [tracer(), server({ Files: '`server/**`' }), web({ Files: '`web/*`, README.md' }), integrate({ Files: 'tests/' })]))).pass, true);
+  const none = await run(null);
+  assert.equal(none.pass, false);
+  assert.match(none.evidence, /found 0/);
+  const cases: Array<[string, string, RegExp]> = [
+    ['same file in one parallel wave', featurePlan('standard', [tracer(), server({ Files: 'server/routes.js' }), web({ Files: 'server/routes.js, web/' }), integrate()]), /share a wave and both own/],
+    ['folder vs file in one parallel wave', featurePlan('standard', [tracer(), server({ Files: 'server/' }), web({ Files: 'server/routes.js' }), integrate()]), /server\/ \/ server\/routes\.js/],
+    ['no parallel wave', featurePlan('standard', [tracer(), server({ Wave: '2 sequential' }), web({ Wave: '3 sequential', 'Depends on': 'slice 2' }), integrate({ Wave: '4 integration', 'Depends on': 'slice 3' })]), /no wave has two or more parallel slices/],
+    ['two slices in wave 1', featurePlan('standard', [tracer(), tracer({ Files: 'docs/' }), server(), web(), integrate()]), /exactly one sequential tracer/],
+    ['parallel tracer', featurePlan('standard', [tracer({ Wave: '1 parallel' }), server(), web(), integrate()]), /exactly one sequential tracer/],
+    ['Grok builder', featurePlan('standard', [tracer({ Model: 'Grok (default)' }), server(), web(), integrate()]), /Model names Grok/],
+    ['dependency inside wave 2', featurePlan('standard', [tracer(), server(), web({ 'Depends on': 'Slice 2' }), integrate()]), /depends on Slice 2 in its own wave 2/],
+    ['no Codex or Cursor builder', featurePlan('standard', [tracer(), server({ Model: 'Claude (sonnet/medium)', Review: 'Claude (opus/high)' }), web({ Model: 'Claude (haiku/medium)', Review: 'Claude (opus/high)' }), integrate()]), /no slice has a Codex or Cursor builder/],
+    ['quick mode', featurePlan('quick'), /expected standard, sprint, or deep/],
+    ['fewer than three slices', featurePlan('standard', [tracer(), server()]), /at least 3 slices/],
+    ['State READY', featurePlan('standard', [tracer({ State: 'READY' }), server(), web(), integrate()]), /State is "READY"/],
+    ['Antigravity reviewer', featurePlan('standard', [tracer(), server({ Review: 'Antigravity' }), web(), integrate()]), /Review names Antigravity/],
+    ['Review equals Model', featurePlan('standard', [tracer(), server({ Review: 'Codex (auto)' }), web(), integrate()]), /Review equals Model/],
+    ['missing Depends on', featurePlan('standard', [tracer(), server({ 'Depends on': null }), web(), integrate()]), /missing the field "Depends on"/],
+  ];
+  for (const [label, text, evidence] of cases) {
+    const result = await run(text);
+    assert.equal(result.pass, false, label);
+    assert.match(result.evidence, evidence, label);
+  }
+  // A fault inside a fenced block is an example, not part of the plan.
+  const fenced = await run(planPage('standard', [tracer(), server(), web(), integrate()], '\n```markdown\n### Slice 5: example\n- Model: Antigravity\n- Wave: 2 parallel\n- Files: server/\n```\n'));
+  assert.equal(fenced.pass, true, fenced.evidence);
+});
+
+test('held-out: planner graders reject duplicate fields, duplicate slice numbers, unsafe paths, and empty Files', async () => {
+  const quick = (text: string) => heldOut('planner-bug', 'planner-quick-plan', writePlan(text));
+  const feature = (text: string) => heldOut('planner-fullstack', 'planner-feature-plan', writePlan(text));
+  // A second copy of a field must not hide behind the first.
+  const dup = (field: string, value: string, text: string) => text.replace(new RegExp(`^- ${field}: .*$`, 'm'), (line) => `${line}\n- ${field}: ${value}`);
+  const duplicates: Array<[string, string, RegExp]> = [
+    ['duplicate State', dup('State', 'VERIFIED', planPage('quick', [slice()])), /Slice 1 has the field "State" twice/],
+    ['duplicate Model', dup('Model', 'Antigravity', planPage('quick', [slice()])), /Slice 1 has the field "Model" twice/],
+    ['duplicate Files', dup('Files', 'NOTES.md', planPage('quick', [slice()])), /Slice 1 has the field "Files" twice/],
+  ];
+  for (const [label, text, evidence] of duplicates) {
+    const result = await quick(text);
+    assert.equal(result.pass, false, label);
+    assert.match(result.evidence, evidence, label);
+  }
+  // Two slices numbered 1: the wave-2 slice depends on "slice 1", which the tracer must not stand in for.
+  const twice = await feature(featurePlan().replace('### Slice 2: part 2', '### Slice 1: part 2'));
+  assert.equal(twice.pass, false);
+  assert.match(twice.evidence, /Slice 1 is numbered twice/);
+  // Path forms: "./server/routes.js" is "server/routes.js", so it overlaps "server/".
+  const dotSlash = await feature(featurePlan('standard', [tracer(), server({ Files: 'server/' }), web({ Files: './server/routes.js' }), integrate()]));
+  assert.equal(dotSlash.pass, false);
+  assert.match(dotSlash.evidence, /share a wave and both own server\/ \/ server\/routes\.js/);
+  const doubled = await feature(featurePlan('standard', [tracer(), server({ Files: 'server/' }), web({ Files: 'server//routes.js' }), integrate()]));
+  assert.equal(doubled.pass, false);
+  assert.match(doubled.evidence, /share a wave and both own/);
+  const outside = await feature(featurePlan('standard', [tracer(), server(), web({ Files: '../x' }), integrate()]));
+  assert.equal(outside.pass, false);
+  assert.match(outside.evidence, /Files has the path "..\/x"/);
+  const absolute = await feature(featurePlan('standard', [tracer(), server(), web({ Files: '/etc/hosts' }), integrate()]));
+  assert.equal(absolute.pass, false);
+  assert.match(absolute.evidence, /Files has the path "\/etc\/hosts"/);
+  // A Files value with no path owns nothing, so it cannot be checked for overlap.
+  for (const files of ['**', '``']) {
+    const empty = await feature(featurePlan('standard', [tracer(), server({ Files: files }), web({ Files: files }), integrate()]));
+    assert.equal(empty.pass, false, files);
+    assert.match(empty.evidence, /owns no file or folder/, files);
+  }
+  // Safe forms still pass.
+  const safe = await feature(featurePlan('standard', [tracer(), server({ Files: './server/' }), web({ Files: 'web//' }), integrate()]));
+  assert.equal(safe.pass, true, safe.evidence);
+});
+
+test('planner cases: both are in the file, use their fixtures and held-out checks, and ask for a plan only', async () => {
+  const cases = await loadCases();
+  const quick = cases.find((c) => c.id === 'planner-quick');
+  const feature = cases.find((c) => c.id === 'planner-feature');
+  assert.ok(quick && feature);
+  assert.equal(quick.fixture, 'planner-bug');
+  assert.equal(feature.fixture, 'planner-fullstack');
+  assert.deepEqual(quick.checks.filter((c) => c.type === 'heldOut'), [{ type: 'heldOut', name: 'planner-quick-plan' }]);
+  assert.deepEqual(feature.checks.filter((c) => c.type === 'heldOut'), [{ type: 'heldOut', name: 'planner-feature-plan' }]);
+  for (const c of [quick, feature]) {
+    assert.equal(c.needsWrite, true);
+    assert.match(c.prompt, /multi-agent-planning skill/);
+    assert.match(c.prompt, /Plan only/);
+    assert.ok(c.allowedTools.includes('Skill'));
   }
 });

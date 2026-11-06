@@ -2,14 +2,14 @@
 kind: explainer
 title: How your AI assistants use the Agentic Harness
 status: final design
-updated: 2026-10-12
+updated: 2026-10-26
 ---
 Summary: This repo gives every AI coding assistant on your computer the same working rules, a few locks it cannot open, and spot checks that show whether it follows the rules. This page shows how the assistants use it and how you set it up after a clone.
 Goal: someone who has just cloned this repo can set it up, use it in a project, and explain what each assistant does with it
 Rules: plain words first · every step has a command and a result to look for · every claim says observed or unknown
 Scope: how the system is used. Code internals are in `src/README.md`. The design system has its own page in `designOS-by-Uma`
 Evidence: fresh assistant sessions on 2026-10-10 and 2026-10-12 · tool and session logs, not the assistant's own claims, where the platform gave them
-State: release 1.4.3, published 2026-10-13
+State: release 1.5.0, published 2026-10-26
 
 ## Loop
 1. Read this page · user
@@ -57,7 +57,7 @@ flowchart TB
 | It tries a blocked action | The software refuses, or asks you first | locks in Claude Code settings |
 | It finishes | Says what changed, what was checked, what is open, and what needs your decision | the handbook |
 - The handbook is about one page. It is always loaded. Skills and references load only when needed, so they cost nothing until then.
-- The handbook's first line names the edition, such as `Harness release 1.4.3.` Ask any assistant "which harness release are you running under?" to see which edition it has.
+- The handbook's first line names the edition, such as `Harness release 1.5.0.` Ask any assistant "which harness release are you running under?" to see which edition it has.
 
 ## What you will notice in daily work
 - The assistant separates what it knows from what it assumes.
@@ -73,7 +73,7 @@ flowchart TB
 | Step | Command | You should see |
 |---|---|---|
 | 1. Install and test | `npm ci`, then `npm test` | `fail 0` |
-| 2a. Use the rules as shipped | `npm run harness -- activate 1.4.3` | `"active": "1.4.3"` |
+| 2a. Use the rules as shipped | `npm run harness -- activate 1.5.0` | `"active": "1.5.0"` |
 | 2b. Or write your own rules | edit `knowledge/core.md`, then `npm run harness -- preview` | a `digest`: the fingerprint of your text |
 | 2b. Publish your edition | `npm run harness -- publish 2.0.0 --approve-sha DIGEST --bootstrap` | `"version": "2.0.0"` |
 | 3. Give it to Claude Code | `npm run harness -- install claude` | the path `~/.claude/CLAUDE.md` |
@@ -91,8 +91,8 @@ flowchart TB
 - Every install backs up the old file first and writes a receipt. `npm run harness -- uninstall PLATFORM` puts the old file back.
 
 ### Skills: one manual step
-- The handbook names three skills: `grill-me`, `html-explainer`, `render-rules`. Their sources are in `tools/agents/skills/`. Two more skills are there too: `verify` and `continue-work`. They load only when you ask for them. `/continue-work` resumes a task in a new session: it rebuilds state from files and checks, reports with evidence, and waits for your go-ahead.
-- No harness command installs them yet. Copy each folder to `~/.agents/skills/`, and link each into `~/.claude/skills/` for Claude Code.
+- The handbook names three skills: `grill-me`, `html-explainer`, `render-rules`. Release 1.5.0, prepared and not published, adds `multi-agent-planning`: it splits work into slices and routes each to Claude, Codex, or Cursor. Their sources are in `tools/agents/skills/`. Two more skills are there too: `verify` and `continue-work`. They load only when you ask for them. `/continue-work` resumes a task in a new session: it rebuilds state from files and checks, reports with evidence, and waits for your go-ahead.
+- `npm run harness -- skills install NAME` copies a skill to `~/.agents/skills/` and links it into `~/.claude/skills/`, with a backup and a receipt. `skills status` shows which installed copies differ from the sources.
 - `html-explainer` also needs the page builder: copy `tools/agents/bin/md-view.sh` and `md-view.template.html` to `~/.agents/bin/`.
 - Without the skills, the assistant still follows the handbook. It only lacks the detailed procedures.
 
@@ -211,7 +211,7 @@ flowchart TB
 - Rules guide an assistant; they cannot force it. Locks force, but only on Claude Code.
 - Cursor needs one paste per release. Codex cloud needs one sentence per task.
 - The reference search runs only on your computer, so cloud assistants have the rules but no search.
-- The skills and the page builder are installed by hand.
+- The page builder is installed by hand. Skills install with `harness skills install NAME`.
 - Codex and Cursor do not report every action, so some checks cannot be observed there.
 - The spot checks are short tasks. Behavior across a long project is not measured.
 
