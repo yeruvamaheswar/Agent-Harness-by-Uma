@@ -184,7 +184,7 @@ Run `npm ci`, `npm run typecheck`, and `npm test` before a pull request. Read [C
 
 ## Known limitations
 
-The full audit is [docs/audits/production-readiness-audit.md](docs/audits/production-readiness-audit.md). It is a draft and lists what is checked and what is not. In short:
+The full audit is [docs/audits/production-readiness-audit.md](docs/audits/production-readiness-audit.md). It gives the verdict, lists what is checked and what is not, and holds the open backlog. In short:
 
 - Installed files are not proven behavior. Every `verify` command prints `behaviorVerified: false` until a fresh session is checked. Fresh-session checks of the active release in Codex and Cursor are not done.
 - Cursor User Rules, Claude web and desktop memory, and Grok Bot profiles are manual steps. No tool can read them.
