@@ -55,7 +55,7 @@ Understand → Design → Slice → Implement → Test → Review → Integrate 
 4. Route. Follow `references/routing.md`. Give a one-line reason for each assignment.
 
 ## Parallel rules
-- Load `subagent-budget` before any launch. At most 3 children at once. Fact-finding stays Sonnet or Haiku at medium. Opus at medium is only the final synthesis. high, xhigh, max, and ultrathink need the user to name that one task.
+- Load `subagent-budget` before any launch. The lead model decides how many children run at once, and `subagent-budget` sets the model and effort for each.
 - Define shared interfaces before a parallel wave.
 - Slices in one parallel wave own disjoint files, as "Overlap" in `references/slice-format.md` defines.
 - Prefer 2 to 3 workers when there is enough independent work. Never start an agent only to fill a slot.

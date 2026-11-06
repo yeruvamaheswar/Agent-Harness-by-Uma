@@ -282,7 +282,6 @@ The full audit is [docs/audits/production-readiness-audit.md](docs/audits/produc
 - This repository documents no observed unattended overnight run. The engine pieces (`charter`, `report`, the guard) run and have tests.
 - `thread-continuity` is experimental and only for T3 Code. Its later slices are not released.
 - Supabase semantic search, add-on packs, and the Grok export are parked. Code and docs remain, but they are not part of the supported workflow.
-- `multi-agent-planning` still says "at most 3 children at once" in its `SKILL.md`, while `subagent-budget` says there is no fixed cap (audit finding F5).
 - There is no lint step. Typecheck is the only static gate.
 - Skills have a maturity label in the table above (stable, beta, experimental). A label is not proof that a skill works in every session.
 
