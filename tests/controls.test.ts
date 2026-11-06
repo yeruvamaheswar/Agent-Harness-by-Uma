@@ -24,11 +24,11 @@ async function fixture(settings?:string,source:unknown=SOURCE){
 const read=async(path:string)=>JSON.parse(await readFile(path,'utf8'));
 const exists=(path:string)=>access(path).then(()=>true,()=>false);
 
-test('the shipped controls.json loads and has the 6 approved controls',async()=>{
+test('the shipped controls.json loads and has the 7 approved controls',async()=>{
  const {controls}=await loadControls();
  assert.deepEqual(
   controls.map(c=>`${c.effect} ${c.id}`),
-  ['deny no-force-push','ask ask-push-main','ask ask-force-with-lease','deny no-secret-reads','ask ask-deploys','deny no-self-edit'],
+  ['deny no-force-push','ask ask-push-main','ask ask-force-with-lease','deny no-secret-reads','ask ask-deploys','deny no-home-delete','deny no-self-edit'],
  );
 });
 test('claudeRules fills the harness root and splits deny from ask',()=>{
