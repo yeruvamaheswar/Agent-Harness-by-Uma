@@ -171,6 +171,18 @@ npm run harness -- repo uninstall "$DEMO"
 
 What you should see: `repo install` writes `AGENTS.md` and `CLAUDE.md` in the scratch folder, `repo verify` prints `"configurationVerified": true`, `search` returns the "Tracer bullets" section with a citation, and `repo uninstall` removes only the harness block. For the engine, run the throwaway plan in [workflow 6a of docs/workflows.md, the engine demo](docs/workflows.md#6-run-a-validated-overnight-autonomous-workflow).
 
+## Screenshots
+
+Real captures of the explainer page, made by `tools/explainer.ts` ([how and when](docs/assets/screenshots/README.md)).
+
+| Desktop | Phone |
+|---|---|
+| ![The explainer at desktop width in light theme: the title, the list of figures in three parts, and Fig. 1, the whole system on one page.](docs/assets/screenshots/explainer-desktop-light.png) | ![The explainer on a phone-width screen in light theme: a compact top bar, the title, and the start of Fig. 1.](docs/assets/screenshots/explainer-phone-light.png) |
+
+![Fig. 6, the skills explorer: the ten skills in five groups with a status filter and a facts panel.](docs/assets/screenshots/explainer-skills-explorer.png)
+
+![Fig. 7, one plan and many agents: lanes for you, the Claude lead, Codex, a Claude reviewer and the ae engine, and an example sequence from plan to verify.](docs/assets/screenshots/explainer-orchestration.png)
+
 ## Skills
 
 These skills live in `tools/agents/skills/`. Install one with `npm run harness -- skills install NAME`. Details for each are in [docs/skills.md](docs/skills.md).

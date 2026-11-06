@@ -117,3 +117,14 @@ Releases are immutable. Use a new version for changed content. If publication fa
 ## Limits
 
 Instructions guide models but cannot guarantee behavior. Platform policies retain their own precedence. Cursor Tab/Inline Edit may not consume global Agent User Rules. Third-party applications, new accounts, remote machines, and newly created Bots require onboarding and verification. This tool does not silently alter unknown applications.
+
+## Explainer page checks and screenshots
+
+`tools/explainer.ts` uses Chrome DevTools and Node 24 built-ins. It finds Chrome through `CHROME_PATH`, the standard macOS location, or `google-chrome`/`chromium` on PATH. It serves the page folder on an ephemeral loopback port and removes its temporary Chrome profile when finished.
+
+```sh
+node --experimental-strip-types tools/explainer.ts check docs/project-explainer.html --json checks.json
+node --experimental-strip-types tools/explainer.ts capture docs/project-explainer.html docs/assets/screenshots
+```
+
+`check` audits five widths in both themes for overflow, console errors during control activation, keyboard focus, reduced motion, contrast, and links. External links are listed without fetching them. Exit codes: 0 passes, 1 fails, 2 means Chrome is missing. `capture` writes PNGs under 400 KB and a README with alt text, the command, date, and source hash. Oversize captures keep their width and use a shorter clip. Capture needs the skills figure (`#fig6`, else `#skills` or the section with `ul.skill-catalog`) and the orchestration figure (`#fig7`, else an ID containing `orchestration` or a figure heading with "plan" and "agents"); the unattended-run figure (`#fig9`) is optional. `--system-design PATH` adds a capture of another page. Contrast uses computed colors; gradients, image backgrounds, and browser-native popup UI require visual review. Known limits: a control with neither a border nor a fill is not given a boundary check (its text label identifies it), and an element with `tabindex="-1"` is not required in the Tab order (roving-tabindex groups are reached with arrow keys), so a control reachable only by mouse is not detected. The browser test skips in CI unless `EXPLAINER_CHROME_TESTS=1`.
