@@ -10,6 +10,7 @@ Do not edit anything in this folder by hand. To change the policy, publish a new
 
 | Version | Created (UTC) | Source | Digest (SHA-256, first 12) |
 | --- | --- | --- | --- |
+| [1.5.6](1.5.6/) | 2026-11-06 | Local files (`--bootstrap`) | `ecf3ff7753fc` |
 | [1.5.5](1.5.5/) | 2026-11-05 | Local files (`--bootstrap`) | `69ed4a6d71c8` |
 | [1.5.4](1.5.4/) | 2026-11-05 | Local files (`--bootstrap`) | `0da09b780120` |
 | [1.5.3](1.5.3/) | 2026-11-04 | Local files (`--bootstrap`) | `9d8a085e7195` |
@@ -30,6 +31,9 @@ The full digest and provenance of each release are in its `release.json` and its
 
 ### What changed
 
+- **1.5.6**
+  - "Show work visually" adds a click rule. In an HTML diagram, each box opens a short TL;DR when clicked, through `popovertarget` and no script.
+  - `references/agent-design.md` adds section 7, "Clickable Report Diagrams", with a reusable HTML pattern.
 - **1.5.5**
   - The verification rule in "Before changing code" adds a guardrail. Ask the user before any sign-up, payment, email to a real person, or use of production data.
 - **1.5.4**
