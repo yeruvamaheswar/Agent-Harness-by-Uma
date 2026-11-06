@@ -521,9 +521,66 @@ function maskKeyLines(text: string): string {
   return out + text.slice(last);
 }
 // A header line: Authorization or Proxy-Authorization, or a hyphenated secret name such as X-Api-Key or X-Auth-Token.
-const HEADER = /(^|[\s"'])((?:Proxy-)?Authorization|[A-Za-z0-9]+(?:-[A-Za-z0-9]+)+)(:[ \t]*)([^\s"'][^\r\n"']*)/gim;
+const HEADER = /(^|[\s"'])((?:Proxy-)?Authorization|[A-Za-z0-9]+(?:-[A-Za-z0-9]+)+)(:[ \t]*)/gim;
+function maskHeaders(text: string): string {
+  let out = '', last = 0;
+  for (const m of text.matchAll(HEADER)) {
+    if (m.index < last || !secretName(m[2])) continue;
+    const start = m.index + m[0].length, quote = text[start];
+    // Text after a previously masked quoted value must survive subsequent passes.
+    if (text.startsWith('[REDACTED]', start)) continue;
+    let end = start;
+    if (quote === '"' || quote === "'") {
+      end++;
+      while (end < text.length && text[end] !== '\r' && text[end] !== '\n') {
+        const c = text[end++];
+        if (c === quote) break;
+        if (c === '\\' && end < text.length && text[end] !== '\r' && text[end] !== '\n') end++;
+      }
+    } else {
+      const value = /[^\s"'][^\r\n"']*/y;
+      value.lastIndex = start;
+      if (!value.exec(text)) continue;
+      end = value.lastIndex;
+    }
+    out += text.slice(last, start) + '[REDACTED]';
+    last = end;
+  }
+  return out + text.slice(last);
+}
+// Keep YAML list structure; retain the existing key-line handling outside lists and in comments.
+function maskYamlLists(text: string): string {
+  const out: string[] = [];
+  let last = 0, blockIndent: number | undefined;
+  for (const m of text.matchAll(/([^\r\n]*)(\r?\n|$)/g)) {
+    if (!m[0]) continue;
+    const line = m[1], whitespace = /^[ \t]*/.exec(line)?.[0] ?? '';
+    const body = line.slice(whitespace.length);
+    if (blockIndent !== undefined) {
+      if (!body || body.startsWith('#')) {
+        out.push(maskKeyLines(m[0]));
+        last = m.index + m[0].length;
+        continue;
+      }
+      if (whitespace.length > blockIndent || (whitespace.length === blockIndent && body.startsWith('- '))) {
+        out.push(whitespace + (body.startsWith('- ') ? '- ' : '') + '[REDACTED]' + m[2]);
+        last = m.index + m[0].length;
+        continue;
+      }
+      blockIndent = undefined;
+    }
+    const head = /^([A-Za-z_][A-Za-z0-9_-]*)[ \t]*:(?:[ \t]+#.*|[ \t]*)$/.exec(body);
+    if (!head || !secretName(head[1].replace(/s$/i, ''))) continue;
+    out.push(maskKeyLines(text.slice(last, m.index)), m[0]);
+    last = m.index + m[0].length;
+    blockIndent = whitespace.length;
+  }
+  out.push(maskKeyLines(text.slice(last)));
+  return out.join('');
+}
 export function redact(text: string): string {
-  const tokens = text
+  // Mask whole headers before token rules can replace only part of their value.
+  const tokens = maskHeaders(text)
     .replace(/-----BEGIN [A-Z0-9 ]*PRIVATE KEY-----[\s\S]*?(?:-----END [A-Z0-9 ]*PRIVATE KEY-----|$)/g, '[REDACTED PRIVATE KEY]')
     .replace(/\b(?:gh[pousr]_[A-Za-z0-9]{20,}|github_pat_[A-Za-z0-9_]{20,})/g, '[REDACTED]')
     .replace(/\bsk-[A-Za-z0-9_-]{16,}/g, '[REDACTED]')
@@ -533,8 +590,7 @@ export function redact(text: string): string {
     .replace(/\b(Bearer)\s+[A-Za-z0-9._~+/=-]{8,}/gi, '$1 [REDACTED]');
   // A secret-named field is masked whole, also when a part of it is already [REDACTED]. The result is stable.
   const fields = maskComposites(tokens)
-    .replace(JSON_FIELD, (m, head: string, name: string) => secretName(name) ? `${head}"[REDACTED]"` : m)
-    .replace(HEADER, (m, pre: string, name: string, colon: string) => secretName(name) ? `${pre}${name}${colon}[REDACTED]` : m);
-  return maskKeyLines(fields)
+    .replace(JSON_FIELD, (m, head: string, name: string) => secretName(name) ? `${head}"[REDACTED]"` : m);
+  return maskYamlLists(fields)
     .replace(NAMED, (m, ex: string, name: string) => /SECRET|TOKEN|PASSWORD|PASSWD|KEY/i.test(name) ? `${ex}${name}=[REDACTED]` : m);
 }

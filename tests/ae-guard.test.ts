@@ -277,6 +277,87 @@ test('R1-3: redirection and writer targets under .github/workflows/ need ci; rea
     is(c, 'allow', 'A');
 });
 
+test('R1-11a: quoted hyphenated secret header', async (t) => {
+  for (const name of ['X-Api-Key', 'X-Auth-Token', 'Authorization', 'Proxy-Authorization']) {
+    for (const quote of ['"', "'"]) {
+      const input = `before\n${name}: ${quote}header-value${quote}\nX-Request-Id: "abc"\nafter`;
+      const out = redact(input);
+      assert.ok(!out.includes('header-value'), input);
+      assert.equal(out, `before\n${name}: [REDACTED]\nX-Request-Id: "abc"\nafter`);
+      assert.equal(redact(out), out);
+    }
+  }
+  assert.equal(redact('X-Request-Id: "abc"'), 'X-Request-Id: "abc"');
+  for (const quote of ['"', "'"]) {
+    const cases: [string, string, string][] = [
+      ['escaped quote', `X-Api-Key: ${quote}ab\\${quote}cd-SECRET${quote}`, 'X-Api-Key: [REDACTED]'],
+      ['escaped quote CRLF', `X-Api-Key: ${quote}ab\\${quote}cd-SECRET${quote}\r\nX-Request-Id: "abc"`, 'X-Api-Key: [REDACTED]\r\nX-Request-Id: "abc"'],
+      ['curl escaped quote', `curl -H ${quote === '"' ? "'" : '"'}X-Api-Key: ${quote}ab\\${quote}cd-SECRET${quote}${quote === '"' ? "'" : '"'} https://example.test`, `curl -H ${quote === '"' ? "'" : '"'}X-Api-Key: [REDACTED]${quote === '"' ? "'" : '"'} https://example.test`],
+      ['unterminated header', `X-Api-Key: ${quote}ab\\${quote}cd-SECRET\r\nnext: ordinary`, 'X-Api-Key: [REDACTED]\r\nnext: ordinary'],
+      ['even backslashes close quote', `X-Api-Key: ${quote}ab\\\\${quote} after`, 'X-Api-Key: [REDACTED] after'],
+    ];
+    for (const [label, input, want] of cases) await t.test(`${label} (${quote})`, () => {
+      assert.equal(redact(input), want);
+      assert.equal(redact(redact(input)), redact(input));
+    });
+  }
+});
+
+test('R1-11b: YAML list items under a secret key', async (t) => {
+  for (const key of ['api_keys', 'token', 'secrets', 'passwords']) {
+    for (const ending of ['next: ordinary\n  - retained', '  next: ordinary\n  - retained', '\nnext: ordinary\n  - retained']) {
+      const input = `before\n${key}:\n  - first-value\n  - second-value\n  - third-value\n${ending}\nafter`;
+      const out = redact(input);
+      for (const value of ['first-value', 'second-value', 'third-value']) assert.ok(!out.includes(value), input);
+      const expectedEnding = ending.startsWith('  next:') ? '  [REDACTED]\n  - [REDACTED]' : ending;
+      assert.equal(out, `before\n${key}:\n  - [REDACTED]\n  - [REDACTED]\n  - [REDACTED]\n${expectedEnding}\nafter`);
+      assert.equal(redact(out), out);
+    }
+  }
+  const ordinary = 'names:\n  - Alice\n  - Bob\nnext: ordinary';
+  assert.equal(redact(ordinary), ordinary);
+  for (const key of ['names', 'secrets_count']) {
+    // After the existing plural strip, secretName sees no secret word in either key.
+    const input = `${key}:  # note\n  - retained\nnext: ordinary\n  - retained`;
+    assert.equal(redact(input), input);
+  }
+  // Without whitespace before # this is a YAML plain scalar, not a block opener.
+  const scalar = 'api_keys:#note\n  - retained';
+  assert.equal(redact(scalar), scalar);
+  assert.equal(redact('token: abc\nnext: ordinary'), 'token: [REDACTED]\nnext: ordinary');
+  const cases: [string, string, string][] = [
+    ['comment after key', 'secrets:  # note\n  - d1\n- d2\nnext: ordinary\n  - retained', 'secrets:  # note\n  - [REDACTED]\n- [REDACTED]\nnext: ordinary\n  - retained'],
+    ['space before colon', 'secrets :\n  - d1\n  - d2\nnext: ordinary', 'secrets :\n  - [REDACTED]\n  - [REDACTED]\nnext: ordinary'],
+    ['tabs around colon and trailing comment', '\tapi_keys\t :\t# note\r\n\t  - d1\r\nnext: ordinary', '\tapi_keys\t :\t# note\r\n\t  - [REDACTED]\r\nnext: ordinary'],
+    ['secret key inside comment', 'secrets:\n  # token: LEAKVAL\n  # ordinary note\n  - d1', 'secrets:\n  # token: [REDACTED]\n  # ordinary note\n  - [REDACTED]'],
+    ['same indent', 'secrets:\n- d1\n- d2', 'secrets:\n- [REDACTED]\n- [REDACTED]'],
+    ['blank inside', 'passwords:\n  - p1\n\n  - p2', 'passwords:\n  - [REDACTED]\n\n  - [REDACTED]'],
+    ['comment before first', 'tokens:\n  # note\n  - e1', 'tokens:\n  # note\n  - [REDACTED]'],
+    ['blank before first and comment inside', 'secrets:\n\n  - p1\n# note\n  - p2', 'secrets:\n\n  - [REDACTED]\n# note\n  - [REDACTED]'],
+    ['mapping items', 'credentials:\n  - key: val1\n    other: val2\n  - key: val3', 'credentials:\n  - [REDACTED]\n    [REDACTED]\n  - [REDACTED]'],
+    ['tabs', 'secrets:\n\t- h1\n\t- h2', 'secrets:\n\t- [REDACTED]\n\t- [REDACTED]'],
+    ['mixed indent', 'keys:\n  - a1\n    - b2', 'keys:\n  - [REDACTED]\n    - [REDACTED]'],
+    ['indented key and mixed whitespace', '\t secrets:\n\t - a1\n \t \t- b2', '\t secrets:\n\t - [REDACTED]\n \t \t- [REDACTED]'],
+    ['CRLF and block boundary', 'tokens:\r\n  # note\r\n  - e1\r\n\r\n  - e2\r\nnames:\r\n  - Alice\r\nordinary text', 'tokens:\r\n  # note\r\n  - [REDACTED]\r\n\r\n  - [REDACTED]\r\nnames:\r\n  - Alice\r\nordinary text'],
+    ['ordinary text ends block', 'keys:\n  - a1\nordinary text\n  - retained', 'keys:\n  - [REDACTED]\nordinary text\n  - retained'],
+  ];
+  for (const [label, input, want] of cases) await t.test(label, () => {
+    assert.equal(redact(input), want);
+    assert.equal(redact(want), want);
+  });
+});
+
+test('R1-11b performance: 200 KB of list-like lines', () => {
+  const line = '  - list-like-value\n';
+  const count = Math.ceil((200 * 1024 - 'secrets:\n'.length) / line.length);
+  const input = 'secrets:\n' + line.repeat(count);
+  const start = performance.now();
+  const out = redact(input);
+  const elapsed = performance.now() - start;
+  assert.equal(out, 'secrets:\n' + '  - [REDACTED]\n'.repeat(count));
+  assert.ok(elapsed < 1000, `redact took ${elapsed.toFixed(2)} ms`);
+});
+
 test('R1-11: Bearer without a digit, secret-named JSON fields, and key headers are redacted; ordinary text is unchanged', () => {
   const cases: [string, string][] = [
     ['Authorization: Bearer abcdefghijklmnopqrstuvwxyz', 'Authorization: [REDACTED]'],
