@@ -2,7 +2,7 @@
 
 Scope: the slice 7 rebuild of `docs/project-explainer.html`. This file lists every change that waits on the owner's approval, and records the Design OS runs for the build.
 
-Status: **DRAFT, awaiting owner approval.** The page is built from the recommended defaults in [explainer-design-spec.md](explainer-design-spec.md). The approved direction stays: "The Witnessed Notebook, as a figure atlas". `PRODUCT.md` and `DESIGN.md` are not changed. The changes proposed for them are below, each with its reason.
+Status: **APPROVED by the owner on 2026-11-06 (D1 at 13 plates, D2, D3, D4, and the `PRODUCT.md` and `DESIGN.md` edits). The surface brief edit was not in the approval and is not applied.** Original status: draft, awaiting owner approval. The page is built from the recommended defaults in [explainer-design-spec.md](explainer-design-spec.md). The approved direction stays: "The Witnessed Notebook, as a figure atlas". `PRODUCT.md` and `DESIGN.md` are not changed. The changes proposed for them are below, each with its reason.
 
 ## Draft items on the page
 

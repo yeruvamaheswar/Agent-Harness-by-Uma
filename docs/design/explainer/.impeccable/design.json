@@ -581,7 +581,7 @@
   ],
   "narrative": {
     "northStar": "The Witnessed Notebook, as a figure atlas",
-    "overview": "**Creative North Star: \"The Witnessed Notebook, as a figure atlas\"**\n\nThe page is a book of plates. Nine numbered figures carry the explanation, and the text beside each figure is its caption. The reader selects a part of a figure, and a small form next to it states the facts for that part.\n\nThe paper is flat and cool. Rules and labels are printed in green-grey. Colour names who acts: green for the user, clay for Claude, cobalt for any other agent. Graphite pencil marks what is unknown, manual, or not built. Corners are square. There are no drop shadows.",
+    "overview": "**Creative North Star: \"The Witnessed Notebook, as a figure atlas\"**\n\nThe page is a book of plates. Numbered figures in three parts carry the explanation, and the text beside each figure is its caption. The reader selects a part of a figure, and a small form next to it states the facts for that part.\n\nThe paper is flat and cool. Rules and labels are printed in green-grey. Colour names who acts: green for the user, clay for Claude, cobalt for any other agent. Graphite pencil marks what is unknown, manual, or not built. Corners are square. There are no drop shadows.",
     "keyCharacteristics": [
       "A list of figures at the left is the contents.",
       "Each figure is a plate with a caption column.",

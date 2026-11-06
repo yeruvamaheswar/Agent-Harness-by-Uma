@@ -20,11 +20,11 @@ A developer who directs two or more AI coding agents, deciding whether to clone 
 - No library. One web font. Light and dark. Reduced motion. Keyboard access. Phone to desktop.
 
 ## Direction contract
-THESIS: The explainer is a figure atlas. Nine numbered, interactive plates carry the explanation and the text is their caption. It refuses the docs page of stacked prose sections with small inline diagrams, and the landing page of cards and a hero metric.
+THESIS: The explainer is a figure atlas. Numbered interactive plates in three parts carry the explanation and the text is their caption. It refuses the docs page of stacked prose sections with small inline diagrams, and the landing page of cards and a hero metric.
 
 OWN-WORLD: The Witnessed Notebook, expanded. Cool paper ground, green-grey form rules and labels in condensed Archivo, square corners, no shadows, 1px rules with a 2px form top rule on every plate. Owner inks name who acts: user green, Claude clay, agent cobalt. Unknowns are dashed graphite pencil. This surface carries no margin rule. Expansion: a title at display scale, plates that fill most of the screen, and motion that follows one rule through the system.
 
-STORY: The reader sees the whole system first, learns the three strengths of a rule, watches a release freeze, an install, a session, and one real run. Then they set it up, because the owner's brief puts getting started before platforms. Then they see what each platform gets, what is proven, why it is built this way, and what is not built.
+STORY: The reader sees the whole system first, learns the three strengths of a rule, watches a release freeze, an install, a session, then the Execution part (skills, one plan with many agents, checkpoint and handoff, an unattended run) and one real run. Then they set it up, because the owner's brief puts getting started before platforms. Then they see what each platform gets, what is proven, why it is built this way, and what is not built.
 
 FIRST VIEWPORT: A thin top bar on a 2px form rule. Left, a list of figures as the contents, the current one in form green-grey. Centre, the title in condensed Archivo at about 54px and one line under it, then the Fig. 1 plate filling the rest of the screen: the whole system as selectable parts. Right, a narrow caption column: the figure title, three lines, and a facts form for the selected part. No call-to-action button; the way forward is the next figure.
 
@@ -39,5 +39,5 @@ FINISH: unreviewed and undocumented is unfinished; this build ends with the fini
 ## Unresolved
 - The public repo name and the public page URL.
 
-## Draft build (2026-11-06, awaiting owner approval)
-The page is built with 13 plates in three parts (The rules, Execution, Use it) and a new lead line, from the defaults in `docs/design/explainer-design-spec.md`. The direction contract above is unchanged until the owner approves the amendment. Draft items and proposed wording: `docs/design/explainer-drafts.md`.
+## Build note (2026-11-06, approved by the owner)
+The page is built with 13 plates in three parts (The rules, Execution, Use it) and a new lead line, from the defaults in `docs/design/explainer-design-spec.md`. The owner approved the amendment on 2026-11-06. Items and wording: `docs/design/explainer-drafts.md`.

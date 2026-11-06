@@ -1,6 +1,6 @@
 ---
 name: "Agentic Harness public pages: the project explainer"
-description: A figure atlas in the Witnessed Notebook family. Nine numbered plates explain the project; the text is their caption.
+description: A figure atlas in the Witnessed Notebook family. Numbered plates in three parts explain the project; the text is their caption.
 colors:
   paper: "#F3F5F1"
   ink: "#1A1D1B"
@@ -49,7 +49,7 @@ typography:
     fontFamily: "Archivo, 'Arial Narrow', 'Helvetica Neue', system-ui, sans-serif"
     fontSize: "1.3rem"
     fontWeight: 650
-    lineHeight: 1.15
+    lineHeight: 1.3
     fontVariation: "'wdth' 80"
   band:
     fontFamily: "Archivo, 'Arial Narrow', 'Helvetica Neue', system-ui, sans-serif"
@@ -220,7 +220,7 @@ The plan-page system stays in `docs/design/plan-pages/DESIGN.md` and `docs/desig
 
 **Creative North Star: "The Witnessed Notebook, as a figure atlas"**
 
-The page is a book of plates. Nine numbered figures carry the explanation, and the text beside each figure is its caption. The reader selects a part of a figure, and a small form next to it states the facts for that part.
+The page is a book of plates. Numbered figures in three parts carry the explanation, and the text beside each figure is its caption. The reader selects a part of a figure, and a small form next to it states the facts for that part.
 
 The paper is flat and cool. Rules and labels are printed in green-grey. Colour names who acts: green for the user, clay for Claude, cobalt for any other agent. Graphite pencil marks what is unknown, manual, or not built. Corners are square. There are no drop shadows.
 
@@ -249,7 +249,7 @@ Low-chroma green-grey paper and form. Colour is kept for owners. Light and dark 
 - **Cool Paper** (`paper`): the page, and the fill behind every node, so lines pass behind parts.
 - **Ink** (`ink`) / **Ink Two** (`ink-2`): text / secondary text (notes, sub-lines in nodes, line labels, the lead, the footer).
 - **Graphite Pencil** (`pencil`): unknowns, test-session lines, disabled buttons, "not built" entries, limit notes.
-- **Rule** (`rule`) / **Faint Rule** (`rule-2`): plate and pane borders / row separators.
+- **Rule** (`rule`) / **Faint Rule** (`rule-2`): plate and pane borders / row separators. `rule` is for plate borders and row separators only. Control boundaries (chips, moments, skill buttons, the text-button underline) use `form`.
 - **Form Tint** (`tint`): form at 7 percent over paper. The fill of a hovered or selected part, and of a selected table row. Approved by the owner, 2026-10-13.
 - **Code Chip** (`chip`): form at 10 percent. The fill behind inline code.
 
@@ -272,7 +272,7 @@ Low-chroma green-grey paper and form. Colour is kept for owners. Light and dark 
 - **Display** (660, clamp 2.2rem to 3.4rem, line-height 1, width 76): the page title only. Approved by the owner, 2026-10-13.
 - **Headline** (650, 1.625rem, line-height 1.15, width 80): each figure heading and each text-section heading. Size approved by the owner, 2026-10-13.
 - **Title** (650, 1.2rem, width 85): the product name in the top bar.
-- **Fact-lead** (650, 1.3rem, line-height 1.15, width 80): the first value of a facts form. It names the selected part. Approved by the owner, 2026-10-13.
+- **Fact-lead** (650, 1.3rem, line-height 1.3, width 80): the first value of a facts form. It names the selected part. Approved by the owner, 2026-10-13.
 - **Band** (700, 0.95rem, 0.06em, uppercase, width 80): sub-headings inside plates and text sections, in form.
 - **Label** (600, 0.72rem, 0.09em, uppercase, width 82): form labels, table heads, figure numbers in the list of figures, button text, in form.
 - **Lane** (650, 0.78rem, 0.06em, uppercase, width 85): owner lane names, in owner ink.
@@ -294,7 +294,7 @@ Low-chroma green-grey paper and form. Colour is kept for owners. Light and dark 
 ## Layout
 
 - **Page:** max-width 90rem, centred. Side padding 3rem; 1.5rem at 900px and below; 1rem at 640px and below.
-- **Top bar:** a thin bar on a 2px form top rule, 2.75rem high. Product name left; release, two links, and the theme button right.
+- **Top bar:** a thin bar on a 2px form top rule, 2.75rem high. Product name left; release, two links, and the theme button right. A skip link comes first. On a phone the bar may wrap to two lines; it keeps the release, Set it up, and the theme button; GitHub moves to Read next.
 - **Frame:** the list of figures (14.75rem, sticky) and the atlas, gap 2.5rem.
 - **Title block:** display title, one lead line, then Fig. 1.
 - **Spread:** each figure is a plate and a caption column (16.375rem), gap 2.25rem. The caption column holds the heading, a short text, the facts form, and a source note.
@@ -333,6 +333,7 @@ Marks are inline SVG at 1rem, drawn in `currentColor`:
 - A dashed pencil line (5 4) is a test session or an unknown.
 - A line label is 0.78rem in ink-2 on a paper patch. Labels are hidden when the plate is narrower than 560px.
 - The line in use thickens to 2.4px.
+- A path in a node breaks only after a `/` (`<wbr>`).
 
 ## Components
 
@@ -362,12 +363,13 @@ Every component below is new on this surface unless it says "shared". The owner 
 - Under reduced motion the mark does not travel. The line thickens, and the steps change in place with a longer pause.
 
 ### Facts form
-- A two-column list on a 2px form top rule: label column 4.6rem in ink-2, value column in ink.
-- The first value is fact-lead type. Rows with no value are left out.
+- A two-column list on a 2px form top rule: label column 4.6rem in ink-2, value column in ink. Rows have .35rem top padding.
+- The first value is fact-lead type, with line height 1.3. Rows with no value are left out.
 - It is a live region, so a screen reader hears the change.
 
 ### Navigation: list of figures
 - A label on a 1px form underline, then rows on faint rules. Each row has the figure number in label type (2.4rem column) and the name. Text sections have no number.
+- **Part labels:** in band type, on a 1px form underline, above each group of rows. They are not links. On a phone they sit inline in the strip.
 - **Current:** form, weight 650. **Hover:** ink.
 - **Arrival:** a heading reached from the list shows a form tint (20 percent) that fades in 1.4s. No fade under reduced motion.
 - **Phone:** a sticky strip on a 1px form bottom rule.
@@ -376,6 +378,12 @@ Every component below is new on this surface unless it says "shared". The owner 
 - Head in label type on a 1px form rule; rows on faint rules; the selected row takes the form tint.
 - **Stacked, at 640px and below:** the head is hidden. Each row becomes a block. Each cell shows its column name in label type in a 7.2rem column.
 - A row name can be a text button with a rule-colour underline; pressed, it turns form.
+
+### Skill list
+- `.skill-catalog` and `.skill-filter`. Group columns: 3 at 1180px and up, 2 to 641px, 1 below.
+- Each skill is a button with `aria-pressed`, a status mark plus its word, and the purpose line in ink-2.
+- A filter strip of four toggle buttons has a polite live count. An empty line and a missing-list line are in pencil.
+- With JavaScript off, it is a plain two-column list.
 
 ### Command box
 - 1px rule border, no fill, mono-block type, with the copy button at the top right.
