@@ -2384,6 +2384,27 @@ test('held-out: planner-feature-plan passes a tracer, a safe parallel wave, and 
   assert.equal(fenced.pass, true, fenced.evidence);
 });
 
+test('held-out: planner-feature-plan checks cross-wave concurrency and transitive tracer reach', async () => {
+  const run = (mode: string, parts: PlanFields[]) => heldOut('planner-fullstack', 'planner-feature-plan', writePlan(featurePlan(mode, parts)));
+  for (const mode of ['standard', 'sprint', 'deep']) {
+    const crossWave = await run(mode, [tracer(), server(), web(), server({ Wave: '3 parallel', 'Depends on': 'slice 3', Files: 'server/routes.js' })]);
+    assert.equal(crossWave.pass, false, mode);
+    assert.match(crossWave.evidence, /Slice 2 and Slice 4 may run at once across waves and both own server\/ \/ server\/routes\.js/);
+    const unreachable = await run(mode, [tracer(), server({ 'Depends on': 'none' }), web(), integrate()]);
+    assert.equal(unreachable.pass, false, mode);
+    assert.match(unreachable.evidence, /Slice 2 does not reach tracer Slice 1 through Depends on/);
+    // The last slice reuses server files after a transitive dependency chain.
+    const ordered = await run(mode, [tracer(), server(), web(), server({ Wave: '3 parallel', 'Depends on': 'slice 2', Files: 'tests/' }), server({ Wave: '4 parallel', 'Depends on': 'slice 4' })]);
+    assert.equal(ordered.pass, true, ordered.evidence);
+  }
+  // Reachability must terminate when a disconnected dependency cycle is present.
+  const cycle = await run('standard', [tracer(), server({ 'Depends on': 'slice 4' }), web(), server({ Wave: '3 parallel', 'Depends on': 'slice 2', Files: 'tests/' })]);
+  assert.equal(cycle.pass, false);
+  assert.match(cycle.evidence, /does not reach tracer Slice 1 through Depends on/);
+  const sequential = await run('standard', [tracer(), server(), web(), integrate({ Files: 'server/routes.js' })]);
+  assert.equal(sequential.pass, true, sequential.evidence);
+});
+
 test('held-out: planner graders reject duplicate fields, duplicate slice numbers, unsafe paths, and empty Files', async () => {
   const quick = (text: string) => heldOut('planner-bug', 'planner-quick-plan', writePlan(text));
   const feature = (text: string) => heldOut('planner-fullstack', 'planner-feature-plan', writePlan(text));

@@ -27,6 +27,8 @@ Do not edit anything in this folder by hand. To change the policy, publish a new
 | [1.1.0](1.1.0/) | 2026-09-25 | Notion export, 2026-09-25 | `aa8f120930f8` |
 | [1.0.0](1.0.0/) | 2026-09-25 | Local bootstrap files | `9b93d6e04749` |
 
+Note for old plans: in standard, sprint, and deep mode, the lint now warns (L2) on a slice other than the wave-1 tracer that does not reach the tracer through `Depends on:`. Waves no longer gate a start, so a later-wave slice with `Depends on: none` can start early. Add the missing dependencies.
+
 The full digest and provenance of each release are in its `release.json` and its `README.md`.
 
 ### What changed

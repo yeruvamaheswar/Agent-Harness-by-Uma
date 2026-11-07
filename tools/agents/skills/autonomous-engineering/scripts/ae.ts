@@ -401,7 +401,7 @@ const handlers: Record<string, (c: Ctx) => Promise<Result> | Result> = {
     // VERIFIED only from a command the engine ran. A person's sign-off is ACCEPTED.
     if (evidence.kind === 'manual') move(rec, 'ACCEPTED', `accepted on a person's note: manual check by ${evidence.by}`, evidence.at);
     else move(rec, 'VERIFIED', 'verify command exit 0', evidence.at);
-    return { ...fromTo(rec, s.id, from), verified: evidence.kind === 'command', evidence, ...(command ? controls.report : {}) };
+    return { ...fromTo(rec, s.id, from), verified: evidence.kind === 'command', evidence, next: 'run ae next: dependents may be READY', ...(command ? controls.report : {}) };
   },
 
   // BLOCKED returns to IN_PROGRESS (the worker continues). FAILED returns to READY. Both restart the fix budget.

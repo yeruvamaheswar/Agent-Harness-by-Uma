@@ -967,3 +967,88 @@ test('a slice that owns . stays fresh after verify: paths are normalized before 
     assert.deepEqual(rep.staleEvidence.map((x: any) => x.slice), ['1'], 'another file still counts');
   } finally { unlinkSync(r.jfile + '.lock'); }
 });
+
+// Ready-on-dependencies: wave labels never replace dependency or concurrency checks.
+const crossWaveSlices: S[] = [
+  { n: 1, wave: '1 parallel' }, { n: 2, wave: '1 parallel', files: 'work/' },
+  { n: 3, wave: '1 parallel' }, { n: 4, wave: '2 parallel', deps: 'slices 1 and 3' },
+];
+
+test('T1: next offers a later-wave dependent while unrelated earlier work runs', async () => {
+  const r = repo(crossWaveSlices, { mode: 'sprint' });
+  await r.run(...initArgs(r));
+  await r.run('next', r.plan);
+  await r.run('start', r.plan, '2');
+  await r.drive('1');
+  await r.drive('3');
+  assert.deepEqual((await r.run('next', r.plan)).batch.map((s: any) => s.id), ['4']);
+});
+
+test('T2: finished and reviewed dependencies wait; ACCEPTED releases a cross-wave slice', async () => {
+  const r = repo(crossWaveSlices.map(s => s.n === 3 ? { ...s, verify: 'read by a person' } : s), { mode: 'sprint' });
+  await r.run(...initArgs(r));
+  await r.run('next', r.plan);
+  await r.run('start', r.plan, '2');
+  await r.drive('1');
+  await r.run('start', r.plan, '3');
+  await r.run('finish', r.plan, '3');
+  for (const state of ['AGENT_FINISHED', 'REVIEWED']) {
+    assert.equal(r.state('3'), state);
+    const out = await r.run('next', r.plan);
+    assert.deepEqual(out.batch, []);
+    assert.deepEqual(out.waiting, [{ id: '4', waitingOn: ['3'] }]);
+    await assert.rejects(r.run('start', r.plan, '4'), /needs READY/);
+    if (state === 'AGENT_FINISHED') await r.run('review', r.plan, '3', '--by', 'rev', '--note', 'ok');
+  }
+  await r.run('verify', r.plan, '3', '--manual', '--by', 'Uma', '--note', 'read');
+  assert.equal(r.state('3'), 'ACCEPTED');
+  assert.deepEqual((await r.run('next', r.plan)).batch.map((s: any) => s.id), ['4']);
+});
+
+test('T3: overlap with an earlier-wave running folder still defers work', async () => {
+  const r = repo(crossWaveSlices.map(s => s.n === 4 ? { ...s, files: 'work/child.ts' } : s), { mode: 'sprint' });
+  await r.run(...initArgs(r));
+  await r.run('next', r.plan);
+  await r.run('start', r.plan, '2');
+  await r.drive('1');
+  await r.drive('3');
+  const out = await r.run('next', r.plan);
+  assert.deepEqual(out.batch, []);
+  assert.deepEqual(out.deferred, [{ id: '4', reason: 'files overlap slice 2' }]);
+});
+
+test('T4: two running slices fill balanced width across waves', async () => {
+  const r = repo([{ n: 2, wave: '1 parallel' }, { n: 4, wave: '2 parallel' }, { n: 5, wave: '1 parallel' }]);
+  await r.run(...initArgs(r));
+  await r.run('next', r.plan);
+  await r.run('start', r.plan, '2');
+  await r.run('start', r.plan, '5');
+  const out = await r.run('next', r.plan);
+  assert.deepEqual(out.batch, []);
+  assert.deepEqual(out.deferred, [{ id: '4', reason: 'no free slot' }]);
+});
+
+test('T5: integration and sequential slices retain runs-alone rules across waves', async () => {
+  for (const kind of ['sequential', 'integration']) {
+    const r = repo([{ n: 1, wave: '1 parallel' }, { n: 2, wave: `2 ${kind}` }], { mode: 'sprint' });
+    await r.run(...initArgs(r));
+  await r.run('next', r.plan);
+    await r.run('start', r.plan, '1');
+    const out = await r.run('next', r.plan);
+    assert.deepEqual(out.batch, []);
+    assert.deepEqual(out.deferred, [{ id: '2', reason: `${kind} slice runs alone` }]);
+    const q = repo([{ n: 1, wave: `1 ${kind}` }, { n: 2, wave: '2 parallel' }], { mode: 'sprint' });
+    await q.run(...initArgs(q));
+    await q.run('next', q.plan);
+    await q.run('start', q.plan, '1');
+    assert.deepEqual((await q.run('next', q.plan)).deferred, [{ id: '2', reason: 'a sequential or integration slice is running' }]);
+  }
+});
+
+test('T6: one free slot chooses lowest wave then slice id', async () => {
+  const r = repo([{ n: 1, wave: '1 parallel' }, { n: 2, wave: '3 parallel' }, { n: 4, wave: '2 parallel' }, { n: 3, wave: '2 parallel' }]);
+  await r.run(...initArgs(r));
+  await r.run('next', r.plan);
+  await r.run('start', r.plan, '1');
+  assert.deepEqual((await r.run('next', r.plan)).batch.map((s: any) => s.id), ['3']);
+});

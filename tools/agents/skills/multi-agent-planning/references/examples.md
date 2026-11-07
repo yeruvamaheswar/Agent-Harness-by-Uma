@@ -220,13 +220,13 @@ graph LR
   S3 --> S4
 ```
 
-| Wave | Slices | Starts when |
+| Wave label | Slices | Starts when (dependencies) |
 |---|---|---|
 | 1 sequential | 1 | the user asks for execution |
 | 2 parallel | 2, 3 | slice 1 is VERIFIED and in a commit that the user approved |
 | 3 integration | 4 | slices 2 and 3 are VERIFIED and in a commit that the user approved |
 
-- Critical path: slice 1 → slice 2 → slice 4.
+- Critical path: slice 1 → slice 2 → slice 4, a longest dependency chain. Slice 1 → slice 3 → slice 4 ties.
 - Wave 2 files: slice 2 owns 3 files in `server/`, slice 3 owns 2 files in `web/`. No overlap.
 - Commit gate: slice 2 edits `server/routes.js`, which slice 1 owns. Wave 2 worktrees start only from a commit that contains VERIFIED slice 1. Without that commit, run slices 2 and 3 one at a time in the shared checkout after the coordinator applies the VERIFIED slice 1 diff to it (`git apply`, no commit), or ask the user.
 
@@ -380,7 +380,7 @@ Rules: demo before polish · mock only the receipt reader, and say so in the dem
 | 2 parallel | 2, 3 | 2:00. Both VERIFIED, or ask the user to cut the late slice. On the user's yes, delete it, remove it from slice 4 `Depends on:`, rewrite slice 4 `Goal:`, `Accept:`, `Verify:`, the critical path, and the evals to the slices that remain, and record the cut in Risks |
 | 3 integration | 4 | 2:30. Rehearsal passes. Polish only after this |
 
-- Critical path: slice 1 → slice 2 → slice 4.
+- Critical path: slice 1 → slice 2 → slice 4, a longest dependency chain. Slice 1 → slice 3 → slice 4 ties.
 - Wave 2 files: slice 2 owns `app/receipt.js`, `app/receipt.test.js`, and `app/fixtures/`. Slice 3 owns `app/public/share.js`, `app/public/share.css`, and `app/public/share.test.js`. No overlap.
 - Commit gate: each wave starts from a commit that contains its VERIFIED dependencies. Slice 4 edits `app/public/index.html`, which slice 1 owns. Without a commit that the user approved, run the next wave one slice at a time in the shared checkout after the coordinator applies the VERIFIED dependency diffs to it (`git apply`, no commit), or ask the user.
 - A cut slice is deleted from the plan. It is never marked VERIFIED.

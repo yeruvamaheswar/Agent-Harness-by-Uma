@@ -12,7 +12,7 @@ Source: `tools/agents/skills/autonomous-engineering/` in this repo. Plan: `plans
 | Core policy (`knowledge/core.md`) | Rules for every task | Wins over this skill. This skill applies its tracer loop and end-of-action report |
 | Rule packs | Extra category rules | Win over this skill when stricter |
 | Platform adapters and controls | Install the policy; enforce permissions on Claude Code | Win over this skill. The engine guard adds no new control |
-| `multi-agent-planning` | Writes the plan: slices, waves, routing, handoff format | PLAN mode loads it. This skill never writes slices |
+| `multi-agent-planning` | Writes the plan: slices, waves (labels only), routing, handoff format | PLAN mode loads it. This skill never writes slices |
 | `grill-me`, `verify`, `continue-work` | Requirements, product acceptance, session resume | This skill calls `grill-me` when requirements are open. You run `verify` and `continue-work` yourself |
 | This skill | Runs the plan: dispatch, review, verify, recover | The only writer of `State:` and `Evidence:` lines |
 

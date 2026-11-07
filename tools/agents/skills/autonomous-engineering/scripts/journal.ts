@@ -354,7 +354,7 @@ export function promoteReady(journal: Journal, plan: Plan, now: Date): string[] 
   return moved;
 }
 
-// The batch to offer: READY slices with settled dependencies, lowest wave first. Parallel slices of one wave
+// The batch to offer: READY slices with settled dependencies, lowest wave first. Parallel slices across waves
 // join only when their files do not overlap each other or running work. Width is the profile width minus running slices.
 export function nextBatch(journal: Journal, plan: Plan) {
   const { maxParallel } = PROFILES[journal.profile];
@@ -376,8 +376,8 @@ export function nextBatch(journal: Journal, plan: Plan) {
     if (batch.length >= slots) { deferred.push({ id: s.id, reason: slots === 0 ? 'no free slot' : `profile width ${maxParallel} reached` }); continue; }
     if (runningSerial) { deferred.push({ id: s.id, reason: 'a sequential or integration slice is running' }); continue; }
     const used = [...running, ...batch];
-    if (used.length && (s.wave.kind !== 'parallel' || used.some(u => u.wave.kind !== 'parallel' || u.wave.n !== s.wave.n))) {
-      deferred.push({ id: s.id, reason: s.wave.kind === 'parallel' ? 'different wave from running work' : `${s.wave.kind} slice runs alone` }); continue;
+    if (used.length && (s.wave.kind !== 'parallel' || used.some(u => u.wave.kind !== 'parallel'))) {
+      deferred.push({ id: s.id, reason: s.wave.kind !== 'parallel' ? `${s.wave.kind} slice runs alone` : 'a sequential or integration slice is in the batch' }); continue;
     }
     const clash = used.find(u => overlap(u.files, s.files));
     if (clash) { deferred.push({ id: s.id, reason: `files overlap slice ${clash.id}` }); continue; }
