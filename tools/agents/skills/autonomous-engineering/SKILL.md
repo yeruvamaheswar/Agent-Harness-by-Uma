@@ -58,8 +58,9 @@ When two rules conflict, the stricter rule wins. This skill never grants itself 
 5. Review the slice (REVIEW mode). Skip this step when `Review:` is `CI`.
 6. Make sure the slice's changes are in the plan's checkout. Then run `ae verify PLAN N`.
 7. When verify fails and the slice is READY, run `ae dispatch` again. It follows the attempt ladder: builder fix, escalation, then the Fallback.
-8. Repeat from step 1 until `done` is true, or a stop condition applies.
+8. After every verify, finish, fail, or block, run `ae next` at once and start the new batch. Never wait for the rest of a wave or batch. On T3, each `delegate_task` completion is its own trigger. Repeat from step 1 until `done` is true, or a stop condition applies.
 
+- Waves are labels. A slice is READY when every slice in its `Depends on:` is `VERIFIED`, `ACCEPTED`, or `INTEGRATED`. `ae next` fills free slots across waves. Kept limits: running slices must not own overlapping files; profile width caps the batch; a `sequential` or `integration` slice runs alone; stop on a usage limit. Run browser-heavy Verify steps one at a time. Check machine load before each new start. Width rises only after clean results.
 - Never commit, push, merge, or deploy. `ae integrate` needs the user's approval and a real ref.
 - `ae unblock` records a user decision. Run it only after the user decides.
 
