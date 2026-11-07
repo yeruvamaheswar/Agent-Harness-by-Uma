@@ -51,15 +51,16 @@ Never delete the copy. Run both commands from this repo's root, so `.state/backu
 - Review: `/autonomous-engineering review slice 3 of plans/tags.md`
 - Recover: `/autonomous-engineering recover plans/tags.md`
 - Sprint: `/autonomous-engineering execute plans/demo.md with the sprint profile`
+- Adaptive: `/autonomous-engineering execute plans/demo.md with the adaptive profile`
 - Usage handoff: `/autonomous-engineering Codex is at 88% on slice 3 of plans/tags.md; hand it over`. Claude is always the lead that picks the replacement. See "Usage handoff" in `references/engine.md`.
 
-The sprint profile runs up to 4 slices in parallel. It does not relax any safety rule.
+The sprint profile runs up to 4 slices in parallel. The adaptive profile has no fixed number. At each `ae next`, it reads memory signals on macOS. It starts every safe normal slice while memory pressure is normal. It starts a heavy slice (`Class: heavy`) only on measured headroom, and it backs off after timeouts, memory pressure, or failures. To change the profile of a plan that runs, the lead runs `ae set-profile PLAN --profile NAME`. No profile relaxes a safety rule. See "Adaptive width" in `references/engine.md`.
 
 ## Files
 | File | Content |
 |---|---|
 | `SKILL.md` | The agent instructions: precedence, the modes (with USAGE), stop conditions, report |
-| `references/engine.md` | Commands, states, profiles, budget, journal, dispatch, usage handoff (snapshot, thresholds, policy, phases) |
+| `references/engine.md` | Commands, states, profiles and adaptive width, budget, journal, dispatch, usage handoff (snapshot, thresholds, policy, phases) |
 | `references/authority.md` | Authority levels, `--allow` values, enforcement, prompt injection, secrets |
 | `agents/openai.yaml` | Codex flag that keeps the skill hidden |
 | `scripts/` | The engine |
@@ -71,6 +72,7 @@ Tests: `tests/ae-*.test.ts`. Run `node --experimental-strip-types --test tests/a
 - Verify runs in the checkout that holds the plan. Changes in a separate worktree are not seen until they are in that checkout.
 - A T3 worktree starts from the last local commit. Uncommitted files are not copied.
 - Subscription quotas cannot be measured by the engine. The lead passes what it observed to `ae usage`; a missing number is `unknown`. `intensity` is a relative estimate.
+- Adaptive width reads memory signals on macOS only. On other systems it runs like balanced, with one heavy slice at a time. The heavy RSS estimate starts at 2048 MB; measure one heavy run and set it with `ae set-profile`.
 - Not tested: whether Cursor and Grok load skills from `~/.agents/skills/`.
 - Not tested: whether Grok Bot on its cloud computer can run the engine.
 - No commit, push, merge, or deploy happens without your approval.

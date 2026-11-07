@@ -5,20 +5,26 @@ import { protectedRel, redact } from './guard.ts';
 import { definitionDigest } from './plan.ts';
 import type { Plan, Slice, State } from './plan.ts';
 import type { RunCharter } from './run.ts';
+import type { CapacityDecision, CapacityState } from './capacity.ts';
 
 // Run journal: plans/<slug>.run.json. The journal is canonical for the engine (DEC-4).
 
-export type ProfileName = 'economy' | 'balanced' | 'sprint';
+export type FixedProfile = 'economy' | 'balanced' | 'sprint';
+// adaptive: width from the capacity probe at each `ae next` (capacity.ts), not from a fixed number.
+export type ProfileName = FixedProfile | 'adaptive';
 // Profiles change width only. The attempt budget is the planner rule and is the same in every profile.
-export const PROFILES: Record<ProfileName, { maxParallel: number }> = {
+export const PROFILES: Record<FixedProfile, { maxParallel: number }> = {
   economy: { maxParallel: 1 },
   balanced: { maxParallel: 2 },
   sprint: { maxParallel: 4 },
 };
+export const PROFILE_NAMES: readonly ProfileName[] = ['economy', 'balanced', 'sprint', 'adaptive'];
+export const isProfile = (p: string): p is ProfileName => (PROFILE_NAMES as readonly string[]).includes(p);
+const isFixed = (p: string): p is FixedProfile => Object.hasOwn(PROFILES, p);
 export const FIX_BUDGET = 4; // failure 4 since the last unblock or definition change sets FAILED
 export const NO_PROGRESS = 3; // identical failure signatures in a row set FAILED early
 export const AUTHORITY = ['deps', 'branches', 'worktrees', 'migrations', 'ci'] as const;
-export const profileForMode = (mode: string | null): ProfileName => mode === 'quick' ? 'economy' : mode === 'sprint' ? 'sprint' : 'balanced';
+export const profileForMode = (mode: string | null): FixedProfile => mode === 'quick' ? 'economy' : mode === 'sprint' ? 'sprint' : 'balanced';
 
 export type Attempt = {
   n: number; kind: 'work' | 'verify' | 'review'; at: string; endedAt?: string; outcome?: 'finished' | 'failed' | 'blocked' | 'handed-off';
@@ -75,11 +81,14 @@ export type Handoff = {
   phase: HandoffPhase; at: string; lead: string; reason: string; from: { label: string; attempt?: number; taskId?: string };
   to: string; checkpointAt?: string; taskId?: string; history: { at: string; phase: HandoffPhase; note: string }[];
 };
+// One row per `ae set-profile` that changed something. `heavyRssMB` is the new estimate, when it changed.
+export type ProfileChange = { at: string; from: ProfileName; to: ProfileName; reason?: string; heavyRssMB?: number };
 export type Journal = {
   schemaVersion: 1; plan: string; profile: ProfileName;
   authority: { allow: string[]; grantedBy: 'user'; at: string };
   createdAt: string; updatedAt: string; run?: RunCharter;
   slices: Record<string, SliceRecord>; removed?: Record<string, SliceRecord>;
+  capacity?: CapacityState; profileChanges?: ProfileChange[];
 };
 
 export const journalPath = (planPath: string) => planPath.replace(/\.md$/, '') + '.run.json';
@@ -355,9 +364,13 @@ export function promoteReady(journal: Journal, plan: Plan, now: Date): string[] 
 }
 
 // The batch to offer: READY slices with settled dependencies, lowest wave first. Parallel slices across waves
-// join only when their files do not overlap each other or running work. Width is the profile width minus running slices.
-export function nextBatch(journal: Journal, plan: Plan) {
-  const { maxParallel } = PROFILES[journal.profile];
+// join only when their files do not overlap each other or running work. A fixed profile's width is its number
+// minus running slices. The adaptive width comes from `capacity` (assessCapacity in capacity.ts): the wave,
+// sequential, and overlap rules apply first, then the limit of the slice's class.
+export function nextBatch(journal: Journal, plan: Plan, capacity?: CapacityDecision) {
+  const profile = journal.profile;
+  if (profile !== 'adaptive' && !isFixed(profile)) throw new Error(`unknown profile "${profile}" in the journal; run ae set-profile PLAN --profile ${PROFILE_NAMES.join('|')}`);
+  if (profile === 'adaptive' && !capacity) throw new Error('the adaptive profile needs a capacity reading');
   const running = plan.slices.filter(s => journal.slices[s.id].state === 'IN_PROGRESS');
   const waiting: { id: string; waitingOn: string[] }[] = [], deferred: { id: string; reason: string }[] = [];
   const ready: Slice[] = [];
@@ -370,8 +383,10 @@ export function nextBatch(journal: Journal, plan: Plan) {
   }
   ready.sort((a, b) => a.wave.n - b.wave.n || Number(a.id) - Number(b.id));
   const batch: Slice[] = [];
-  const slots = Math.max(0, maxParallel - running.length);
   const runningSerial = running.some(r => r.wave.kind !== 'parallel');
+  if (profile === 'adaptive') return { ...adaptiveBatch(ready, running, runningSerial, capacity!), waiting };
+  const { maxParallel } = PROFILES[profile];
+  const slots = Math.max(0, maxParallel - running.length);
   for (const s of ready) {
     if (batch.length >= slots) { deferred.push({ id: s.id, reason: slots === 0 ? 'no free slot' : `profile width ${maxParallel} reached` }); continue; }
     if (runningSerial) { deferred.push({ id: s.id, reason: 'a sequential or integration slice is running' }); continue; }
@@ -384,4 +399,35 @@ export function nextBatch(journal: Journal, plan: Plan) {
     batch.push(s);
   }
   return { batch, waiting, deferred, slots, running: running.map(r => r.id) };
+}
+
+// The same wave, sequential, and overlap rules as a fixed profile, with no fixed width. Then each slice needs room in
+// its class limit (and in the total limit, which exists only without measured signals). The lowest READY slice keeps
+// its place: when it waits for capacity, slices of other waves wait too, and a sequential slice still runs alone.
+function adaptiveBatch(ready: Slice[], running: Slice[], runningSerial: boolean, cap: CapacityDecision) {
+  const batch: Slice[] = [], deferred: { id: string; reason: string }[] = [];
+  const left: Record<'total' | 'normal' | 'heavy', number | null> = { total: cap.total.starts, normal: cap.normal.starts, heavy: cap.heavy.starts };
+  const full = (k: keyof typeof left) => { const v = left[k]; return v !== null && v <= 0; };
+  const take = (k: keyof typeof left) => { const v = left[k]; if (v !== null) left[k] = v - 1; };
+  let anchor: Slice | undefined;
+  for (const s of ready) {
+    if (runningSerial) { deferred.push({ id: s.id, reason: 'a sequential or integration slice is running' }); continue; }
+    const used = [...running, ...batch], ctx = used.length ? used : anchor ? [anchor] : [];
+    if (ctx.length && (s.wave.kind !== 'parallel' || ctx.some(u => u.wave.kind !== 'parallel' || u.wave.n !== s.wave.n))) {
+      const reason = !used.length ? `waits for slice ${anchor!.id} (${anchor!.wave.n} ${anchor!.wave.kind}), which waits for capacity`
+        : s.wave.kind === 'parallel' ? 'different wave from running work' : `${s.wave.kind} slice runs alone`;
+      deferred.push({ id: s.id, reason }); continue;
+    }
+    const clash = used.find(u => overlap(u.files, s.files));
+    if (clash) { deferred.push({ id: s.id, reason: `files overlap slice ${clash.id}` }); continue; }
+    const cls = s.class === 'heavy' ? 'heavy' : 'normal', limit = full('total') ? cap.total : full(cls) ? cap[cls] : null;
+    if (limit) {
+      deferred.push({ id: s.id, reason: limit.reason ?? `${cls}: no capacity` });
+      if (!used.length && !anchor) anchor = s;
+      continue;
+    }
+    batch.push(s);
+    take('total'); take(cls);
+  }
+  return { batch, deferred, slots: cap.total.starts, running: running.map(r => r.id) };
 }

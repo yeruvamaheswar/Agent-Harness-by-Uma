@@ -7,17 +7,19 @@ import { basename } from 'node:path';
 export const STATES = ['PLANNED', 'READY', 'IN_PROGRESS', 'AGENT_FINISHED', 'BLOCKED', 'FAILED', 'REVIEWED', 'VERIFIED', 'ACCEPTED', 'INTEGRATED'] as const;
 export type State = typeof STATES[number];
 export type WaveKind = 'sequential' | 'parallel' | 'integration';
+// Workload class, for the adaptive profile. `heavy`: the work or Verify runs a heavy job (Playwright e2e, xcodebuild, video encode).
+export type WorkClass = 'normal' | 'heavy';
 export type Slice = {
   id: string; name: string; goal: string; covers: string; model: string; review: string; fallback: string;
   wave: { n: number; kind: WaveKind }; dependsOn: string[]; files: string[]; outOfScope: string[];
-  accept: string; verify: string; state: State; evidence: string;
+  accept: string; verify: string; state: State; evidence: string; class: WorkClass;
   // Files and Out of scope exactly as the plan line has them (null when absent), for the handoff note.
   raw: { files: string; outOfScope: string | null };
 };
 export type Plan = { path: string; slug: string; mode: string | null; slices: Slice[] };
 
-const FIELDS = ['Goal', 'Covers', 'Model', 'Review', 'Fallback', 'Wave', 'Depends on', 'Files', 'Out of scope', 'Accept', 'Verify', 'State', 'Evidence'] as const;
-const REQUIRED = FIELDS.filter(f => f !== 'Covers' && f !== 'Out of scope');
+const FIELDS = ['Goal', 'Covers', 'Model', 'Review', 'Fallback', 'Wave', 'Depends on', 'Files', 'Out of scope', 'Class', 'Accept', 'Verify', 'State', 'Evidence'] as const;
+const REQUIRED = FIELDS.filter(f => f !== 'Covers' && f !== 'Out of scope' && f !== 'Class');
 const HEADING = /^### Slice (\d+): (.+?)\s*$/, FIELD_LINE = /^- ([A-Za-z][A-Za-z ]*?): ?(.*?)\s*$/;
 
 export class PlanError extends Error {
@@ -61,11 +63,13 @@ export function parsePlan(text: string, path: string): Plan {
     const dep = get('Depends on');
     const dependsOn = !dep || dep.toLowerCase() === 'none' ? [] : [...new Set(dep.match(/\d+/g) ?? [])];
     if (dep && dep.toLowerCase() !== 'none' && !dependsOn.length) problems.push(`${tag}: Depends on "${dep}" names no slice number`);
+    const cls = get('Class').toLowerCase() || 'normal';
+    if (cls !== 'normal' && cls !== 'heavy') problems.push(`${tag}: unknown Class "${get('Class')}" (want heavy or normal)`);
     slices.push({
       id, name, goal: get('Goal'), covers: get('Covers'), model: get('Model'), review: get('Review'), fallback: get('Fallback'),
       wave: { n: wm ? Number(wm[1]) : 0, kind: (wm?.[2] ?? 'sequential') as WaveKind }, dependsOn,
       files: list(get('Files')), outOfScope: list(get('Out of scope')), accept: get('Accept'), verify: get('Verify'),
-      state: state as State, evidence: get('Evidence'), raw: { files: get('Files'), outOfScope: get('Out of scope') || null },
+      state: state as State, evidence: get('Evidence'), class: cls as WorkClass, raw: { files: get('Files'), outOfScope: get('Out of scope') || null },
     });
     i = end;
   }
@@ -99,8 +103,10 @@ export const verifyCommand = (slice: Slice): string | null => /`([^`]+)`/.exec(s
 
 // Every field except State and Evidence, so engine writes never look like a definition change.
 // `raw` repeats Files and Out of scope; it stays out so that adding it changed no existing digest.
+// `class` stays out too: it changes scheduling, not the work, so a class change never resets a slice,
+// and adding the field changed no existing digest.
 export function definitionDigest(slice: Slice): string {
-  const { state: _s, evidence: _e, raw: _r, ...def } = slice;
+  const { state: _s, evidence: _e, raw: _r, class: _c, ...def } = slice;
   const stable = Object.keys(def).sort().map(k => [k, def[k as keyof typeof def]]);
   return createHash('sha256').update(JSON.stringify(stable)).digest('hex').slice(0, 12);
 }

@@ -8,32 +8,35 @@ import { chooseTarget, intensity, parseModelRef } from './dispatch.ts';
 import { assessSlice, DEFAULT_POLICY, parsePolicy, parseSnapshot } from './usage.ts';
 import type { Caps } from './dispatch.ts';
 import { checkPath, classifyCommand, findControls, loadControls, redact } from './guard.ts';
+import { assessCapacity, DEFAULT_HEAVY_RSS_MB, emptyCapacity, MAX_HEAVY_RSS_MB, probeMachine } from './capacity.ts';
+import type { CapacityDecision, ProbeReading } from './capacity.ts';
 import {
-  AUTHORITY, FIX_BUDGET, MAX_CHECKPOINTS, PROFILES, awaiting, closeStaleHandoffs, handoffOpen, createJournal, evidenceLine, failureSignature, failures, fingerprint, inspectLock, journalPath, loadJournal, move,
+  AUTHORITY, FIX_BUDGET, MAX_CHECKPOINTS, PROFILE_NAMES, awaiting, closeStaleHandoffs, handoffOpen, createJournal, evidenceLine, failureSignature, failures, fingerprint, inspectLock, isProfile, journalPath, loadJournal, move,
   nextBatch, orphanTempFiles, outputTail, profileForMode, promoteReady, recordFailure, refuseSymlinks, saveJournal, settled, syncJournal, within, withLock, writeAtomic,
 } from './journal.ts';
-import type { Attempt, Checkpoint, Evidence, Handoff, Journal, ProfileName, SliceRecord } from './journal.ts';
+import type { Attempt, Checkpoint, Evidence, Handoff, Journal, ProfileChange, SliceRecord } from './journal.ts';
 import { parsePlan, setSliceFields, verifyCommand } from './plan.ts';
 import type { Plan, Slice } from './plan.ts';
 
 // Engine CLI. node --experimental-strip-types ae.ts <command> PLAN [SLICE] [flags]
 // JSON on stdout. Errors on stderr with exit 1. `check` exits 0 for allow and 2 for ask or deny.
 
-export type Deps = { cwd: string; now?: () => Date };
+// `probe` reads the machine for the adaptive profile (capacity.ts). Tests pass their own; no test runs sysctl.
+export type Deps = { cwd: string; now?: () => Date; probe?: () => ProbeReading };
 type Args = { command: string; plan: string; slice?: string; flags: Map<string, string>; caps?: string[]; cmd?: string; path?: string };
 // Files the engine itself rewrites, as canonical repo paths: real root to real plan folder. They never count toward a slice fingerprint.
 const engineOwned = (root: string, planPath: string, jfile: string) => {
   const realRoot = realpathSync(root), dir = realpathSync(dirname(planPath));
   return new Set([planPath, planPath.replace(/\.md$/, '.html'), jfile, jfile + '.bak', jfile + '.lock', ...orphanTempFiles(planPath, jfile)].map(p => relative(realRoot, join(dir, basename(p)))));
 };
-type Base = { args: Args; plan: Plan; now: Date; root: string; planPath: string; cwd: string; jfile: string };
+type Base = { args: Args; plan: Plan; now: Date; root: string; planPath: string; cwd: string; jfile: string; probe: () => ProbeReading };
 type Ctx = Base & { journal: Journal; slice: (id: string | undefined) => { s: Slice; rec: SliceRecord } };
 type Result = Record<string, unknown>;
 
-const COMMANDS = ['init', 'status', 'next', 'start', 'finish', 'block', 'fail', 'review', 'verify', 'unblock', 'integrate', 'check', 'dispatch', 'handoff', 'recover', 'usage', 'checkpoint', 'prepare', 'transfer', 'report', 'charter'];
+const COMMANDS = ['init', 'status', 'next', 'start', 'finish', 'block', 'fail', 'review', 'verify', 'unblock', 'integrate', 'check', 'dispatch', 'handoff', 'recover', 'usage', 'checkpoint', 'prepare', 'transfer', 'report', 'charter', 'set-profile'];
 const USAGE = `usage: ae.ts <command> PLAN [SLICE] [flags]\n       ae.ts check [PLAN] -- CMD | --path P\ncommands: ${COMMANDS.join(', ')}`;
 const FLAGS = ['allow', 'profile', 'provider', 'model', 'effort', 'task-id', 'summary', 'reason', 'by', 'note', 'timeout', 'ref', 'manual', 'caps', 'host', 'apply', 'reject',
-  'snapshot', 'policy', 'agent', 'remaining', 'to', 'lead', 'done', 'next', 'json', 'approval', 'deadline', 'cap', 'branch', 'replace'];
+  'snapshot', 'policy', 'agent', 'remaining', 'to', 'lead', 'done', 'next', 'json', 'approval', 'deadline', 'cap', 'branch', 'replace', 'heavy-rss-mb'];
 const BOOLEAN = ['manual', 'apply', 'reject', 'json', 'replace'];
 // Free text that the journal, the plan, or the output can hold. It is redacted when it is read, before anything stores it.
 const FREE_TEXT = ['summary', 'reason', 'by', 'note', 'ref', 'task-id', 'provider', 'model', 'effort', 'agent', 'to', 'lead', 'done', 'next'];
@@ -82,7 +85,8 @@ const need = (a: Args, name: string) => {
   if (!v) throw new Error(`${a.command}: --${name} is required`);
   return v;
 };
-const brief = (s: Slice, rec: SliceRecord) => ({ id: s.id, name: s.name, state: rec.state, wave: `${s.wave.n} ${s.wave.kind}`, dependsOn: s.dependsOn, files: s.files, model: s.model, review: s.review, fallback: s.fallback, verify: s.verify });
+// `class` shows only for a heavy slice, so the output for a plan without Class lines is unchanged.
+const brief = (s: Slice, rec: SliceRecord) => ({ id: s.id, name: s.name, state: rec.state, wave: `${s.wave.n} ${s.wave.kind}`, ...(s.class === 'heavy' ? { class: s.class } : {}), dependsOn: s.dependsOn, files: s.files, model: s.model, review: s.review, fallback: s.fallback, verify: s.verify });
 
 // The repo is the Git top level of the working folder. Only outside Git does the plan's folder decide.
 const repoRoot = (cwd: string, planPath?: string) => git(cwd, 'rev-parse', '--show-toplevel') ?? (planPath ? git(dirname(planPath), 'rev-parse', '--show-toplevel') : null) ?? cwd;
@@ -306,8 +310,28 @@ const handlers: Record<string, (c: Ctx) => Promise<Result> | Result> = {
   next(c) {
     const stop = runStop(c.journal, c.now);
     if (stop) return { ...stop, batch: [], done: c.plan.slices.every(s => settled(c.journal.slices[s.id].state)) };
-    const promoted = promoteReady(c.journal, c.plan, c.now), { batch, waiting, deferred, slots, running } = nextBatch(c.journal, c.plan);
-    return { profile: c.journal.profile, slots, running, promoted, batch: batch.map(s => brief(s, c.journal.slices[s.id])), waiting, deferred, ...awaiting(c.journal, c.plan), done: c.plan.slices.every(s => settled(c.journal.slices[s.id].state)) };
+    const promoted = promoteReady(c.journal, c.plan, c.now);
+    // adaptive: read the machine, keep the sample in the journal, and decide the width per class
+    let capacity: CapacityDecision | undefined;
+    if (c.journal.profile === 'adaptive') { const a = assessCapacity(c.journal, c.plan, c.probe(), c.now); c.journal.capacity = a.state; capacity = a.decision; }
+    const { batch, waiting, deferred, slots, running } = nextBatch(c.journal, c.plan, capacity);
+    return { profile: c.journal.profile, slots, running, promoted, batch: batch.map(s => brief(s, c.journal.slices[s.id])), waiting, deferred, ...(capacity ? { capacity } : {}), ...awaiting(c.journal, c.plan), done: c.plan.slices.every(s => settled(c.journal.slices[s.id].state)) };
+  },
+
+  // The lead's choice of width, for a journal that exists. It runs under the journal lock, and the save keeps the old
+  // journal as .bak. Each change is a profileChanges row. The same profile and estimate again is a no-op.
+  'set-profile'(c) {
+    const f = c.args.flags, to = need(c.args, 'profile'), from = c.journal.profile;
+    if (!isProfile(to)) throw new Error(`set-profile: unknown profile "${to}"; use ${PROFILE_NAMES.join(', ')}`);
+    const rss = heavyRss(c.args, to), rssChanged = rss !== undefined && rss !== c.journal.capacity?.heavyRssMB;
+    const estimate = () => (to === 'adaptive' ? { heavyRssMB: c.journal.capacity?.heavyRssMB ?? DEFAULT_HEAVY_RSS_MB, heavyRssFrom: c.journal.capacity?.heavyRssMB ? 'set' : 'default' } : {});
+    if (to === from && !rssChanged) return { profile: to, from, changed: false, ...estimate() };
+    c.journal.profile = to;
+    if (to === 'adaptive') { c.journal.capacity ??= emptyCapacity(); if (rss !== undefined) c.journal.capacity.heavyRssMB = rss; }
+    const reason = f.get('reason')?.trim();
+    const change: ProfileChange = { at: c.now.toISOString(), from, to, ...(reason ? { reason } : {}), ...(rssChanged ? { heavyRssMB: rss } : {}) };
+    (c.journal.profileChanges ??= []).push(change);
+    return { profile: to, from, changed: true, change, ...estimate() };
   },
 
   start(c) {
@@ -536,15 +560,27 @@ const handlers: Record<string, (c: Ctx) => Promise<Result> | Result> = {
   },
 };
 
+// --heavy-rss-mb: the RSS estimate of one heavy job, in MB, for the adaptive profile only.
+function heavyRss(a: Args, profile: string): number | undefined {
+  if (!a.flags.has('heavy-rss-mb')) return undefined;
+  if (profile !== 'adaptive') throw new Error(`${a.command}: --heavy-rss-mb applies to the adaptive profile only`);
+  const n = Number(a.flags.get('heavy-rss-mb'));
+  if (!Number.isInteger(n) || n < 1 || n > MAX_HEAVY_RSS_MB) throw new Error(`${a.command}: --heavy-rss-mb must be a whole number of MB from 1 to ${MAX_HEAVY_RSS_MB}`);
+  return n;
+}
+
 function initJournal(c: Base, jfile: string): Journal {
   if (existsSync(jfile)) throw new Error(`journal already exists: ${jfile}; init refuses to overwrite it`);
-  const f = c.args.flags, profile = (f.get('profile') ?? profileForMode(c.plan.mode)) as ProfileName;
-  if (!(profile in PROFILES)) throw new Error(`unknown profile "${profile}"; use economy, balanced, or sprint`);
+  const f = c.args.flags, profile = f.get('profile') ?? profileForMode(c.plan.mode);
+  if (!isProfile(profile)) throw new Error(`unknown profile "${profile}"; use ${PROFILE_NAMES.join(', ')}`);
+  const rss = heavyRss(c.args, profile);
   const allow = (f.get('allow') ?? '').split(',').map(x => x.trim()).filter(Boolean);
   const bad = allow.filter(x => !(AUTHORITY as readonly string[]).includes(x));
   if (bad.length) throw new Error(`unknown --allow value ${bad.join(', ')}; use ${AUTHORITY.join(', ')}`);
   assertFiles(c.plan, c.root, allow);
-  return createJournal(c.plan, profile, allow, c.now);
+  const journal = createJournal(c.plan, profile, allow, c.now);
+  if (profile === 'adaptive') journal.capacity = { ...emptyCapacity(), ...(rss !== undefined ? { heavyRssMB: rss } : {}) };
+  return journal;
 }
 
 // ---- recover ----
@@ -642,7 +678,9 @@ async function recover(b: Base, text: string): Promise<Result> {
     }
     const sim = structuredClone(journal);
     promoteReady(sim, plan, now);
-    const nb = nextBatch(sim, plan);
+    // adaptive: a fresh reading for the report only. The sample is not kept: recover changes no capacity state.
+    const capacity = sim.profile === 'adaptive' ? assessCapacity(sim, plan, b.probe(), now).decision : undefined;
+    const nb = nextBatch(sim, plan, capacity);
 
     let planChanged = false;
     if (apply) {
@@ -657,7 +695,7 @@ async function recover(b: Base, text: string): Promise<Result> {
       synced, planDrift, staleEvidence, inProgress, handoffs, tempFiles, ...awaiting(journal, plan), blockedFiles,
       git: { branch: git(root, 'symbolic-ref', '--short', '-q', 'HEAD') ?? 'detached or none', head: git(root, 'rev-parse', 'HEAD') ?? 'none', changedFiles: found, unowned },
       filesProblems: problems.map(p => p.text),
-      next: { batch: nb.batch.map(s => s.id), running: nb.running, waiting: nb.waiting, deferred: nb.deferred },
+      next: { batch: nb.batch.map(s => s.id), running: nb.running, waiting: nb.waiting, deferred: nb.deferred, ...(capacity ? { capacity } : {}) },
       done: plan.slices.every(s => settled(journal.slices[s.id].state)),
       ...(apply ? { applied } : { hint: 'read-only: nothing was written. recover --apply demotes stale VERIFIED and ACCEPTED slices and reconciles the plan lines' }),
       ...(planChanged ? { rebuild: `~/.agents/bin/md-view.sh ${args.plan}` } : {}),
@@ -692,7 +730,7 @@ export async function main(argv: string[], deps: Deps): Promise<Result> {
   const realPlan = realpathSync(planPath), realRoot = realpathSync(root);
   if (!realPlan.startsWith(realRoot + sep)) throw new Error(`the plan ${planPath} resolves to ${realPlan}, outside the repo ${realRoot}; refusing to write there. Run the engine from the plan's repo`);
   assertPlanFolderReal(planPath, realRoot);
-  const base: Base = { args, plan, now, root, planPath, cwd: deps.cwd, jfile };
+  const base: Base = { args, plan, now, root, planPath, cwd: deps.cwd, jfile, probe: deps.probe ?? (() => probeMachine()) };
   const ctx = (journal: Journal): Ctx => ({
     ...base, journal,
     slice: (id: string | undefined) => {
