@@ -19,8 +19,8 @@ export type Candidate = { label: string; source: 'fresh-session' | 'fallback' | 
 export const DEFAULT_POLICY: Policy = {
   thresholds: { default: { assess: 70, prepare: 85, transfer: 95 } },
   // Capability rank per agent, or per Claude tier. A replacement needs a rank at least that of the slice's Model.
-  // Grok is 0: the planner uses Grok for review only.
-  ranks: { 'Claude haiku': 1, 'Claude sonnet': 2, 'Claude opus': 3, Codex: 3, Cursor: 2, Grok: 0 },
+  // Grok is 0: the planner uses Grok for review only. Antigravity is 1: the agent key cannot tell its models apart, so it gets the lowest build rank.
+  ranks: { 'Claude haiku': 1, 'Claude sonnet': 2, 'Claude opus': 3, Codex: 3, Antigravity: 1, Cursor: 2, Grok: 0 },
   pool: ['Cursor (auto)', 'Codex (auto)', 'Claude (sonnet/high)', 'Claude (opus/high)'],
 };
 
@@ -48,7 +48,7 @@ export const ACTIONS: Record<Level | 'block', { action: string; text: string }> 
 
 const pct = (v: unknown) => typeof v === 'number' && Number.isFinite(v) && v >= 0 && v <= 100;
 const fail = (what: string): never => { throw new Error(`usage: ${redact(what)}`); };
-const AGENTS = ['Claude', 'Codex', 'Cursor', 'Grok'];
+const AGENTS = ['Claude', 'Codex', 'Antigravity', 'Cursor', 'Grok'];
 // "codex", "Codex", and "Codex (auto)" all name Codex. Anything else is not an agent key.
 function agentKey(name: string): string | null {
   const plain = AGENTS.find(a => a.toLowerCase() === name.trim().toLowerCase());

@@ -19,19 +19,21 @@ Start a child only when all of these hold:
 
 Do not start a child when one agent can finish the work in a few steps, when the work is a speculative duplicate, or when the same fact is already known.
 
-## Choose the best model for each child
+## Choose the cheapest capable model for each child
 
 Pick provider, model, and effort per child. Do not copy one choice across the fan-out.
 
 - Spread work across providers by fit. Do not leave a capable provider idle while another carries several children. Do not invent a task to use a provider.
-- Pick the model and effort that best fit the task. Judge them in this order: accuracy to the goal, speed, then efficiency of usage. Do not pick above the need (wasted usage) or below it (wrong result, rework). Do not overstate or understate what a model can do.
+- Assign the cheapest model and the lowest effort that can meet the slice goal and pass its check. Cheapest means the least usage spent for a correct result.
+- Move up one rung only after a failed check. State the reason. Do not move up on a guess that the task is hard.
 - Typical fits: fact-finding, probes, and mechanical edits suit Haiku, Sonnet, or a fast model at low or medium effort.
-- Use a stronger model (for example Opus) when it materially improves correctness: architecture, security, hard integration, or a second failed attempt. Say why.
+- Size the work with the rubric in the `multi-agent-planning` skill (`references/routing.md`): cheap, mid, or strong. Architecture and security get no forced strong start. Size them up only when you judge that the work needs it. Say why.
+- After a second failed attempt, move up. Say why.
 - Do not use high, xhigh, max, or ultrathink unless the user named that task, or a specific failure justifies one step up. A blanket "ultrathink" in a parent brief is not permission for every child.
 - A reviewer must be a different session from the builder. Prefer a different model family.
-- Fallback order when a provider fails through T3 (limit, 401, expired login): first run the same task through that provider's own CLI from the terminal (`codex exec`, `cursor-agent -p`, `grok`), in the background with a log file; then, if the CLI also fails, move to the provider and model that best fit the task, by the same order: accuracy, speed, efficiency. Claude has no fixed rank in this order. Do not retry the same route in a loop. A task run through a CLI still follows the same file ownership, no-commit, and independent-review rules.
+- Fallback order when a provider fails through T3 (limit, 401, expired login): first run the same task through that provider's own CLI from the terminal (`codex exec`, `cursor-agent -p`, `grok`), in the background with a log file; then, if the CLI also fails, move to the cheapest provider and model that can meet the goal, per the rules above. Claude has no fixed rank in this choice. Do not retry the same route in a loop. A task run through a CLI still follows the same file ownership, no-commit, and independent-review rules.
 - Prefer a deterministic test over another model review when a test can prove the result.
-- Codex and Cursor children use `auto` and keep their own model.
+- Only Cursor children use `auto` and keep their own model. Name the model and effort of every Codex and Antigravity child, from `multi-agent-planning/references/model-tiers.md`.
   - Exception: pstack panels in Cursor (arena, architect, interrogate, and the arena cross-judge pool) use the named models in `~/.cursor/rules/pstack-models.mdc`. A cross-family judge needs named models.
 
 ## What T3 does
@@ -40,7 +42,7 @@ Checked 2026-10-26 against `delegate_task` and `orchestrator_capabilities`.
 
 - A child inherits the parent provider and model unless `target` sets them.
 - Options inherit only when the child uses the same provider instance and the same model. Pass `options: []` or `options: {}` to clear them. Set `effort` (or that model's advertised effort key) on every child you start.
-- Claude Opus 5.5 defaults to medium. Claude Sonnet 5.5, Claude Opus 5, and Claude Opus 4.8 default to high. Claude Opus 4.7 defaults to xhigh. Do not treat "default" as cheap.
+- Read each model's default effort from `orchestrator_capabilities` at the start of the task. Do not rely on a dated list. Do not treat "default" as cheap.
 - T3 does not show remaining usage for any provider. Label usage unknown. Do not invent numbers.
 - Child agents differ in tools. Claude children have Supabase tools. Grok and Cursor children have a shell and browser preview but no Supabase tools. Check before you assign a task that needs a tool.
 - Parallel children share each provider's usage window. Many high-effort runs on one provider can empty it before the work is integrated.
@@ -50,7 +52,7 @@ Checked 2026-10-26 against `delegate_task` and `orchestrator_capabilities`.
 1. List the children you will start now. For each, state the task, provider, model, effort, owned files, and reviewer.
 2. Check overlap: no two running children edit the same file.
 3. Check balance: no provider is overloaded while a suitable one is idle.
-4. On T3, set `target.model` and `target.options` on every child. Do not leave effort to inheritance. Choose the model that best fits the task for accuracy, speed, and efficiency. Do not overpromise or underpromise on the choice.
+4. On T3, set `target.model` and `target.options` on every child. Do not leave effort to inheritance. Choose the cheapest model and effort that can meet the goal.
 5. On Claude Code, pass the model and effort on the Agent tool.
 6. Tell the user the count, models, and efforts before a fan-out of more than one child.
 

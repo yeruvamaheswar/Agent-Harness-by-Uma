@@ -56,8 +56,8 @@ Rules: <rule> · <rule>
 - `kind`: plan, audit, review, report, comparison, or explainer.
 - `Label: value` lines before the first `##` render as a fact table. A value split by ` · ` renders as a list. Extra front matter keys render there too.
 - `## Loop` items `N. Step · owner` render as owner lanes. Owners: `Claude`, `user`, or an agent name such as `Codex` or `Cursor`.
-- Each Claude step names its subagent's model and effort in the owner field, e.g. `Claude (opus/high)`. Codex and Cursor steps say `Codex (auto)` or `Cursor (auto)`.
-- Pick the lowest rung that fits: `haiku/medium` mechanical · `sonnet/medium` code, config, docs with tests · `opus/low` short judgment · `opus/medium` plans, multi-file docs · `opus/high` security, permissions, installers, cross-platform · `opus/xhigh` long multi-step work across repos · `opus/max` only with a written reason.
+- Each Claude step names its subagent's model and effort in the owner field, e.g. `Claude (opus/high)`. Codex steps name `Codex (model-id/effort)`, Antigravity steps name `Antigravity (model-id)`, and Cursor steps say `Cursor (auto)`. Pick the model from `model-tiers.md` in the `multi-agent-planning` skill.
+- Pick the lowest rung that fits. The approved tier of each rung and of every other model is in `multi-agent-planning/references/model-tiers.md`: `haiku/medium` mechanical · `sonnet/medium` code, config, docs with tests · `opus/low` short judgment · `opus/medium` plans, multi-file docs · `opus/high` security, permissions, installers, cross-platform · `opus/xhigh` long multi-step work across repos · `opus/max` only with a written reason.
 - Each slice lists `Depends on:` and `Files:` so independent slices can run in parallel.
 - Task items `- [ ] text · owner · check · rollback` from every section form one progress board. Separator: space, middle dot, space. Open `user` steps also list under "Waiting on you".
 - `### Always loaded` and `### On demand` in one section render side by side.

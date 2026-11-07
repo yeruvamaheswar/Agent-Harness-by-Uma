@@ -14,6 +14,7 @@ const caps = (): Caps => ({ providers: [
   ], canRunChildTask: true, constraints: [] },
   { providerInstanceId: 'cursor', driverKind: 'cursor', models: [{ id: 'default', label: 'Auto' }, { id: 'grok-4.7' }], canRunChildTask: true, constraints: [] },
   { providerInstanceId: 'grok', driverKind: 'grok', models: [{ id: 'grok-4.7' }], canRunChildTask: true, constraints: [] },
+  { providerInstanceId: 'antigravity', driverKind: 'antigravity', models: [{ id: 'gemini-3.8-flash-low' }, { id: 'gemini-3.8-flash-high' }], canRunChildTask: true, constraints: [] },
   { providerInstanceId: 'opencode', driverKind: 'opencode', models: [], canRunChildTask: false, constraints: ['Provider instance is disabled.'] },
 ] });
 const t3 = { caps: caps(), host: 't3' };
@@ -116,4 +117,77 @@ test('intensity is a labeled relative estimate', () => {
   assert.equal(intensity(parseModelRef('Claude (haiku/low)')).value, 0.5);
   assert.equal(intensity(parseModelRef('Codex (auto)')).value, 3);
   assert.match(intensity(parseModelRef('Grok (default)')).label, /relative estimate, not measured quota/);
+});
+
+test('EVAL-1: Codex (model-id/effort) splits into model and effort; old Codex lines still parse', () => {
+  const r = parseModelRef('Codex (gpt-6.1-terra/low)');
+  assert.equal(r.modelId, 'gpt-6.1-terra'); assert.equal(r.effort, 'low'); assert.equal(r.mode, 'model'); assert.equal(r.label, 'Codex (gpt-6.1-terra/low)');
+  assert.equal(parseModelRef('Codex (gpt-6.1-terra/low, unverified)').unverified, true);
+  assert.equal(parseModelRef('Codex (gpt-6-sol)').effort, undefined); // no "/": today's behavior
+  assert.equal(parseModelRef('Codex (gpt-6-sol)').modelId, 'gpt-6-sol');
+  assert.equal(parseModelRef('Codex (auto)').mode, 'auto');
+  assert.equal(parseModelRef('Cursor (auto)').mode, 'auto');
+  assert.equal(parseModelRef('Grok (default)').mode, 'default');
+  assert.throws(() => parseModelRef('Codex (gpt-6-sol/)'), /Cannot parse Codex model/);
+  assert.throws(() => parseModelRef('Codex (a/b/c)'), /Cannot parse Codex model/);
+});
+
+test('EVAL-2: a named Codex model sets the advertised effort option, else adds a note', () => {
+  const ok = res('Codex (gpt-6-sol/low)');
+  assert.equal(ok.model, 'gpt-6-sol'); assert.deepEqual(ok.options, [{ id: 'reasoningEffort', value: 'low' }]); assert.deepEqual(ok.notes, []);
+  const unadvertised = res('Codex (gpt-6-sol/xhigh)'); // gpt-6-sol lists low, medium, high
+  assert.equal(unadvertised.model, 'gpt-6-sol'); assert.equal(unadvertised.options, undefined); assert.match(unadvertised.notes[0], /effort "xhigh" is not advertised by gpt-6-sol/);
+  const none = res('Codex (gpt-6.1-sol/low)'); // this model lists no effort option
+  assert.equal(none.options, undefined); assert.match(none.notes[0], /not advertised/);
+  const c = caps(); c.providers[0].models[1].options = [{ id: 'effort', values: ['low'] }];
+  assert.deepEqual((resolveTarget(parseModelRef('Codex (gpt-6-sol/low)'), { caps: c, host: 't3' }) as Target).options, [{ id: 'effort', value: 'low' }]);
+  c.providers[0].models[1].options = [{ id: 'reasoning_effort', values: ['low'] }];
+  assert.deepEqual((resolveTarget(parseModelRef('Codex (gpt-6-sol/low)'), { caps: c, host: 't3' }) as Target).options, [{ id: 'reasoning_effort', value: 'low' }]);
+});
+
+test('EVAL-3: Antigravity (model-id) resolves to the antigravity provider with the model id unchanged', () => {
+  const r = parseModelRef('Antigravity (gemini-3.8-flash-low)');
+  assert.equal(r.agent, 'Antigravity'); assert.equal(r.mode, 'model'); assert.equal(r.modelId, 'gemini-3.8-flash-low'); assert.equal(r.effort, undefined);
+  const t = res('Antigravity (gemini-3.8-flash-low)');
+  assert.equal(t.dispatch, 't3-delegate'); assert.equal(t.providerInstanceId, 'antigravity'); assert.equal(t.model, 'gemini-3.8-flash-low'); assert.equal(t.options, undefined);
+  const missing = resolveTarget(parseModelRef('Antigravity (gemini-9)'), t3) as Unavailable;
+  assert.equal(missing.unavailable, true); assert.match(missing.reason, /not listed for Antigravity/);
+  const noProvider = caps(); noProvider.providers = noProvider.providers.filter(p => p.driverKind !== 'antigravity');
+  assert.match((resolveTarget(parseModelRef('Antigravity (gemini-3.8-flash-low)'), { caps: noProvider, host: 't3' }) as Unavailable).reason, /provider for Antigravity/);
+});
+
+test('EVAL-4: a named Codex model escalates effort only, then returns null; Antigravity returns null', () => {
+  const lab = (t: string, f: number) => escalate(parseModelRef(t), f)?.label ?? null;
+  assert.equal(lab('Codex (gpt-6-sol/low)', 0), 'Codex (gpt-6-sol/low)');
+  assert.equal(lab('Codex (gpt-6-sol/low)', 1), 'Codex (gpt-6-sol/medium)');
+  assert.equal(lab('Codex (gpt-6-sol/low)', 2), 'Codex (gpt-6-sol/high)');
+  assert.equal(lab('Codex (gpt-6-sol/low)', 3), 'Codex (gpt-6-sol/xhigh)');
+  assert.equal(lab('Codex (gpt-6-sol/low)', 4), null);
+  assert.equal(lab('Codex (gpt-6-sol/xhigh)', 1), null);
+  assert.equal(lab('Codex (gpt-6-sol/low, unverified)', 1), 'Codex (gpt-6-sol/medium, unverified)');
+  assert.equal(lab('Codex (gpt-6-sol)', 1), null); // no effort to raise
+  assert.equal(lab('Antigravity (gemini-3.8-flash-low)', 1), null);
+  assert.equal(lab('Claude (sonnet/medium)', 1), 'Claude (sonnet/high)'); // Claude is unchanged
+});
+
+test('EVAL-5: a named model missing from the host list is unavailable, and chooseTarget takes Fallback', () => {
+  const slice = { model: 'Codex (gpt-9-nova/low)', fallback: 'Claude (sonnet/high)' };
+  const a = chooseTarget(slice, 0, t3);
+  assert.equal(a.used, 'fallback'); assert.equal(a.chain[0].result, 'unavailable'); assert.match(a.chain[0].reason, /model "gpt-9-nova" is not listed for Codex/);
+  const g = chooseTarget({ model: 'Antigravity (gemini-9)', fallback: 'Claude (sonnet/high)' }, 0, t3);
+  assert.equal(g.used, 'fallback');
+  // a named model at its last effort escalates to nothing, so Fallback runs
+  const last = chooseTarget({ model: 'Codex (gpt-6-sol/xhigh)', fallback: 'Claude (sonnet/high)' }, 1, t3);
+  assert.equal(last.used, 'fallback'); assert.equal(last.chain[0].result, 'exhausted');
+  const next = chooseTarget({ model: 'Codex (gpt-6-sol/low)', fallback: 'Claude (sonnet/high)' }, 1, t3);
+  assert.equal(next.used, 'escalated'); assert.deepEqual(next.target.options, [{ id: 'reasoningEffort', value: 'medium' }]);
+  // gpt-6-sol lists low, medium, high: an escalation to xhigh is not advertised, so Fallback runs (review F1)
+  const unadv = chooseTarget({ model: 'Codex (gpt-6-sol/high)', fallback: 'Claude (sonnet/high)' }, 1, t3);
+  assert.equal(unadv.used, 'fallback'); assert.equal(unadv.chain[0].result, 'unavailable'); assert.match(unadv.chain[0].reason, /effort "xhigh" is not advertised by gpt-6-sol/);
+  // a first attempt with an unadvertised effort still runs with a note (EVAL-2)
+  assert.equal(chooseTarget({ model: 'Codex (gpt-6-sol/xhigh)', fallback: 'Claude (sonnet/high)' }, 0, t3).used, 'model');
+});
+
+test('Codex (auto/effort) is a parse error (review F7)', () => {
+  assert.throws(() => parseModelRef('Codex (auto/low)'), /Cannot parse Codex model/);
 });

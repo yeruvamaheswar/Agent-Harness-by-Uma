@@ -1213,7 +1213,6 @@ for (const s of slices) {
   if (s.fields.State.trim() !== 'PLANNED') fail(label + ' State is "' + s.fields.State + '", a plan-only run leaves it PLANNED');
   const model = s.fields.Model.toLowerCase().trim();
   if (s.fields.Review.toLowerCase().trim() === model) fail(label + ' Review equals Model (' + s.fields.Model + ')');
-  for (const key of ['Model', 'Review', 'Fallback']) if (/antigravity/i.test(s.fields[key])) fail(label + ' ' + key + ' names Antigravity');
   for (const key of ['Model', 'Fallback']) if (/grok/i.test(s.fields[key])) fail(label + ' ' + key + ' names Grok');
 }
 function overlaps(a, b) {

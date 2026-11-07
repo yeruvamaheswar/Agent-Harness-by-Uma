@@ -36,7 +36,7 @@ Not run: opening the project in a cloud agent. That needs a live agent session.
 
 Label: `concept`.
 
-The plan assigns each slice to an agent. Claude plans and reviews, Codex builds with `auto`, Cursor builds UI work with `auto`, and Grok may only review. The reviewer is never the builder's session. `ae dispatch` prints the routing for a slice (see workflow 3), and `ae handoff` prints the note you give the worker.
+The plan assigns each slice to an agent. Claude plans and reviews, Codex builds with a named model and effort such as `Codex (gpt-6.1-terra/medium)`, Antigravity builds with a named model, Cursor builds UI work with `auto`, and Grok may only review. The reviewer is never the builder's session. `ae dispatch` prints the routing for a slice (see workflow 3), and `ae handoff` prints the note you give the worker.
 
 What you would do:
 
@@ -52,7 +52,7 @@ Not run: steps 2 and 3. They need a live Claude Code session and sessions in Cod
 
 Label: `runnable`.
 
-The plan names a model and effort for each slice: a mechanical edit goes to a Codex or Cursor `auto` builder, and design-heavy work goes to Claude at a higher effort. The engine turns those lines into a target and an escalation path. This block writes a throwaway plan, starts the engine, and shows the dispatch for slice 1. It then fails an attempt and shows how the escalation plan changes.
+The plan names a model and effort for each slice: a mechanical edit goes to a Codex model and effort from `model-tiers.md`, such as `gpt-6.1-terra/medium`, an Antigravity model, or a Cursor `auto` builder, and design-heavy work goes to Claude at a higher effort. The engine turns those lines into a target and an escalation path. This block writes a throwaway plan, starts the engine, and shows the dispatch for slice 1. It then fails an attempt and shows how the escalation plan changes.
 
 ```bash
 . "${TMPDIR:-/tmp}/harness-demo/env.sh"
@@ -71,7 +71,7 @@ mode: standard
 
 ### Slice 1: write the notes file
 - Goal: notes.txt says ready
-- Model: Codex (auto)
+- Model: Codex (gpt-6.1-terra/medium)
 - Review: Claude (sonnet/medium)
 - Fallback: Claude (opus/high)
 - Wave: 1 sequential
@@ -82,7 +82,7 @@ mode: standard
 - Verify: `grep -q ready notes.txt`
 - State: PLANNED
 - Evidence: none
-- [ ] Write notes.txt · Codex (auto) · Verify passes · delete the file
+- [ ] Write notes.txt · Codex (gpt-6.1-terra/medium) · Verify passes · delete the file
 
 ### Slice 2: design the summary
 - Goal: summary.txt says done
@@ -105,7 +105,7 @@ cd "$DEMO"
 ae init plans/demo.md
 ae next plans/demo.md
 ae dispatch plans/demo.md 1
-ae start plans/demo.md 1 --provider codex --model auto --task-id demo-builder-1
+ae start plans/demo.md 1 --provider codex --model gpt-6.1-terra --task-id demo-builder-1
 ae fail plans/demo.md 1 --reason "demo: first attempt failed"
 ae dispatch plans/demo.md 1
 ```
@@ -123,7 +123,7 @@ When an agent nears its limit, the lead writes a usage snapshot from numbers it 
 ```bash
 . "${TMPDIR:-/tmp}/harness-demo/env.sh"
 cd "$DEMO"
-ae start plans/demo.md 1 --provider codex --model auto --task-id demo-builder-2
+ae start plans/demo.md 1 --provider codex --model gpt-6.1-terra --task-id demo-builder-2
 echo '{"agents": {"Codex": {"limits": [{"kind": "quota", "usedPct": 88, "source": "demo snapshot"}]}}}' > usage.json
 ae usage plans/demo.md 1 --snapshot usage.json --remaining 30
 ae prepare plans/demo.md 1 --to "Claude (opus/high)" --lead "Claude (opus/high)" --reason "demo: Codex quota 88 percent"

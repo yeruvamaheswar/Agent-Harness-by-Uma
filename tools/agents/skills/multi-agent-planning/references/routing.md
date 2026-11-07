@@ -11,41 +11,44 @@ These are the user's subscriptions.
 | Codex | $20/mo | Main volume worker. Implementation from a clear spec. Bug fixes. Unit and integration tests. Repo-scoped changes. CI fixes. Parallel Codex threads in isolated worktrees for independent slices, when the host supports them | Open design questions |
 | Cursor | $30/mo | Hands-on editing. Frontend and UI. Refactors. Quick fixes. Component integration. Bounded merge conflicts. Integration under a separate integration owner. Cursor may own backend slices too | Integrating slices it built |
 | Grok | $30/mo, optional | Research before or beside planning. Alternatives. Assumption challenge. Optional critic in `Review:` | Building a slice. `Model:` or `Fallback:` |
-| Antigravity | $20/mo, excluded | Nothing by default | Any slice, unless the user asks for it in this task |
+| Antigravity | $20/mo, routable | By tier from `model-tiers.md`: cheap and mid work such as fact-finding, mechanical edits, docs, and code from a clear spec. A higher tier only when `model-tiers.md` lists the model there | Slices whose model has no row in `model-tiers.md` (`tier unknown`) |
 
-- Default active stack: Claude, Codex, and Cursor, $150/mo. With Grok: $180/mo.
+- Default active stack: Claude, Codex, Cursor, and Antigravity, $170/mo. With Grok: $200/mo.
 - These are subscription prices. They are not API credit and not a quota.
-- Antigravity: never route to it unless the user asks in this task. Do not uninstall it. Do not edit its config.
+- No provider and no model is a default. The size of the work picks the model.
+- Do not uninstall Antigravity. Do not edit its config.
 
 ## Grok
 - A Grok finding counts only when it is actionable: file path, line reference where available, repro or test evidence, severity, and a concrete fix.
 - An opinion without evidence is not a defect.
 - Record in the plan whether Grok added value.
-- A plan never depends on Grok. When Grok is unavailable or excluded, the plan is complete with Claude, Codex, and Cursor.
+- A plan never depends on Grok. When Grok is unavailable or excluded, the plan is complete without it.
 - Grok never appears in `Model:` or `Fallback:`. It may appear only in `Review:`, as an optional critic.
 - When a slice's `Review:` is Grok, write the stand-in reviewer in Risks, for example Claude (opus/high, fresh session).
 - Grok research happens before or beside planning. Record it in Existing state, not as a building slice.
 
-## Default routing
-| Work | Agent |
+## Size the slice, then pick the model
+Size each slice. Then pick the cheapest model and effort in `model-tiers.md` at or above that size, from any routable provider.
+
+| Size | Work |
 |---|---|
-| Major architecture | Claude (opus/high) |
-| Hard cross-platform reasoning | Claude (opus/high), or Claude (opus/xhigh) for long multi-step work |
-| Complex or critical bug | Claude (opus/high) |
-| Ordinary implementation | Codex (auto) |
-| Tests | Codex (auto) |
-| Routine edits and frontend iteration | Cursor (auto) |
-| Mechanical docs | Claude (haiku/medium) or Claude (sonnet/medium) |
-| Independent critical review | Claude (opus/high), in a fresh session, never the builder's session |
-| Optional extra critique | Grok (default), in `Review:` only |
+| cheap | Fact-finding, probes, mechanical edits, docs without judgment |
+| mid | Code from a clear spec with tests, multi-file docs, routine debugging |
+| strong | Open design, security-critical design or auth changes, migrations, cross-platform contracts, hard debugging |
 
-- Claude rungs are in the `html-explainer` skill. Pick the lowest rung that fits.
+- The rubric is a judgment, not a rule. Architecture and security get no forced strong start. Size them up only when the work needs it. Say why.
+- Within a tier, prefer the lowest effort and a provider with free capacity. Write the cost as `unknown` when no host reports it.
+- Cursor does hands-on UI edits and refactors at `Cursor (auto)`. Cursor does not use the tiers.
+- Independent critical review: a strong-tier model in a fresh session, never the builder's session.
+- Optional extra critique: `Grok (default)`, in `Review:` only.
+- Claude rungs are in `model-tiers.md` and in the `html-explainer` skill. Pick the lowest rung that fits.
 
-## Codex and Cursor stay auto
-- Always write `Codex (auto)` and `Cursor (auto)` in `Model:`, `Review:`, and `Fallback:`. Do not override the model. This is the user's decision.
-- In T3 Code, `auto` for Codex means the Codex config default model.
+## Only Cursor stays auto
+- Write `Cursor (auto)` in `Model:`, `Review:`, and `Fallback:`. Do not override the Cursor model. This is the user's decision.
 - In T3 Code, `auto` for Cursor means the model id `default` (Auto).
-- Write discovery results, such as the Codex config default model or the T3 model id used, in Existing state and in the Worker tracking table. Never in `Model:`.
+- Codex names its model and effort: `Codex (model-id/effort)`, for example `Codex (gpt-6.1-terra/low)`. The lint warns on `Codex (auto)`. Old plans that say `Codex (auto)` still parse and dispatch with no model override.
+- Antigravity names its model: `Antigravity (model-id)`. The effort is part of the id.
+- Write discovery results, such as the T3 model id used, in Existing state and in the Worker tracking table.
 
 ## Scoring a slice
 Weigh these factors for each slice:
@@ -84,9 +87,10 @@ Rules:
 
 | Builder | Escalation step | Typical `Fallback:` |
 |---|---|---|
-| Codex (auto) | Codex with higher reasoning effort, when the host exposes it. Else a rerun with the failing output | Claude (opus/high) |
-| Cursor (auto) | Cursor rerun with the failing output and the review findings | Codex (auto), or Claude at the rung the risk needs |
-| Claude (rung) | One rung up the `html-explainer` list. `opus/max` only with a written reason | Codex (auto), or a new Claude session when the slice needs Claude judgment |
+| Codex (model-id/effort) | The same model at the next effort, within the efforts the host advertises. With no step left, go to `Fallback:` | A model in another family at or above the slice size, or Claude at the rung the risk needs |
+| Antigravity (model-id) | None. The effort is in the id, so go straight to `Fallback:` | A model in another family at or above the slice size |
+| Cursor (auto) | Cursor rerun with the failing output and the review findings | Codex (model-id/effort), or Claude at the rung the risk needs |
+| Claude (rung) | One rung up the `html-explainer` list. `opus/max` only with a written reason | A model at or above the slice size from another provider, or a new Claude session when the slice needs Claude judgment |
 
 ### Attempt budget
 - Three attempts per slice. First, one bounded fix by the builder. Second, the escalation step. Third, the `Fallback:` owner.
@@ -112,9 +116,13 @@ Rules:
 |---|---|---|
 | T3 Code | Call the `orchestrator_capabilities` tool. It lists provider instances, model ids, option descriptors (such as `effort` or `reasoningEffort`), and `canRunChildTask`. Pass `search` to find a model outside the short list | observed |
 | Claude Code | The model list of the Agent tool | observed |
-| Codex | `grep -E '^model *=' ~/.codex/config.toml`. Read no other key | observed, else `unknown` |
+| Codex | In T3 Code, the `codex` provider in `orchestrator_capabilities`, with each model's effort options. Else `grep -E '^model *=' ~/.codex/config.toml`. Read no other key | observed, else `unknown` |
 | Cursor | `cursor-agent --list-models`, when the command exists | observed, else `unknown` |
+| Antigravity | The `antigravity` provider in `orchestrator_capabilities`. The effort is in the model id | observed, else `unknown` |
 | Any other host | None | the tier, `auto`, or `unverified` |
 
-- In `## Existing state`, mark each capability as observed or assumed. Discovery results go there, not in `Model:`.
-- Never invent model IDs, quotas, usage, or costs.
+- Discover again at every plan start. Do not reuse an old list.
+- In `## Existing state`, list every provider with its status (routable, review only, or disabled), its model ids, and the date. Mark each capability as observed or assumed. Discovery results go there, not in `Model:`.
+- A discovered model with no row in `model-tiers.md` is `tier unknown`. Route no build slice to it until a probe or the user sets its tier.
+- A slice may launch only on a model that the current discovery lists. When it is not listed, the model is unavailable and the slice goes to `Fallback:`.
+- Never invent model IDs, quotas, usage, costs, or tiers. Never guess a tier from a model name.

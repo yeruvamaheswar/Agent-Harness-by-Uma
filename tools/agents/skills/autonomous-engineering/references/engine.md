@@ -191,11 +191,14 @@ The ladder is the planner's rule. `ae dispatch` picks the target for each step.
 ## Dispatch and escalation
 - With a T3 capabilities file, the provider must exist, `canRunChildTask` must be true, and it must have no constraints.
 - Claude tiers resolve to the first listed model id with `-<tier>-`. Effort is passed only when the model lists that value.
-- Codex (auto) gets no model. Cursor (auto) gets `default`. Grok (default) gets no model.
+- `Codex (auto)` gets no model. `Cursor (auto)` gets `default`. `Grok (default)` gets no model.
+- A named model (`Codex (model-id/effort)`, `Antigravity (model-id)`) must be in the host list, else it is unavailable and dispatch uses the Fallback. The agent `Antigravity` maps to the T3 driver `antigravity`.
+- `Codex (model-id/effort)` sets the effort option when the model advertises it under `effort`, `reasoningEffort`, or `reasoning_effort`. Otherwise `notes` says so and no option is set.
 - With no capabilities on Claude Code, Claude is a `native-subagent`. Other agents are `handoff`.
 - With host `other`, every target is `handoff`.
 - Escalation: one level. Effort low, medium, high, xhigh; then tier haiku, sonnet, opus at high. Never `max`.
-- When `auto`, `default`, or the top rung cannot escalate, dispatch uses the Fallback. When nothing can run, it returns a handoff.
+- A named Codex model with an effort steps through the same efforts and then has no step left. It never changes model. `Antigravity (model-id)` has no step: its effort is in the id.
+- When `auto`, `default`, a named model without an effort, or the top rung cannot escalate, dispatch uses the Fallback. When nothing can run, it returns a handoff.
 - `intensity` is a relative estimate, not a measured quota.
 
 ## Usage handoff
@@ -209,7 +212,7 @@ Source: `plans/usage-continuity.md`. Code: `scripts/usage.ts`. The engine never 
   "Claude": {"limits": [{"kind": "context", "reached": true}]}
 }}
 ```
-- Keys are agent names: `Claude`, `Codex`, `Cursor`, `Grok`. Case does not matter, and a model text such as `Cursor (auto)` counts as its agent. All Claude tiers share one key: one account. Any other key is listed in `ignored`, redacted.
+- Keys are agent names: `Claude`, `Codex`, `Antigravity`, `Cursor`, `Grok`. Case does not matter, and a model text such as `Cursor (auto)` counts as its agent. All Claude tiers share one key: one account. Any other key is listed in `ignored`, redacted.
 - `kind` is set by the lead: `quota` (subscription), `rate` (rate limit), or `context` (context window). Quota and rate are account limits. Context is a session limit. The engine never guesses the kind from text.
 - `usedPct` is 0 to 100, or `null` when the provider shows none. A missing agent, a `null`, or a number outside 0 to 100 gives `unknown`. The bad value is dropped, never echoed.
 - `"reached": true` on a limit means the lead saw it at its limit. It counts as 100 percent and gives `exhausted` for that kind.
@@ -240,11 +243,11 @@ Source: `plans/usage-continuity.md`. Code: `scripts/usage.ts`. The engine never 
 ### Policy (`--policy FILE`, optional)
 ```json
 {"thresholds": {"default": {"assess": 70, "prepare": 85, "transfer": 95}, "Codex": {"assess": 60, "prepare": 75, "transfer": 90}, "context": {"assess": 80, "prepare": 90, "transfer": 98}},
- "ranks": {"Claude haiku": 1, "Claude sonnet": 2, "Claude opus": 3, "Codex": 3, "Cursor": 2, "Grok": 0},
+ "ranks": {"Claude haiku": 1, "Claude sonnet": 2, "Claude opus": 3, "Codex": 3, "Antigravity": 1, "Cursor": 2, "Grok": 0},
  "pool": ["Cursor (auto)", "Codex (auto)", "Claude (sonnet/high)", "Claude (opus/high)"]}
 ```
 - Any key may be left out; the defaults above apply. Threshold lookup: `Agent.kind`, then `Agent`, then `kind`, then `default`. Each needs assess <= prepare <= transfer.
-- `ranks` is capability. A candidate needs a rank at least that of the slice's `Model:`. A slice `Model:` with no rank needs the highest rank. A candidate with no rank is excluded. The ranks are a judgment; change them in the policy file.
+- `ranks` is capability. A candidate needs a rank at least that of the slice's `Model:`. A slice `Model:` with no rank needs the highest rank. A candidate with no rank is excluded. The ranks are a judgment; change them in the policy file. `Antigravity` is 1 because the agent key cannot tell its models apart, so it gets the lowest build rank. It is not in the default pool.
 - Grok never builds: it is excluded as a candidate, and `prepare` refuses it. The planner uses Grok for review only.
 
 ### Candidates

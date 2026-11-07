@@ -68,8 +68,8 @@ if re.search(r"(?m)^planner:[ \t]*[\"'`]?multi-agent-(?:planning|slice-planner)[
             print(f"warn: {heading}: Review: equals Model:")
         for name in ("Model:", "Review:", "Fallback:"):
             value = field(body, name)
-            if value is not None and re.search(r"antigravity", value, re.I):
-                print(f"warn: {heading}: Antigravity in {name}")
+            if value is not None and re.search(r"\bcodex\s*\(\s*auto\b", value, re.I):
+                print(f"warn: {heading}: Codex (auto) in {name}; name a model and effort")
         for name in ("Model:", "Fallback:"):
             value = field(body, name)
             if value is not None and re.search(r"\bgrok\b", value, re.I):
