@@ -79,7 +79,7 @@ On every load, the engine syncs with the plan:
 ## Adaptive width
 Source: `plans/adaptive-concurrency.md`. Code: `scripts/capacity.ts`.
 
-At each `ae next`, the engine reads the machine, keeps the reading in the journal, and sets a limit for each workload class. The wave, sequential, and overlap rules apply first, as in every profile. The engine runs no daemon and no sampler between calls.
+At each `ae next`, the engine reads the machine, keeps the reading in the journal, and sets a limit for each workload class. The sequential and overlap rules apply first, as in every profile. The engine runs no daemon and no sampler between calls.
 
 ### Workload class
 - A slice is `normal` by default. Add `- Class: heavy` to a slice whose work or Verify runs a heavy job: a Playwright e2e run, `xcodebuild`, or a video encode.
@@ -107,7 +107,8 @@ At each `ae next`, the engine reads the machine, keeps the reading in the journa
 | heavy | The pressure level is normal, the swap window is known and flat, and free memory fits it (see "Memory fit"). When a Verify run of a heavy slice timed out after the last passing heavy Verify, heavy slices run one at a time until a heavy Verify passes. A later ordinary failure does not end this |
 | sequential, integration | The rule of every profile: the slice runs alone |
 
-- The lowest READY slice keeps its place. When it waits for capacity, slices of other waves wait too, with the reason `waits for slice N (W kind), which waits for capacity`.
+- Parallel slices of any wave start beside each other, as in a fixed profile. A parallel slice that waits for capacity does not hold later slices back.
+- A sequential or integration slice keeps its place. When it waits for capacity, later slices wait too, with the reason `waits for slice N (W kind), which waits for capacity`.
 
 ### Swap window
 - Each adaptive `ae next` keeps its reading. The journal holds the newest 16.
