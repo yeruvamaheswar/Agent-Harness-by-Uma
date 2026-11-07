@@ -797,3 +797,27 @@ test('recover --apply demotes a VERIFIED slice that has no live evidence (a plan
   assert.equal(r.journal().slices['1'].state, 'AGENT_FINISHED');
   assert.equal(r.parsed().slices[0].state, 'AGENT_FINISHED');
 });
+
+test('T7: command and manual verify JSON carry the next hint; recover offers cross-wave work', async () => {
+  for (const manual of [false, true]) {
+    const r = repo([
+      { n: 1, wave: '1 parallel', verify: manual ? 'a person reads the page' : '`true`' },
+      { n: 2, wave: '1 parallel' }, { n: 3, deps: 'slice 1', wave: '2 parallel' },
+    ]);
+    await r.init();
+    await r.run('start', r.plan, '2');
+    await r.run('start', r.plan, '1');
+    await r.run('finish', r.plan, '1');
+    await r.review('1');
+    const result = r.cli('verify', r.plan, '1', ...(manual ? ['--manual', '--by', 'Uma', '--note', 'read'] : []));
+    assert.equal(result.status, 0, result.stderr);
+    const out = JSON.parse(result.stdout);
+    assert.equal(out.next, 'run ae next: dependents may be READY');
+    assert.equal(out.state, manual ? 'ACCEPTED' : 'VERIFIED');
+    const recovered = r.cli('recover', r.plan);
+    assert.equal(recovered.status, 0, recovered.stderr);
+    const report = JSON.parse(recovered.stdout);
+    assert.deepEqual(report.next.batch, ['3']);
+    assert.deepEqual(report.next.running, ['2']);
+  }
+});

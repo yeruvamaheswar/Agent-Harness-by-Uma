@@ -1,7 +1,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
-import { existsSync, mkdtempSync, writeFileSync } from "node:fs";
+import { existsSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 
@@ -395,4 +395,151 @@ test("planner lint warns on a blank or repeated required field", () => {
 test("planner lint still runs on pages with the old planner name", () => {
   const page = `---\nkind: plan\ntitle: T\nstatus: active\nupdated: 2026-10-25\nplanner: multi-agent-slice-planner\nmode: standard\n---\n${sliceBody("Slice 1: tracer", "Review:")}`;
   assert.deepEqual(build("legacy.md", page).warns, ["warn: Slice 1: tracer: missing Review:"]);
+});
+
+test("L1 warns once for cross-wave overlap, but not for dependency chains", () => {
+  const page = (deps: string, wave = "3 parallel") => plannerPage("sprint", [
+    sliceBody("Slice 1: tracer", "", { "Files:": "tracer.ts" }),
+    sliceBody("Slice 2: api", "", { "Wave:": "2 parallel", "Files:": "src/**, src/a.ts", "Depends on:": "slice 1" }),
+    sliceBody("Slice 3: bridge", "", { "Wave:": "2 sequential", "Files:": "bridge.ts", "Depends on:": "slice 2" }),
+    sliceBody("Slice 4: ui", "", { "Wave:": wave, "Files:": "src/a.ts, src/a.ts", "Depends on:": deps }),
+  ].join("\n"));
+  const overlap = build("cross-wave.md", page("slice 1"));
+  assert.equal(overlap.r.status, 0);
+  assert.deepEqual(overlap.warns, [
+    "warn: Slice 3: bridge: Depends on: slice 2",
+    "warn: Slice 2: api, Slice 4: ui: overlap src/a.ts",
+  ]);
+  for (const deps of ["slice 2", "slice 3"]) {
+    assert.deepEqual(build("chain.md", page(deps)).warns, ["warn: Slice 3: bridge: Depends on: slice 2"]);
+  }
+  assert.deepEqual(build("cross-sequential.md", page("slice 1", "3 sequential")).warns, [
+    "warn: Slice 3: bridge: Depends on: slice 2",
+  ]);
+});
+
+test("L1 keeps same-wave dependency warnings without overlap on a chain", () => {
+  const b = build("same-chain.md", plannerPage("standard", [
+    sliceBody("Slice 1: tracer", "", { "Files:": "tracer.ts" }),
+    sliceBody("Slice 2: api", "", { "Wave:": "2 parallel", "Depends on:": "slice 1" }),
+    sliceBody("Slice 3: ui", "", { "Wave:": "2 parallel", "Depends on:": "slice 2" }),
+  ].join("\n")));
+  assert.deepEqual(b.warns, ["warn: Slice 3: ui: Depends on: slice 2"]);
+});
+
+test("L2 requires transitive tracer reach in standard, sprint, and deep modes", () => {
+  for (const mode of ["standard", "sprint", "deep"]) {
+    const b = build("tracer-reach.md", plannerPage(mode, [
+      sliceBody("Slice 1: tracer", "", { "Files:": "tracer.ts" }),
+      sliceBody("Slice 2: review", "", { "Wave:": "2 sequential", "Files:": "review.md", "Depends on:": "none" }),
+      sliceBody("Slice 3: api", "", { "Wave:": "3 parallel", "Files:": "api.ts", "Depends on:": "slice 2" }),
+      sliceBody("Slice 4: ui", "", { "Wave:": "4 parallel", "Files:": "ui.ts", "Depends on:": "slice 3" }),
+    ].join("\n")));
+    assert.equal(b.r.status, 0);
+    assert.deepEqual(b.warns, [
+      "warn: Slice 2: review: does not reach tracer slice 1",
+      "warn: Slice 3: api: does not reach tracer slice 1",
+      "warn: Slice 4: ui: does not reach tracer slice 1",
+    ], mode);
+  }
+});
+
+test("L3 requires deep slices to reach the architecture review transitively", () => {
+  const page = (deps: string) => plannerPage("deep", [
+    sliceBody("Slice 1: tracer", "", { "Files:": "tracer.ts" }),
+    sliceBody("Slice 2: review", "", { "Wave:": "2 sequential", "Files:": "review.md", "Depends on:": "slice 1" }),
+    sliceBody("Slice 3: api", "", { "Wave:": "3 parallel", "Files:": "api.ts", "Depends on:": deps }),
+    sliceBody("Slice 4: ui", "", { "Wave:": "4 parallel", "Files:": "ui.ts", "Depends on:": "slice 3" }),
+  ].join("\n"));
+  assert.deepEqual(build("deep-reach.md", page("slice 2")).warns, []);
+  assert.deepEqual(build("deep-bypass.md", page("slice 1")).warns, [
+    "warn: Slice 3: api: does not reach architecture-review slice 2",
+    "warn: Slice 4: ui: does not reach architecture-review slice 2",
+  ]);
+});
+
+test("L4 warns on later-wave dependencies and dependency walks terminate on cycles", () => {
+  const b = build("later-wave.md", plannerPage("sprint", [
+    sliceBody("Slice 1: tracer", "", { "Files:": "tracer.ts" }),
+    sliceBody("Slice 2: api", "", { "Wave:": "2 parallel", "Files:": "api.ts", "Depends on:": "slices 1 and 3" }),
+    sliceBody("Slice 3: ui", "", { "Wave:": "3 parallel", "Files:": "ui.ts", "Depends on:": "slice 2" }),
+    sliceBody("Slice 4: loop", "", { "Wave:": "4 parallel", "Files:": "loop.ts", "Depends on:": "slice 4" }),
+  ].join("\n")));
+  assert.equal(b.r.status, 0);
+  assert.deepEqual(b.warns, [
+    "warn: Slice 2: api: Depends on: slice 3 is in a later wave",
+    "warn: Slice 4: loop: Depends on: slice 4",
+    "warn: Slice 4: loop: does not reach tracer slice 1",
+  ]);
+});
+
+function embeddedMarkdown(file: string) {
+  const html = readFileSync(file, "utf8");
+  const match = html.match(/<script[^>]*id="src"[^>]*>([\s\S]*?)<\/script>/);
+  assert.ok(match, "embedded Markdown exists");
+  return match[1];
+}
+
+test("Ready now lists the plan-only tracer without changing the source or freshness", () => {
+  const source = `${cleanPlanner}\n## Waves\n- Wave 1: tracer\n\n## Usage\n- bounded\n`;
+  const b = build("ready.md", source);
+  assert.equal(b.r.status, 0, b.r.stderr);
+  const md = embeddedMarkdown(b.html);
+  assert.match(md, /### Ready now\n- Slice 1: tracer \(wave 1 sequential\)\n\n## Usage/);
+  assert.equal(readFileSync(b.file, "utf8"), source);
+  const check = spawnSync("bash", [script, "--check", b.file], { encoding: "utf8" });
+  assert.equal(check.status, 0);
+  assert.match(check.stdout, /^fresh/);
+});
+
+test("Ready now follows T1 dependencies across waves while another slice runs", () => {
+  const body = [
+    sliceBody("Slice 1: tracer", "", { "Wave:": "1 parallel", "State:": "VERIFIED", "Evidence:": "check passed" }),
+    sliceBody("Slice 2: busy", "", { "Wave:": "1 parallel", "State:": "IN_PROGRESS" }),
+    sliceBody("Slice 3: settled", "", { "Wave:": "1 parallel", "State:": "VERIFIED", "Evidence:": "check passed" }),
+    sliceBody("Slice 4: next", "", { "Wave:": "2 parallel", "Depends on:": "slices 1 and 3" }),
+    "## Waves\n- Wave labels\n",
+  ].join("\n");
+  const b = build("t1.md", plannerPage("sprint", body));
+  assert.equal(b.r.status, 0, b.r.stderr);
+  assert.equal(embeddedMarkdown(b.html).split("### Ready now\n")[1].trim(), "- Slice 4: next (wave 2 parallel)");
+});
+
+test("Ready now prints none for unsettled or unknown dependencies and ignores fenced slices", () => {
+  const source = plannerPage("sprint", [
+    sliceBody("Slice 1: busy", "", { "State:": "IN_PROGRESS" }),
+    sliceBody("Slice 2: waiting", "", { "Depends on:": "slice 1" }),
+    sliceBody("Slice 3: unknown", "", { "Depends on:": "slice 99" }),
+    sliceBody("Slice 4: no number", "", { "Depends on:": "external approval" }),
+    "~~~markdown\n" + sliceBody("Slice 99: example", "", { "State:": "VERIFIED", "Evidence:": "example" }) + "~~~\n",
+    "```markdown\n" + sliceBody("Slice 5: example") + "```\n",
+    "## Waves\n- labels\n",
+  ].join("\n"));
+  const b = build("none-ready.md", source);
+  assert.equal(b.r.status, 0, b.r.stderr);
+  assert.equal(embeddedMarkdown(b.html).split("### Ready now\n")[1].trim(), "- none");
+});
+
+test("Ready now accepts settled states, READY slices, and the legacy planner name", () => {
+  const source = plannerPage("sprint", [
+    sliceBody("Slice 1: accepted", "", { "State:": "ACCEPTED", "Evidence:": "approved" }),
+    sliceBody("Slice 2: integrated", "", { "State:": "INTEGRATED", "Evidence:": "merged" }),
+    sliceBody("Slice 3: ready", "", { "State:": "READY", "Wave:": "2 parallel", "Depends on:": "slices 1 & 2" }),
+    "## Waves\n- labels\n",
+  ].join("\n")).replace("planner: multi-agent-planning", "planner: multi-agent-slice-planner");
+  const b = build("legacy-ready.md", source);
+  assert.equal(b.r.status, 0, b.r.stderr);
+  assert.equal(embeddedMarkdown(b.html).split("### Ready now\n")[1].trim(), "- Slice 3: ready (wave 2 parallel)");
+});
+
+test("Ready now preserves an existing list and requires a planner and Waves section", () => {
+  for (const source of [
+    `${cleanPlanner}\n## Waves\n### Ready now\n- owner supplied\n`,
+    cleanPlanner,
+    `${head}## Waves\n- ordinary page\n`,
+  ]) {
+    const b = build("unchanged-ready.md", source);
+    assert.equal(b.r.status, 0, b.r.stderr);
+    assert.equal(embeddedMarkdown(b.html), source);
+  }
 });

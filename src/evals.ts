@@ -1233,12 +1233,27 @@ for (const s of slices) byWave.set(s.wave, [...(byWave.get(s.wave) ?? []), s]);
 const first = byWave.get(Math.min(...byWave.keys()));
 if (first.length !== 1 || first[0].kind !== 'sequential') fail('the first wave must hold exactly one sequential tracer slice');
 if (![...byWave.values()].some((group) => group.length >= 2 && group.every((s) => s.kind === 'parallel'))) fail('no wave has two or more parallel slices');
-for (const group of byWave.values()) {
-  for (let i = 0; i < group.length; i++) {
-    for (let j = i + 1; j < group.length; j++) {
-      if (group[i].kind !== 'parallel' && group[j].kind !== 'parallel') continue;
-      for (const a of group[i].files) for (const b of group[j].files) if (overlaps(a, b)) fail('Slice ' + group[i].n + ' and Slice ' + group[j].n + ' share a wave and both own ' + a + ' / ' + b);
-    }
+const dependencies = new Map(slices.map((s) => [s.n, [...s.fields['Depends on'].matchAll(/slices?\\s+(\\d+(?:\\s*(?:,|and|&)\\s*\\d+)*)/gi)].flatMap((m) => m[1].match(/\\d+/g).map(Number))]));
+function reaches(start, target) {
+  const visited = new Set([start]);
+  const pending = [...(dependencies.get(start) ?? [])];
+  while (pending.length) {
+    const n = pending.pop();
+    if (n === target) return true;
+    if (visited.has(n)) continue;
+    visited.add(n);
+    pending.push(...(dependencies.get(n) ?? []));
+  }
+  return false;
+}
+for (let i = 0; i < slices.length; i++) {
+  for (let j = i + 1; j < slices.length; j++) {
+    const a = slices[i];
+    const b = slices[j];
+    const sameWave = a.wave === b.wave;
+    const mayRunAtOnce = (a.kind === 'parallel' && b.kind === 'parallel') || (sameWave && (a.kind === 'parallel' || b.kind === 'parallel'));
+    if (!mayRunAtOnce || reaches(a.n, b.n) || reaches(b.n, a.n)) continue;
+    for (const left of a.files) for (const right of b.files) if (overlaps(left, right)) fail('Slice ' + a.n + ' and Slice ' + b.n + (sameWave ? ' share a wave and both own ' : ' may run at once across waves and both own ') + left + ' / ' + right);
   }
 }
 for (const s of slices) {
@@ -1248,6 +1263,9 @@ for (const s of slices) {
       if (dep && dep.wave === s.wave) fail('Slice ' + s.n + ' depends on Slice ' + n + ' in its own wave ' + s.wave);
     }
   }
+}
+for (const s of slices) {
+  if (s.n !== first[0].n && !reaches(s.n, first[0].n)) fail('Slice ' + s.n + ' does not reach tracer Slice ' + first[0].n + ' through Depends on');
 }
 if (!slices.some((s) => /^(codex|cursor)\\b/i.test(s.fields.Model.trim()))) fail('no slice has a Codex or Cursor builder');
 `,

@@ -90,14 +90,32 @@ if re.search(r"(?m)^planner:[ \t]*[\"'`]?multi-agent-(?:planning|slice-planner)[
     for s in slices:
         if s["num"] is not None and s["wave_n"] is not None:
             waves.setdefault(s["num"], set()).add(s["wave_n"])
+    dependencies = {}
+    for s in slices:
+        if s["num"] is not None:
+            dependencies.setdefault(s["num"], set()).update(s["deps"])
+    def reaches(s, target):
+        pending, seen = list(s["deps"]), set()
+        while pending:
+            dep = pending.pop()
+            if dep == target: return True
+            if dep in seen: continue
+            seen.add(dep)
+            pending.extend(dependencies.get(dep, ()))
+        return False
     for s in slices:
         if s["wave_n"] is None: continue
         for d in s["deps"]:
             if s["wave_n"] in waves.get(d, ()): print(f"warn: {s['heading']}: Depends on: slice {d}")
+            if any(n > s["wave_n"] for n in waves.get(d, ())):
+                print(f"warn: {s['heading']}: Depends on: slice {d} is in a later wave")
     for i, a in enumerate(slices):
         for b in slices[i + 1:]:
-            if a["wave_n"] is None or a["wave_n"] != b["wave_n"]: continue
-            if "parallel" not in (a["wave_k"], b["wave_k"]): continue
+            if a["wave_n"] is None or b["wave_n"] is None: continue
+            same_wave = a["wave_n"] == b["wave_n"]
+            both_parallel = a["wave_k"] == b["wave_k"] == "parallel"
+            if not (both_parallel or (same_wave and "parallel" in (a["wave_k"], b["wave_k"]))): continue
+            if reaches(a, b["num"]) or reaches(b, a["num"]): continue
             seen = set()
             for fa in a["files"]:
                 for fb in b["files"]:
@@ -121,9 +139,20 @@ if re.search(r"(?m)^planner:[ \t]*[\"'`]?multi-agent-(?:planning|slice-planner)[
                 if s["wave_k"] == "parallel": print(f"warn: mode quick: {s['heading']}: parallel wave")
                 elif s["wave_k"] and (s["wave_n"], s["wave_k"]) != (1, "sequential"): print(f"warn: mode quick: {s['heading']}: expected Wave: 1 sequential")
             if len(slices) != 1: print(f"warn: mode quick: {len(slices)} slices, expected 1")
-        elif mode == "deep":
+        if mode in ("standard", "sprint", "deep"):
+            tracers = [s for s in slices if s["wave_n"] == 1]
+            if len(tracers) == 1 and tracers[0]["num"] is not None:
+                tracer = tracers[0]
+                for s in slices:
+                    if s is not tracer and not reaches(s, tracer["num"]):
+                        print(f"warn: {s['heading']}: does not reach tracer slice {tracer['num']}")
+        if mode == "deep":
             second = [s for s in slices if s["wave_n"] == 2]
             if len(second) != 1 or second[0]["wave_k"] != "sequential": print("warn: mode deep: wave 2 must hold only the architecture-review slice, sequential")
+            if len(second) == 1 and second[0]["num"] is not None:
+                for s in slices:
+                    if s["wave_n"] is not None and s["wave_n"] >= 3 and not reaches(s, second[0]["num"]):
+                        print(f"warn: {s['heading']}: does not reach architecture-review slice {second[0]['num']}")
     else: print("warn: missing mode:")
 if path.endswith(".contract.md"):
     def section(name):
@@ -190,9 +219,36 @@ rel="${dir#"$root"}"; rel="${rel#/}"
 path="${rel:+$rel/}$(basename "$src")"
 
 python3 - "$src" "$out" "$tpl" "$hash" "$(basename "$root")" "$path" <<'PY'
-import sys, datetime, html
+import sys, datetime, html, re
 src, out, tpl, h, repo, path = sys.argv[1:]
 md = open(src, encoding="utf-8").read().replace("</script", "<\\/script")
+# Mask fenced examples without changing offsets into the embedded Markdown.
+text = re.sub(r"^ {0,3}(`{3,}|~{3,}).*?^ {0,3}\1[`~]*[ \t]*$",
+              lambda m: re.sub(r"[^\n]", " ", m.group()), md, flags=re.S | re.M)
+fm = re.match(r"^---\n(.*?)\n---", text, re.S)
+if fm and re.search(r"(?m)^planner:[ \t]*[\"'`]?multi-agent-(?:planning|slice-planner)[\"'`]?[ \t]*$", fm.group(1)):
+    waves = re.search(r"^## Waves[ \t]*\n.*?(?=^#{1,2} |\Z)", text, re.S | re.M)
+    if waves and not re.search(r"^### Ready now[ \t]*$", text, re.M):
+        def field(body, name):
+            found = re.search(r"^- " + name + r":[ \t]*(.*)$", body, re.M)
+            return found.group(1).strip() if found else ""
+        slices = []
+        for m in re.finditer(r"^### (Slice[^\n]*)\n(.*?)(?=^#{1,3} |\Z)", text, re.S | re.M):
+            heading, body = m.group(1).strip(), m.group(2)
+            num = re.match(r"Slice\s+(\d+)\b", heading)
+            deps, dep_text = [], field(body, "Depends on")
+            for group in re.findall(r"(?i)\bslices?\s+(\d+(?:\s*(?:,|and|&)\s*\d+)*)", dep_text):
+                deps.extend(int(d) for d in re.findall(r"\d+", group))
+            # Text that names no slice (not "none") is an unknown dependency: never settled.
+            if not deps and dep_text.lower() not in ("", "none"): deps = [None]
+            slices.append((int(num.group(1)) if num else None, heading,
+                           field(body, "State"), field(body, "Wave"), deps))
+        settled = {num for num, _, state, _, _ in slices
+                   if num is not None and state in ("VERIFIED", "ACCEPTED", "INTEGRATED")}
+        ready = [f"- {heading} (wave {wave})" for _, heading, state, wave, deps in slices
+                 if state in ("PLANNED", "READY") and all(d in settled for d in deps)]
+        addition = "\n\n### Ready now\n" + "\n".join(ready or ["- none"]) + "\n\n"
+        md = md[:waves.end()].rstrip() + addition + md[waves.end():]
 page = open(tpl, encoding="utf-8").read()
 built = datetime.datetime.now().strftime("%Y-%m-%d %H:%M")
 # Fill {{MD}} last, so placeholder text inside the .md stays as written.

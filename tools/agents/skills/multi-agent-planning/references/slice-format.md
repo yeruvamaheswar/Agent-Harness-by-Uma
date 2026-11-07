@@ -87,19 +87,23 @@ One `### Slice N: name` heading per slice. One field per line, in this order.
 - `VERIFIED`, `ACCEPTED`, and `INTEGRATED` need an `Evidence:` pointer.
 
 ## Waves
-- Wave 1 is the tracer bullet: one `sequential` slice through every layer.
-- Slices in one `parallel` wave own disjoint files. See "Overlap".
-- A slice never depends on a slice in its own wave.
+- A wave is a display label. It does not gate a start. A slice is READY when every slice in its `Depends on:` is `VERIFIED`, `ACCEPTED`, or `INTEGRATED`. The engine can offer a READY `parallel` slice while an earlier wave still runs: when a slot is free, no `sequential` or `integration` slice runs or is in the batch, and its files do not overlap running or batched work.
+- Wave 1 is the tracer bullet: one `sequential` slice through every layer. Every other slice reaches it through `Depends on:`.
+- Slices that may run at once own disjoint files. See "Overlap".
+- A slice never depends on a slice in its own wave or in a later wave. The lint warns.
+- A `sequential` or `integration` slice runs alone. Width and usage limits stay.
+- Run browser-heavy Verify steps one at a time. Check machine load before each new start. Width rises only after clean results.
+- The critical path is the longest `Depends on:` chain.
 - An `integration` slice combines reviewed slices. It has one owner, who is not a builder of those slices.
-- A later wave may own a file that an earlier wave owned. Its worktree then needs a commit that contains the earlier work. See "Worktrees" in `SKILL.md`.
+- A later-wave slice may own a file that an earlier slice owned when it depends on that slice, directly or through other slices. Its worktree then needs a commit that contains the earlier work. See "Worktrees" in `SKILL.md`.
 - In `quick` mode: exactly one slice, `Wave: 1 sequential`, and no `parallel` wave. The lint warns on a second slice, on a `parallel` wave, and on any other wave value.
-- In `deep` mode: wave 2 holds only the architecture-review slice, `sequential`, which reviews the tracer and the shared interfaces. Build slices start in wave 3. The lint warns otherwise.
+- In `deep` mode: wave 2 holds only the architecture-review slice, `sequential`, which reviews the tracer and the shared interfaces. Build slices start in wave 3 and reach the review slice through `Depends on:`. The lint warns otherwise.
 - When the user cuts a slice, delete it, and remove it from each dependent slice's `Depends on:`, and rewrite each dependent slice's `Goal:`, `Accept:`, `Verify:`, the critical path, and the evals to the work that remains.
 
 ### Overlap
-- The owned paths of the slices in one `parallel` wave are disjoint.
+- The owned paths of any two slices that may run at once are disjoint. "May run at once": neither depends on the other, directly or through other slices, and both are `parallel`, or they share a wave and one is `parallel`.
 - A folder that ends in `/` owns every path under it.
-- So `server/` overlaps `server/routes.js`, and two slices in one parallel wave cannot own them.
+- So `server/` overlaps `server/routes.js`, and two such slices cannot own them. Slices on one dependency chain may share files.
 
 ## Worker tracking
 Use this table on the plan page when execution is authorized. Do not create worktrees during planning.

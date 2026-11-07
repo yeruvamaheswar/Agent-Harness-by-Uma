@@ -41,14 +41,14 @@ Infer the mode from the request. The default is `standard`. Once this skill is a
 | `quick` | A small single fix | One slice, `Wave: 1 sequential`. Targeted test and review. No `parallel` wave |
 | `standard` | A feature or change with 2 or more slices | Tracer, then parallel waves where files separate, then integration |
 | `sprint` | A hackathon or a fixed short deadline | Smallest demoable product first. Thin end-to-end slice. Mock only what is safe, and label each mock. 2 to 3 workers when justified. Timed integration checkpoints. Demo before polish |
-| `deep` | Architecture, security, migrations, cross-platform work, or unclear contracts | The `standard` shape, plus one `sequential` architecture-review slice that reviews the tracer and the shared interfaces. Wave 2 holds only that slice; build slices start in wave 3. A session that did not write the design reviews it. Later waves start only after it is `VERIFIED`. Higher effort. Stronger tests and security review. Grok may be an extra critic, never the builder |
+| `deep` | Architecture, security, migrations, cross-platform work, or unclear contracts | The `standard` shape, plus one `sequential` architecture-review slice that reviews the tracer and the shared interfaces. Wave 2 holds only that slice; build slices start in wave 3. A session that did not write the design reviews it. Every build slice reaches it through `Depends on:`, directly or through another slice. Higher effort. Stronger tests and security review. Grok may be an extra critic, never the builder |
 
 ## Workflow
 Understand → Design → Slice → Implement → Test → Review → Integrate → Verify. A plan-only run does the first three and routes the rest.
 1. Understand. Read the repo instructions, code, tests, and `git status`. Separate facts, assumptions, and unknowns. Write each unknown as `unknown`.
 2. Design. Pick the simplest design that reuses existing patterns. Define each shared interface (route, schema, type) before any parallel wave.
 3. Slice.
-   - Wave 1 is the tracer bullet: one complete happy path through every layer. Later waves start only after wave 1 is `VERIFIED` (or `ACCEPTED` after a person's sign-off). On a plan-only turn, the tracer stays `PLANNED` and is not run.
+   - Wave 1 is the tracer bullet: one complete happy path through every layer. Every other slice reaches it through `Depends on:`. It must be `VERIFIED` (or `ACCEPTED` after a person's sign-off) first. On a plan-only turn, the tracer stays `PLANNED` and is not run.
    - Aim for about one hour of focused agent work per slice. This is a heuristic, not a rule.
    - Give each slice one observable result. Do not hide unbuilt work behind a mock. Name each mock in `Accept:` and in Risks.
    - Fill every required field in `references/slice-format.md`. Make each `Verify:` check all of its `Accept:`.
@@ -57,9 +57,11 @@ Understand → Design → Slice → Implement → Test → Review → Integrate 
 ## Parallel rules
 - Load `subagent-budget` before any launch. The lead model decides how many children run at once, and `subagent-budget` sets the model and effort for each.
 - Define shared interfaces before a parallel wave.
-- Slices in one parallel wave own disjoint files, as "Overlap" in `references/slice-format.md` defines.
+- A slice is READY when every slice in its `Depends on:` is `VERIFIED`, `ACCEPTED`, or `INTEGRATED`. Waves are labels, not gates. A slice can start once it is READY, not when its wave ends.
+- Two slices that may run at once own disjoint files, as "Overlap" in `references/slice-format.md` defines. A `sequential` or `integration` slice runs alone. Width and usage limits stay.
+- Run browser-heavy Verify steps one at a time. Check machine load before each new start. Width rises only after clean results.
 - Prefer 2 to 3 workers when there is enough independent work. Never start an agent only to fill a slot.
-- Keep a dependency graph. Name the critical path.
+- Keep a dependency graph. Name the critical path: the longest `Depends on:` chain.
 - Give every worker the full handoff note from `references/slice-format.md`. A worker does not inherit the chat.
 
 ## Capability discovery
