@@ -427,6 +427,21 @@ test('set-profile runs as a CLI command, and the usage text lists it', () => {
   assert.match(cli().stderr, /commands: .*\bset-profile\b/);
 });
 
+// ---- slice 2: the engine reference and the skill README ----
+test('engine.md documents set-profile and the adaptive profile; the README names them', () => {
+  const skill = join(SCRIPTS, '..'), engine = readFileSync(join(skill, 'references/engine.md'), 'utf8'), readme = readFileSync(join(skill, 'README.md'), 'utf8');
+  const rows = engine.split('\n').filter(l => l.startsWith('| `'));
+  assert.ok(rows.some(l => l.startsWith('| `set-profile PLAN` | `--profile NAME` (required), `--heavy-rss-mb N`')), 'a set-profile row in the commands table');
+  assert.match(rows.find(l => l.startsWith('| `init PLAN`'))!, /--profile economy\\\|balanced\\\|sprint\\\|adaptive`, `--heavy-rss-mb N` \(adaptive only\)/);
+  assert.match(engine, /^\| adaptive \| No fixed number/m, 'an adaptive row in Profiles');
+  const section = engine.slice(engine.indexOf('## Adaptive width'), engine.indexOf('## Attempt budget'));
+  assert.ok(section.length > 1000, 'an Adaptive width section before the attempt budget');
+  for (const want of ['kern.memorystatus_vm_pressure_level', 'kern.memorystatus_level', '"Swapouts"', '60 s', '2048 MB', '--heavy-rss-mb N', 'balanced width (2)', 'one heavy slice at a time', 'A review rejection does not count', 'os.freemem()', '### Limits'])
+    assert.ok(section.includes(want), `the Adaptive width section names ${want}`);
+  assert.match(readme, /with the adaptive profile/);
+  assert.match(readme, /`ae set-profile PLAN --profile NAME`/);
+});
+
 // ---- recover ----
 test('recover reads the probe for its next field on an adaptive journal and keeps no sample', async () => {
   const r = repo([...heavy(1), { n: 2 }]);

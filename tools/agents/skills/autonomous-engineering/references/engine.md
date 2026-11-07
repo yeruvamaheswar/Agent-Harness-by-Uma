@@ -13,9 +13,10 @@ node --experimental-strip-types <this skill folder>/scripts/ae.ts <command> PLAN
 ## Commands
 | Command | Flags | Needs state | Result |
 |---|---|---|---|
-| `init PLAN` | `--profile economy\|balanced\|sprint`, `--allow deps,branches,worktrees,migrations,ci` | no journal yet | Creates the journal. Imports plan states (see below). Refuses when a journal exists |
+| `init PLAN` | `--profile economy\|balanced\|sprint\|adaptive`, `--heavy-rss-mb N` (adaptive only), `--allow deps,branches,worktrees,migrations,ci` | no journal yet | Creates the journal. Imports plan states (see below). Refuses when a journal exists |
 | `status PLAN` | | any | `counts` per state, `done`, `profile`, `authority`, and one row per slice with failures, blocker, last move, evidence |
-| `next PLAN` | | any | Moves PLANNED slices with settled dependencies to READY. The batch crosses waves: lowest wave, then id. A slice is deferred with a reason: `no free slot`, `profile width N reached`, `a sequential or integration slice is running`, `a sequential or integration slice is in the batch`, `<kind> slice runs alone`, or `files overlap slice N`. Run it after every verify, finish, fail, or block. Returns `batch`, `waiting`, `deferred`, `slots`, `running`, `needsReview`, `needsVerify`, `done` |
+| `next PLAN` | | any | Moves PLANNED slices with settled dependencies to READY. The batch crosses waves: lowest wave, then id. A slice is deferred with a reason: `no free slot`, `profile width N reached`, `a sequential or integration slice is running`, `a sequential or integration slice is in the batch`, `<kind> slice runs alone`, or `files overlap slice N`. Run it after every verify, finish, fail, or block. Returns `batch`, `waiting`, `deferred`, `slots`, `running`, `needsReview`, `needsVerify`, `done`. With the adaptive profile, it reads the capacity probe, keeps the reading in the journal, and adds `capacity`. Then `slots` is `null` unless the signals are not measured (see "Adaptive width") |
+| `set-profile PLAN` | `--profile NAME` (required), `--heavy-rss-mb N` (adaptive only), `--reason TEXT` | any | Changes the profile of the journal under the journal lock. The save keeps the old journal as `.bak`. Each change appends a `profileChanges` row: `{at, from, to, reason?, heavyRssMB?}`. The same profile and estimate again gives `changed: false` and writes nothing. With adaptive, the result has `heavyRssMB` and `heavyRssFrom` (`default` or `set`). The lead runs it; a worker never does |
 | `start PLAN N` | `--provider`, `--model`, `--effort`, `--task-id` | READY | IN_PROGRESS. Opens a work attempt. Refuses when a dependency is not settled |
 | `finish PLAN N` | `--summary` | IN_PROGRESS | AGENT_FINISHED. A claim, not proof |
 | `block PLAN N` | `--reason` (required) | IN_PROGRESS | BLOCKED, with the reason |
@@ -32,7 +33,7 @@ node --experimental-strip-types <this skill folder>/scripts/ae.ts <command> PLAN
 | `checkpoint PLAN N` | `--done`, `--next`, `--note`, `--by` | IN_PROGRESS | Records a checkpoint. A PREPARED handoff becomes CHECKPOINTED |
 | `prepare PLAN N` | `--to LABEL`, `--lead "Claude (...)"`, `--reason` (all required) | IN_PROGRESS | Opens a handoff in phase PREPARED. Refuses a lead that is not Claude, Grok, and the current worker (a fresh session of it is allowed). The same `--to` again is a no-op; another `--to` replaces the choice |
 | `transfer PLAN N` | `--lead` (required), `--task-id`, `--provider`, `--model`, `--effort` | IN_PROGRESS, handoff CHECKPOINTED or TRANSFERRED | From CHECKPOINTED: ends the old work attempt as `handed-off`, opens one for the replacement, phase TRANSFERRED. Run it before you delegate. Refuses when slice files changed after the checkpoint. From TRANSFERRED: `--task-id` attaches the replacement's task to that attempt. The same task id again is a no-op; another task id is refused |
-| `recover PLAN` | `--apply` | any | Reports `lock`, `planDrift` (hand edits), `handoffs` (each unfinished handoff with its `next` step), `staleEvidence`, `inProgress` with `needsCheck`, `needsReview`, `needsVerify`, `blockedFiles`, `git` (branch, head, unowned changes), `filesProblems`, `next`. Files paths are checked first: a slice whose Files fail is listed in `filesProblems`, and none of its files is read or fingerprinted. A VERIFIED slice among them is listed as stale (`recorded: "unchecked"`). A VERIFIED slice with no live evidence is listed as stale with `recorded: null`. A `BLOCKED*.md` that is a symlink or not a regular file is listed with `issue: null` and a note, and is never read. Without `--apply` it takes no lock and writes nothing. `--apply` only demotes stale VERIFIED and ACCEPTED slices to AGENT_FINISHED (ACCEPTED is checked the same way as VERIFIED), every one listed, also those with `recorded: null` (reason `evidence stale: no live evidence`). Dependents are not demoted |
+| `recover PLAN` | `--apply` | any | Reports `lock`, `planDrift` (hand edits), `handoffs` (each unfinished handoff with its `next` step), `staleEvidence`, `inProgress` with `needsCheck`, `needsReview`, `needsVerify`, `blockedFiles`, `git` (branch, head, unowned changes), `filesProblems`, `next`. With the adaptive profile, `next` has `capacity` from a fresh reading. `recover` keeps no reading, also with `--apply`. Files paths are checked first: a slice whose Files fail is listed in `filesProblems`, and none of its files is read or fingerprinted. A VERIFIED slice among them is listed as stale (`recorded: "unchecked"`). A VERIFIED slice with no live evidence is listed as stale with `recorded: null`. A `BLOCKED*.md` that is a symlink or not a regular file is listed with `issue: null` and a note, and is never read. Without `--apply` it takes no lock and writes nothing. `--apply` only demotes stale VERIFIED and ACCEPTED slices to AGENT_FINISHED (ACCEPTED is checked the same way as VERIFIED), every one listed, also those with `recorded: null` (reason `evidence stale: no live evidence`). Dependents are not demoted |
 
 - A command Verify (a backticked span in `Verify:`) refuses `--manual`. A manual Verify step needs `--manual`.
 - `verify` runs `bash -o pipefail -c` in the Git top level of the plan file. So `npm test | tail` fails when `npm test` fails. Work in another worktree is not seen until it is in that checkout.
@@ -70,8 +71,87 @@ On every load, the engine syncs with the plan:
 | economy | 1 | quick |
 | balanced | 2 | standard, deep |
 | sprint | 4 | sprint |
+| adaptive | No fixed number: set at each `ae next` from measured signals, by workload class | none. Name it with `--profile adaptive` |
 
-Profiles change width only. The budget and the guard are the same in every profile.
+- Profiles change width only. The budget, the guard, and verify are the same in every profile.
+- `init` sets the profile. `ae set-profile` changes it later, for example from balanced to adaptive in a run that already started.
+
+## Adaptive width
+Source: `plans/adaptive-concurrency.md`. Code: `scripts/capacity.ts`.
+
+At each `ae next`, the engine reads the machine, keeps the reading in the journal, and sets a limit for each workload class. The wave, sequential, and overlap rules apply first, as in every profile. The engine runs no daemon and no sampler between calls.
+
+### Workload class
+- A slice is `normal` by default. Add `- Class: heavy` to a slice whose work or Verify runs a heavy job: a Playwright e2e run, `xcodebuild`, or a video encode.
+- `Class:` takes `heavy` or `normal`, in any case. Any other value is a plan error.
+- The class is not part of the definition digest. A class change never resets a slice, and the new field changed no existing digest.
+- The fixed profiles ignore the class.
+- `Class:` is an engine field. The planner's `slice-format.md` does not list it yet.
+
+### Signals
+| Signal | Source on macOS | Use |
+|---|---|---|
+| Pressure level | `sysctl -n kern.memorystatus_vm_pressure_level`: 1 normal, 2 warn, 4 critical | Gates normal and heavy starts |
+| Swapouts | `vm_stat` "Swapouts": pages swapped out since boot | The swap window gates heavy starts |
+| Free memory | `sysctl -n kern.memorystatus_level`: the percent of total memory that `memory_pressure` calls free | The memory fit of heavy starts |
+| Load average | `os.loadavg()` and the CPU count | Shown, and quoted in heavy reasons. Never decides alone |
+
+- The probe runs `/usr/sbin/sysctl` and `/usr/bin/vm_stat` by absolute path, with a 2 s timeout. A failed read gives `unknown` or `null`. The probe never throws.
+- The engine never uses `os.freemem()`. On macOS it counts only unused pages: on one machine it gave 0.46% while `memory_pressure` gave 47% free.
+- Load never defers or allows a start alone. On macOS it also counts threads that wait on I/O, so it swings without a memory problem.
+
+### Rules
+| Class | A new slice starts when |
+|---|---|
+| normal | The pressure level is normal. There is no numeric limit. At warn: one slice, and only when no slice of the plan runs, so a busy machine cannot stall the run. At critical: none |
+| heavy | The pressure level is normal, the swap window is known and flat, and free memory fits it (see "Memory fit"). When the newest Verify run of a heavy slice timed out, heavy slices run one at a time until a heavy Verify passes |
+| sequential, integration | The rule of every profile: the slice runs alone |
+
+- The lowest READY slice keeps its place. When it waits for capacity, slices of other waves wait too, with the reason `waits for slice N (W kind), which waits for capacity`.
+
+### Swap window
+- Each adaptive `ae next` keeps its reading. The journal holds the newest 16.
+- The base is the newest stored reading that is 60 s old or more. When Swapouts grew since the base, heavy slices wait.
+- With no such reading, as at the first `ae next`, the trend is unknown and heavy slices wait. Run `ae next` again 60 s later or more.
+- After a long gap between calls, the window is long and can hold an old burst. A long window can only defer, never allow. The reason then asks for a fresh window.
+
+### Memory fit
+- The RSS estimate is the memory of one heavy job. The default is 2048 MB: a middle estimate for one Playwright run with 1 worker, or one small `xcodebuild test`.
+- Each heavy start in one batch needs free memory, minus the estimate for each heavy start before it in the batch, of at least twice the estimate. With 8192 MB free and the default, 3 heavy slices fit.
+- Memory width is the running heavy slices plus the starts that fit. A running heavy slice is in the reading already.
+- Calibrate it from one measured run. Measure the peak RSS, for example with `/usr/bin/time -l` ("maximum resident set size"). Then run `ae set-profile PLAN --profile adaptive --heavy-rss-mb N`.
+
+### Back-off
+- Triggers count after the last passing Verify of a heavy slice:
+  - A Verify that timed out, of any slice.
+  - A pressure episode: warn or critical at an `ae next`, after a reading that was neither.
+  - Two failed slices in a row: a work or verify failure of one slice, then of another slice, with no passing Verify between them. A review rejection does not count.
+- Each trigger lowers the heavy width by one. While memory fits one heavy slice, the width is never below 1.
+- A passing Verify of a heavy slice clears every trigger.
+
+### No measured signals
+- When the platform is not macOS, or the pressure level or Swapouts cannot be read, the signals are not measured.
+- Then adaptive uses the balanced width (2) for all slices, and one heavy slice at a time. A known warn or critical level still applies.
+- The engine reads no Linux signals. Adaptive was not tested on Linux.
+
+### Output
+- `capacity.measured` and `capacity.signals`: platform, pressure, `swap` (`state` flat, grew, unknown, or unavailable, with `pages` and `windowS`), `freeMB`, `totalMB`, `load`, `cpus`.
+- `capacity.normal`, `capacity.heavy`, and `capacity.total`: `starts` (how many may start now; `null` is no numeric limit) and `reason` (why no more may start). `total` has a limit only when the signals are not measured.
+- `capacity.heavy` also has `running`, `width` (the heavy slices that may run at once when the gates are open), `rssMB`, `rssFrom` (`default` or `set`), `backoff` (`steps`, `since`, the newest `triggers`), and `serial` (the timeout rule, or `null`).
+- Each deferred slice has the reason of its limit, such as `heavy: memory pressure warn (load 4.2 on 10 CPUs)` or `normal: memory pressure warn; 2 running`.
+- A heavy slice shows `class: "heavy"` in `batch` and in `status`.
+
+### Journal records
+- `capacity`: `{samples, pressureEpisodes, heavyRssMB?}`. Only `ae next` writes it, under the journal lock.
+- `profileChanges`: one row per `set-profile` that changed something.
+- Two coordinators of one plan share these records through the journal.
+
+### Limits
+- A heavy job that has not reached its peak is not in the reading yet. The 2x margin covers part of that. The next `ae next` sees the pressure and swap signals, and back-off follows.
+- Heavy slices of another plan are not counted. The memory signals are machine-wide, so they still see that load.
+- The engine sees only the Verify runs that it executes. A timeout inside a worker's own run is not a trigger.
+- One RSS estimate applies to every heavy slice of the plan.
+- An engine older than this profile fails on `ae next` for an adaptive journal. Reinstall the skill before `init --profile adaptive`.
 
 ## Attempt budget and no-progress rule
 The ladder is the planner's rule. `ae dispatch` picks the target for each step.
@@ -218,6 +298,8 @@ ae transfer plans/p.md 3 --lead "Claude (opus/high)" --task-id <cursor task id>
 |---|---|
 | State transitions, journal, backup, lock, plan line rewrite | Engine (real) |
 | Batch selection, dependency and file-overlap checks | Engine (real) |
+| Capacity probe, adaptive width, and back-off | Engine (real), from the signals that the probe read |
+| Choosing the profile and calibrating the RSS estimate | Instruction: the lead does it with `ae set-profile` |
 | Running Verify and recording evidence | Engine (real) |
 | Fix budget, no-progress rule, escalation, target resolution | Engine (real) |
 | Usage risk, candidate ranking, checkpoint, handoff phases, the transfer fingerprint check | Engine (real), from the snapshot the lead wrote |
