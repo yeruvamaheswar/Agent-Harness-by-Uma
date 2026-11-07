@@ -104,7 +104,7 @@ At each `ae next`, the engine reads the machine, keeps the reading in the journa
 | Class | A new slice starts when |
 |---|---|
 | normal | The pressure level is normal. There is no numeric limit. At warn: one slice, and only when no slice of the plan runs, so a busy machine cannot stall the run. At critical: none |
-| heavy | The pressure level is normal, the swap window is known and flat, and free memory fits it (see "Memory fit"). When the newest Verify run of a heavy slice timed out, heavy slices run one at a time until a heavy Verify passes |
+| heavy | The pressure level is normal, the swap window is known and flat, and free memory fits it (see "Memory fit"). When a Verify run of a heavy slice timed out after the last passing heavy Verify, heavy slices run one at a time until a heavy Verify passes. A later ordinary failure does not end this |
 | sequential, integration | The rule of every profile: the slice runs alone |
 
 - The lowest READY slice keeps its place. When it waits for capacity, slices of other waves wait too, with the reason `waits for slice N (W kind), which waits for capacity`.

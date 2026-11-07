@@ -25,6 +25,7 @@ export const SWAP_WINDOW_S = 60;
 export const DEFAULT_HEAVY_RSS_MB = 2048;
 export const MAX_HEAVY_RSS_MB = 1_048_576;
 export const MAX_SAMPLES = 16;
+export const SAMPLE_SPACING_MS = (2 * SWAP_WINDOW_S * 1000) / MAX_SAMPLES; // 7.5 s
 export const MAX_EPISODES = 16;
 // Without measured signals, adaptive uses the balanced width for all slices, and one heavy slice at a time.
 export const FALLBACK_WIDTH = PROFILES.balanced.maxParallel;
@@ -59,7 +60,7 @@ export function probeMachine(o: { platform?: string; exec?: Exec; load?: () => n
 // ---- state kept in the journal ----
 export type CapacitySample = { at: string; swapouts: number | null; pressure: PressureLevel };
 export type CapacityState = {
-  samples: CapacitySample[]; // the newest MAX_SAMPLES readings of `ae next`
+  samples: CapacitySample[]; // at most MAX_SAMPLES readings of `ae next`; see keepSample
   pressureEpisodes: { at: string; level: 'warn' | 'critical' }[]; // a warn or critical reading after one that was not
   heavyRssMB?: number; // set by `ae set-profile --heavy-rss-mb`; else DEFAULT_HEAVY_RSS_MB
 };
@@ -85,6 +86,13 @@ const bad = (p: PressureLevel | undefined) => p === 'warn' || p === 'critical';
 const time = (iso: string | undefined) => (iso ? Date.parse(iso) : NaN);
 const iso = (t: number) => new Date(t).toISOString();
 export const timedOut = (a: Attempt) => a.kind === 'verify' && a.outcome === 'failed' && (a.reason ?? '').startsWith('verify failed (timeout)');
+
+// The newest reading is always kept: pressure episodes compare against it. Older kept readings are at least
+// SAMPLE_SPACING_MS apart, so MAX_SAMPLES of them span 105 s or more, and frequent calls cannot push out the swap base.
+export function keepSample(samples: CapacitySample[], sample: CapacitySample): CapacitySample[] {
+  const close = samples.length >= 2 && time(samples.at(-1)!.at) - time(samples.at(-2)!.at) < SAMPLE_SPACING_MS;
+  return [...(close ? samples.slice(0, -1) : samples), sample].slice(-MAX_SAMPLES);
+}
 
 // The newest stored sample that is at least SWAP_WINDOW_S old is the base. A longer window can only show more growth.
 export function swapTrend(samples: CapacitySample[], current: number | null, now: Date): SwapTrend {
@@ -113,7 +121,7 @@ export function assessCapacity(journal: Journal, plan: Plan, reading: ProbeReadi
   const running = plan.slices.filter(s => journal.slices[s.id]?.state === 'IN_PROGRESS');
   const runningHeavy = running.filter(s => heavyIds.has(s.id)).length;
   const all = results(journal), heavyRuns = all.filter(r => r.verify && heavyIds.has(r.id));
-  const lastClean = heavyRuns.filter(r => r.ok).at(-1)?.t ?? null, lastHeavy = heavyRuns.at(-1);
+  const lastClean = heavyRuns.filter(r => r.ok).at(-1)?.t ?? null;
   const after = (t: number) => lastClean === null || t > lastClean;
 
   // A pressure episode: warn or critical after a reading that was neither. Episodes before the last clean heavy run are dropped.
@@ -153,7 +161,9 @@ export function assessCapacity(journal: Journal, plan: Plan, reading: ProbeReadi
     : null;
   const fit = measured && freeMB !== null ? Math.max(0, Math.floor(freeMB / rssMB) - 1) : null;
   const memoryWidth = fit === null ? 1 : runningHeavy + fit, steps = triggers.length;
-  const serial = lastHeavy && !lastHeavy.ok && lastHeavy.timeout ? `heavy: the last heavy run (slice ${lastHeavy.id}) timed out; one heavy slice at a time until a heavy Verify passes` : null;
+  // Any heavy timeout after the last passing heavy Verify keeps heavy slices serial. A later ordinary failure does not clear it.
+  const lastTimeout = heavyRuns.filter(r => r.timeout && after(r.t)).at(-1);
+  const serial = lastTimeout ? `heavy: a Verify run of heavy slice ${lastTimeout.id} timed out; one heavy slice at a time until a heavy Verify passes` : null;
   let width = Math.max(Math.min(1, memoryWidth), memoryWidth - steps);
   if (serial) width = Math.min(width, 1);
   const shown = triggers.slice(-3).map(t => t.text).join('; ');
@@ -171,6 +181,6 @@ export function assessCapacity(journal: Journal, plan: Plan, reading: ProbeReadi
       backoff: { steps, since: lastClean === null ? null : iso(lastClean), triggers: triggers.slice(-5) }, serial,
     },
   };
-  const state: CapacityState = { ...prev, samples: [...prev.samples, { at, swapouts: reading.swapouts, pressure: p }].slice(-MAX_SAMPLES), pressureEpisodes };
+  const state: CapacityState = { ...prev, samples: keepSample(prev.samples, { at, swapouts: reading.swapouts, pressure: p }), pressureEpisodes };
   return { decision, state };
 }

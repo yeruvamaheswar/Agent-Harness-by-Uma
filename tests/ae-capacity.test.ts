@@ -9,7 +9,7 @@ import { main } from '../tools/agents/skills/autonomous-engineering/scripts/ae.t
 import { journalPath, PROFILES } from '../tools/agents/skills/autonomous-engineering/scripts/journal.ts';
 import type { Journal } from '../tools/agents/skills/autonomous-engineering/scripts/journal.ts';
 import { definitionDigest, parsePlan } from '../tools/agents/skills/autonomous-engineering/scripts/plan.ts';
-import { parseSwapouts, probeMachine, swapTrend } from '../tools/agents/skills/autonomous-engineering/scripts/capacity.ts';
+import { MAX_SAMPLES, parseSwapouts, probeMachine, SWAP_WINDOW_S, swapTrend } from '../tools/agents/skills/autonomous-engineering/scripts/capacity.ts';
 import type { ProbeReading } from '../tools/agents/skills/autonomous-engineering/scripts/capacity.ts';
 
 // plans/adaptive-concurrency.md, EVAL-1 to EVAL-11. Every test uses its own temp repo and an injected probe:
@@ -258,6 +258,17 @@ test('EVAL-4: a heavy slice waits for a known swap window, flat swapouts, normal
   assert.deepEqual((await r.next()).ids, ['1', '2'], 'a high load alone defers nothing');
 });
 
+test('EVAL-4: frequent ae next calls keep the 60 s swap baseline, in bounded memory', async () => {
+  const r = repo([...heavy(1), { n: 2 }]);
+  await r.run('init', r.plan, '--profile', 'adaptive');
+  let n: Awaited<ReturnType<typeof r.next>> | undefined;
+  for (let i = 0; i < 90; i++) n = await r.next(); // one call each second for 90 s
+  assert.equal(n!.out.capacity.signals.swap.state, 'flat', 'a sample 60 s old or more is still kept');
+  assert.ok(n!.out.capacity.signals.swap.windowS <= 2 * SWAP_WINDOW_S, `a fresh window, not the first sample (${n!.out.capacity.signals.swap.windowS} s)`);
+  assert.deepEqual(n!.ids, ['1', '2'], 'the heavy slice is offered');
+  assert.ok(r.journal().capacity!.samples.length <= MAX_SAMPLES, 'memory stays bounded');
+});
+
 test('EVAL-5: free memory sets the heavy width; set-profile --heavy-rss-mb changes the estimate', async () => {
   const r = repo(heavy(1, 2, 3, 4));
   await r.warm();
@@ -287,7 +298,7 @@ test('EVAL-6: after a heavy verify timeout, heavy slices run one at a time until
   const v = await r.drive('1', '--timeout', '0.4');
   assert.deepEqual([v.timedOut, v.state], [true, 'READY']);
   let n = await r.next();
-  const serial = 'heavy: the last heavy run (slice 1) timed out; one heavy slice at a time until a heavy Verify passes';
+  const serial = 'heavy: a Verify run of heavy slice 1 timed out; one heavy slice at a time until a heavy Verify passes';
   assert.deepEqual(n.ids, ['1'], 'the timed-out slice may run again, alone');
   assert.equal(n.why('2'), serial);
   assert.equal(n.out.capacity.heavy.serial, serial);
@@ -303,6 +314,20 @@ test('EVAL-6: after a heavy verify timeout, heavy slices run one at a time until
   assert.equal(n.out.capacity.heavy.serial, null);
   assert.equal(n.out.capacity.heavy.backoff.steps, 0, 'a passing heavy Verify clears the back-off');
   assert.deepEqual(n.ids, ['1', '2']);
+});
+
+test('EVAL-6: an ordinary failed retry after a heavy verify timeout keeps heavy slices one at a time', async () => {
+  // The first Verify run times out; the retry exits 1 at once. No heavy Verify passes in between.
+  const r = repo([{ n: 1, cls: 'heavy', verify: '`test -f t1 && exit 1; touch t1; sleep 20`' }, ...heavy(2, 3)]);
+  await r.warm();
+  assert.equal((await r.drive('1', '--timeout', '0.4')).timedOut, true);
+  const retry = await r.drive('1', '--timeout', '5');
+  assert.deepEqual([retry.timedOut, retry.state], [false, 'READY'], 'the retry failed without a timeout');
+  r.tick(61);
+  const n = await r.next();
+  assert.match(n.out.capacity.heavy.serial ?? '', /slice 1 timed out/, 'serialization stays on until a heavy Verify passes');
+  assert.equal(n.out.capacity.heavy.width, 1);
+  assert.deepEqual(n.ids, ['1']);
 });
 
 test('EVAL-7: a pressure episode lowers the heavy width by one until a heavy Verify passes', async () => {
