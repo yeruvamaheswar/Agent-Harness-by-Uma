@@ -365,8 +365,8 @@ export function promoteReady(journal: Journal, plan: Plan, now: Date): string[] 
 
 // The batch to offer: READY slices with settled dependencies, lowest wave first. Parallel slices across waves
 // join only when their files do not overlap each other or running work. A fixed profile's width is its number
-// minus running slices. The adaptive width comes from `capacity` (assessCapacity in capacity.ts): the wave,
-// sequential, and overlap rules apply first, then the limit of the slice's class.
+// minus running slices. The adaptive width comes from `capacity` (assessCapacity in capacity.ts): the
+// sequential and overlap rules apply first, then the limit of the slice's class.
 export function nextBatch(journal: Journal, plan: Plan, capacity?: CapacityDecision) {
   const profile = journal.profile;
   if (profile !== 'adaptive' && !isFixed(profile)) throw new Error(`unknown profile "${profile}" in the journal; run ae set-profile PLAN --profile ${PROFILE_NAMES.join('|')}`);

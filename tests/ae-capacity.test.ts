@@ -224,6 +224,19 @@ test('adaptive keeps the sequential rule, and a waiting sequential slice keeps i
   assert.deepEqual((await alone.next()).ids, ['3'], 'a heavy parallel slice that waits does not hold a later wave back');
 });
 
+test('adaptive: a waiting parallel slice keeps a later sequential slice behind it; file overlap holds across waves', async () => {
+  const a = repo([{ n: 1, cls: 'heavy' }, { n: 2, wave: '2 sequential' }]);
+  await a.run('init', a.plan, '--profile', 'adaptive');
+  const an = await a.next();
+  assert.deepEqual(an.ids, []);
+  assert.equal(an.why('2'), 'waits for slice 1 (1 parallel), which waits for capacity');
+  const o = repo([{ n: 1, files: 'shared.txt' }, { n: 2, wave: '2 parallel', files: 'shared.txt' }, { n: 3, wave: '2 parallel' }]);
+  await o.run('init', o.plan, '--profile', 'adaptive');
+  const on = await o.next();
+  assert.deepEqual(on.ids, ['1', '3']);
+  assert.equal(on.why('2'), 'files overlap slice 1');
+});
+
 // ---- EVAL-4 and EVAL-5: heavy slices ----
 test('EVAL-4: a heavy slice waits for a known swap window, flat swapouts, normal pressure, and free memory', async () => {
   const r = repo([...heavy(1), { n: 2 }]);
