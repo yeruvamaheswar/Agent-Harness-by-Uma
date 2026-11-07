@@ -1,7 +1,7 @@
 // Dispatch: turn a slice's Model/Fallback text into a target (REQ-7, REQ-8, DEC-8). Pure functions; no I/O.
 
 export type ModelRef = {
-  agent: 'Claude' | 'Codex' | 'Cursor' | 'Grok' | 'user' | 'CI';
+  agent: 'Claude' | 'Codex' | 'Antigravity' | 'Cursor' | 'Grok' | 'user' | 'CI';
   mode: 'tier' | 'auto' | 'default' | 'model' | 'none';
   tier?: string; effort?: string; modelId?: string; unverified?: boolean; extras: string[]; label: string;
 };
@@ -17,7 +17,8 @@ export type Opts = { caps?: Caps | null; host: string };
 export type Step = { ref: string; result: 'ok' | 'unavailable' | 'exhausted'; reason: string };
 
 // Agent name -> T3 driverKind. Observed in T3 orchestrator_capabilities on 2026-10-25; not a model id.
-const DRIVER: Record<string, string> = { Claude: 'claudeAgent', Codex: 'codex', Cursor: 'cursor', Grok: 'grok' };
+const DRIVER: Record<string, string> = { Claude: 'claudeAgent', Codex: 'codex', Antigravity: 'antigravity', Cursor: 'cursor', Grok: 'grok' };
+const EFFORT_OPTION_IDS = ['effort', 'reasoningEffort', 'reasoning_effort'];
 const TIERS = ['haiku', 'sonnet', 'opus'];
 const EFFORTS = ['low', 'medium', 'high', 'xhigh']; // escalation never reaches max
 const TIER_WEIGHT: Record<string, number> = { haiku: 1, sonnet: 3, opus: 8 };
@@ -27,8 +28,8 @@ export function parseModelRef(text: string): ModelRef {
   const t = String(text ?? '').trim();
   if (/^user$/i.test(t)) return { agent: 'user', mode: 'none', extras: [], label: 'user' };
   if (/^ci$/i.test(t)) return { agent: 'CI', mode: 'none', extras: [], label: 'CI' };
-  const m = /^(Claude|Codex|Cursor|Grok)\s*\(([^()]*)\)$/i.exec(t);
-  if (!m) throw new Error(`Cannot parse model text "${t}". Expected "Claude (opus/high)", "Codex (auto)", "Cursor (auto)", "Grok (default)", "user", or "CI".`);
+  const m = /^(Claude|Codex|Antigravity|Cursor|Grok)\s*\(([^()]*)\)$/i.exec(t);
+  if (!m) throw new Error(`Cannot parse model text "${t}". Expected "Claude (opus/high)", "Codex (gpt-6.1-terra/low)", "Antigravity (gemini-3.8-flash-low)", "Cursor (auto)", "Grok (default)", "user", or "CI".`);
   const agent = (m[1][0].toUpperCase() + m[1].slice(1).toLowerCase()) as ModelRef['agent'];
   const parts = m[2].split(',').map((s) => s.trim()).filter(Boolean);
   if (!parts.length) throw new Error(`Cannot parse model text "${t}": empty parentheses.`);
@@ -45,6 +46,12 @@ export function parseModelRef(text: string): ModelRef {
   const lower = first.toLowerCase();
   if (lower === 'auto' && (agent === 'Codex' || agent === 'Cursor')) return { ...base, mode: 'auto' };
   if (lower === 'default' && agent === 'Grok') return { ...base, mode: 'default' };
+  // A named Codex model may carry an effort: "gpt-6.1-terra/low". A value without "/" keeps the whole text as the model id.
+  if (agent === 'Codex') {
+    const [modelId, effort, ...rest] = first.split('/').map((x) => x.trim());
+    if (!modelId || rest.length || effort === '' || (effort && modelId.toLowerCase() === 'auto')) throw new Error(`Cannot parse Codex model "${first}". Expected model-id/effort, for example "gpt-6.1-terra/low".`);
+    return { ...base, mode: 'model', modelId, ...(effort ? { effort: effort.toLowerCase() } : {}) };
+  }
   return { ...base, mode: 'model', modelId: first };
 }
 
@@ -89,14 +96,29 @@ export function resolveTarget(ref: ModelRef, { caps, host }: Opts): Target | Una
     }
     return ok({});
   }
-  const listed = p.models.some((x) => x.id === ref.modelId);
+  const listed = p.models.find((x) => x.id === ref.modelId);
   if (!listed && !ref.unverified) return unavailable(`model "${ref.modelId}" is not listed for ${ref.agent}`);
-  return ok({ model: ref.modelId }, listed ? [] : [`model "${ref.modelId}" is unverified: the host did not list it`]);
+  const notes = listed ? [] : [`model "${ref.modelId}" is unverified: the host did not list it`];
+  let options: Option[] | undefined;
+  if (ref.effort) { // named model with an effort: set the advertised option, else note it (REQ-4)
+    const adv = listed?.options?.find((o) => EFFORT_OPTION_IDS.includes(o.id) && o.values.includes(ref.effort!));
+    if (adv) options = [{ id: adv.id, value: ref.effort }];
+    else notes.push(`effort "${ref.effort}" is not advertised by ${ref.modelId}; no effort option set`);
+  }
+  return ok({ model: ref.modelId, ...(options ? { options } : {}) }, notes);
 }
 
 // One level per failure: effort low, medium, high, xhigh; then tier haiku, sonnet, opus at high. null = go to Fallback.
 export function escalate(ref: ModelRef, failures: number): ModelRef | null {
   if (failures <= 0) return ref;
+  // A named model with an effort steps through the efforts only. A model change goes through Fallback (DEC-7).
+  if (ref.mode === 'model' && ref.agent !== 'Claude') {
+    if (!ref.effort || !EFFORTS.includes(ref.effort)) return null;
+    const e = EFFORTS.indexOf(ref.effort) + failures;
+    if (e >= EFFORTS.length) return null;
+    const effort = EFFORTS[e];
+    return { ...ref, effort, label: `${ref.agent} (${[`${ref.modelId}/${effort}`, ...ref.extras, ...(ref.unverified ? ['unverified'] : [])].join(', ')})` };
+  }
   if (ref.agent !== 'Claude' || ref.mode !== 'tier' || !ref.tier || !TIERS.includes(ref.tier)) return null;
   let tier = ref.tier;
   let effort = ref.effort ?? 'medium';
@@ -117,6 +139,11 @@ export function chooseTarget(slice: { model: string; fallback?: string }, failur
     if (!ref) return null;
     const r = resolveTarget(ref, opts);
     if (isUnavailable(r)) { chain.push({ ref: ref.label, result: 'unavailable', reason: `${name}: ${r.reason}` }); return null; }
+    // An escalated named model must get its new effort; else the retry runs at the host default, so go to Fallback (REQ-6).
+    if (used === 'escalated' && ref.mode === 'model' && ref.effort && !r.options?.length) {
+      chain.push({ ref: ref.label, result: 'unavailable', reason: `${name}: effort "${ref.effort}" is not advertised by ${ref.modelId}` });
+      return null;
+    }
     if (r.dispatch === 'handoff') { firstHandoff ??= r; chain.push({ ref: ref.label, result: 'unavailable', reason: `${name}: ${r.reason}` }); return null; }
     chain.push({ ref: ref.label, result: 'ok', reason: `${name}: ${r.reason}` });
     return { target: r, used };

@@ -540,3 +540,23 @@ test('review 2.2 and 2.6: a definition change or a new handoff closes the old tr
   await q.run('finish', q.plan, '1');
   assert.deepEqual(q.journal().slices['1'].handoffs!.map(h => h.phase), ['CLOSED', 'CLOSED']);
 });
+
+// ---- dynamic model routing: Antigravity and named Codex models ----
+test('Antigravity has rank 1: it can replace a cheap slice only; a usage snapshot may name it', () => {
+  assert.equal(DEFAULT_POLICY.ranks.Antigravity, 1);
+  const cheap = rankCandidates({ model: 'Claude (haiku/medium)', fallback: 'Antigravity (gemini-3.8-flash-low)' }, 'Claude (haiku/medium)', false, snap({}), P, NO_HOST);
+  assert.equal(cheap.candidates[0].label, 'Antigravity (gemini-3.8-flash-low)'); assert.equal(cheap.candidates[0].source, 'fallback'); assert.equal(cheap.candidates[0].rank, 1);
+  const mid = rankCandidates({ model: 'Claude (sonnet/medium)', fallback: 'Antigravity (gemini-3.8-flash-low)' }, 'Claude (sonnet/medium)', false, snap({}), P, NO_HOST);
+  assert.match(mid.excluded.find(e => e.label === 'Antigravity (gemini-3.8-flash-low)')!.reason, /rank 1 is below the slice's need 2/);
+  assert.ok(!DEFAULT_POLICY.pool.some(x => /antigravity/i.test(x)), 'the pool is unchanged');
+  const s = parseSnapshot({ agents: { Antigravity: quota(90), 'Antigravity (gemini-3.8-flash-low)': { limits: [{ kind: 'rate', usedPct: 10 }] } } });
+  assert.deepEqual(s.ignored, []); assert.equal(s.agents.Antigravity.limits!.length, 2);
+  assert.equal(assessAgent('Antigravity', s.agents.Antigravity, P).level, 'prepare');
+});
+
+test('a named Codex model keeps the Codex rank and its own agent key', () => {
+  const r = rankCandidates({ model: 'Codex (gpt-6.1-terra/low)', fallback: 'Antigravity (gemini-3.8-flash-low)' }, 'Codex (gpt-6.1-terra/low)', false, snap({}), P, NO_HOST);
+  assert.equal(r.need, 3);
+  assert.match(r.excluded.find(e => e.label === 'Antigravity (gemini-3.8-flash-low)')!.reason, /below the slice's need 3/);
+  assert.equal(parseSnapshot({ agents: { 'Codex (gpt-6.1-terra/low)': quota(10) } }).agents.Codex.limits!.length, 1);
+});

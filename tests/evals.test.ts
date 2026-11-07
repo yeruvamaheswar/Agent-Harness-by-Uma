@@ -2315,7 +2315,6 @@ test('held-out: planner-quick-plan passes a one-slice quick plan and fails each 
   const cases: Array<[string, string, RegExp]> = [
     ['two slices', planPage('quick', [slice(), slice({ Wave: '2 sequential', 'Depends on': 'slice 1', Files: 'NOTES.md' })]), /exactly one slice, found 2/],
     ['State VERIFIED', planPage('quick', [slice({ State: 'VERIFIED' })]), /State is "VERIFIED"/],
-    ['Antigravity builder', planPage('quick', [slice({ Model: 'Antigravity' })]), /names Antigravity/],
     ['Review equals Model', planPage('quick', [slice({ Review: 'claude (sonnet/medium) ' })]), /Review equals Model/],
     ['missing Verify', planPage('quick', [slice({ Verify: null })]), /missing the field "Verify"/],
     ['standard mode', planPage('standard', [slice()]), /expected quick/],
@@ -2370,7 +2369,6 @@ test('held-out: planner-feature-plan passes a tracer, a safe parallel wave, and 
     ['quick mode', featurePlan('quick'), /expected standard, sprint, or deep/],
     ['fewer than three slices', featurePlan('standard', [tracer(), server()]), /at least 3 slices/],
     ['State READY', featurePlan('standard', [tracer({ State: 'READY' }), server(), web(), integrate()]), /State is "READY"/],
-    ['Antigravity reviewer', featurePlan('standard', [tracer(), server({ Review: 'Antigravity' }), web(), integrate()]), /Review names Antigravity/],
     ['Review equals Model', featurePlan('standard', [tracer(), server({ Review: 'Codex (auto)' }), web(), integrate()]), /Review equals Model/],
     ['missing Depends on', featurePlan('standard', [tracer(), server({ 'Depends on': null }), web(), integrate()]), /missing the field "Depends on"/],
   ];
@@ -2403,6 +2401,17 @@ test('held-out: planner-feature-plan checks cross-wave concurrency and transitiv
   assert.match(cycle.evidence, /does not reach tracer Slice 1 through Depends on/);
   const sequential = await run('standard', [tracer(), server(), web(), integrate({ Files: 'server/routes.js' })]);
   assert.equal(sequential.pass, true, sequential.evidence);
+});
+
+test('EVAL-7: the held-out planner graders accept a plan that names Antigravity or a named Codex model', async () => {
+  const quick = (text: string) => heldOut('planner-bug', 'planner-quick-plan', writePlan(text));
+  const feature = (text: string) => heldOut('planner-fullstack', 'planner-feature-plan', writePlan(text));
+  const a = await quick(planPage('quick', [slice({ Model: 'Antigravity (gemini-3.8-flash-low)' })]));
+  assert.equal(a.pass, true, a.evidence);
+  const b = await quick(planPage('quick', [slice({ Model: 'Codex (gpt-6.1-terra/low)', Fallback: 'Antigravity (gemini-3.8-flash-high)' })]));
+  assert.equal(b.pass, true, b.evidence);
+  const c = await feature(featurePlan('standard', [tracer({ Fallback: 'Antigravity (gemini-3.8-flash-medium)' }), server({ Model: 'Codex (gpt-6.1-terra/medium)', Review: 'Antigravity (gemini-3.8-flash-high)' }), web(), integrate()]));
+  assert.equal(c.pass, true, c.evidence);
 });
 
 test('held-out: planner graders reject duplicate fields, duplicate slice numbers, unsafe paths, and empty Files', async () => {

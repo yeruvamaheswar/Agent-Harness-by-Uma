@@ -15,6 +15,7 @@ Goal: a plan page where each slice has one owner, one reviewer, one check, and o
 |---|---|
 | `references/slice-format.md` | Always, before you write a slice. It is the contract: fields, lifecycle, waves, overlap, handoff note, `BLOCKED.md` |
 | `references/routing.md` | Before you fill `Model:`, `Review:`, or `Fallback:`, and before you delegate |
+| `references/model-tiers.md` | Before you pick a model. It holds the approved tier of each model and effort |
 | `references/examples.md` | When you are not sure of the page shape for a mode |
 
 ## Precedence
@@ -28,6 +29,7 @@ Goal: a plan page where each slice has one owner, one reviewer, one check, and o
 
 ## Default: plan only
 - Write the plan page. Start no worker.
+- The lead may start as many read-only research children during planning as the work needs, to finish faster: probe code, check host capabilities, draft slice sections. Load `subagent-budget` first. It sets no fixed count. Each child gets the cheapest model and effort that can do its task, per `subagent-budget`. A research child never edits a file. The lead reviews every result and owns the plan, so speed does not lower quality. The lead writes the final page.
 - Start workers only when the user asks for execution or the task explicitly authorizes implementation.
 - Explicit authorization means that the user asks, in this conversation, to execute, run, or implement the plan or named slices. A plain feature request, such as "add tags to notes", is a planning request.
 - Planning creates no branch and no worktree. Every slice stays `PLANNED`.
@@ -65,8 +67,9 @@ Understand → Design → Slice → Implement → Test → Review → Integrate 
 - Give every worker the full handoff note from `references/slice-format.md`. A worker does not inherit the chat.
 
 ## Capability discovery
-- Discover what the host offers before you name a Claude model. `references/routing.md` gives the method per host.
-- Never invent model IDs, quotas, usage, or costs. Codex and Cursor stay `Codex (auto)` and `Cursor (auto)`. Exception: pstack panels in Cursor use the named models in `~/.cursor/rules/pstack-models.mdc`. Record discovery results in Existing state, not in `Model:`.
+- Discover again at every plan start. List every provider, its status, and its model ids in Existing state. `references/routing.md` gives the method per host.
+- Route from `references/model-tiers.md`. Size each slice, then pick the cheapest listed model and effort at or above that size, from any routable provider. A model with no row there is `tier unknown`.
+- Never invent model IDs, quotas, usage, costs, or tiers. Only Cursor stays `Cursor (auto)`. Codex names `Codex (model-id/effort)`. Exception: pstack panels in Cursor use the named models in `~/.cursor/rules/pstack-models.mdc`. Record discovery results in Existing state, not in `Model:`.
 - A subscription price is not API credit. Do not assume unlimited concurrency. Use no separately billed API without the user's authorization.
 
 ## Execution (only when authorized)

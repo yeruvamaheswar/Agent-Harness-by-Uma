@@ -22,7 +22,7 @@ Goal: a due date shows the same calendar day that the user picked
 Rules: plan only · reproduce first · no commit without the user
 
 ## Loop
-1. Reproduce with a failing test, then fix · Codex (auto)
+1. Reproduce with a failing test, then fix · Codex (gpt-6.1-terra/medium)
 2. Review the diff · Claude (sonnet/medium)
 3. Approve the merge · user
 
@@ -43,14 +43,14 @@ Rules: plan only · reproduce first · no commit without the user
 ## Model assignment
 | Slice | Goal | Agent | Model | Effort | Reviewer | Fallback |
 |---|---|---|---|---|---|---|
-| 1 | Due date shows the picked day | Codex | auto | auto | Claude (sonnet/medium) | Claude (opus/high) |
+| 1 | Due date shows the picked day | Codex | gpt-6.1-terra | medium | Claude (sonnet/medium) | Claude (opus/high) |
 
 - Slice 1: a repo-scoped bug fix with a clear repro is Codex volume work. Sonnet is enough to review a two-file diff.
 
 ## Slices
 ### Slice 1: local due date
 - Goal: a due date shows the calendar day the user picked
-- Model: Codex (auto)
+- Model: Codex (gpt-6.1-terra/medium)
 - Review: Claude (sonnet/medium)
 - Fallback: Claude (opus/high)
 - Wave: 1 sequential
@@ -61,7 +61,7 @@ Rules: plan only · reproduce first · no commit without the user
 - Verify: `TZ=America/New_York npm test -- src/format-date.test.js`, and the "2026-11-03" → "Nov 3" case passes
 - State: PLANNED
 - Evidence: none
-- [ ] Write the failing test, then fix the parser · Codex (auto) · Verify command passes · revert the two files
+- [ ] Write the failing test, then fix the parser · Codex (gpt-6.1-terra/medium) · Verify command passes · revert the two files
 
 ## Waves
 - Wave 1 sequential: slice 1. Quick mode has no parallel wave.
@@ -76,7 +76,7 @@ Rules: plan only · reproduce first · no commit without the user
 | Other callers rely on the UTC behavior | The reviewer searches for other callers of `formatDate` in the diff review |
 
 ## First action
-- Slice 1, owner Codex (auto), after the user asks for execution.
+- Slice 1, owner Codex (gpt-6.1-terra/medium), after the user asks for execution.
 
 ## Execution state
 - planned 1 · running 0 · blocked 0 · reviewed 0 · verified 0 · integrated 0
@@ -100,7 +100,7 @@ Rules: plan only · no commit or push without the user · AGENT_FINISHED is not 
 
 ## Loop
 1. Build the tracer: one tag saved and shown · Claude (opus/high)
-2. Build the filter API and the filter UI in parallel · Codex (auto), Cursor (auto)
+2. Build the filter API and the filter UI in parallel · Codex (gpt-6.1-terra/medium), Cursor (auto)
 3. Integrate and run the end-to-end test · Claude (sonnet/medium)
 4. Smoke-test and approve the merge · user
 
@@ -115,7 +115,7 @@ Rules: plan only · no commit or push without the user · AGENT_FINISHED is not 
 - Fact: the React UI is in `web/`. Tests run with `npm test`.
 - Assumption: tags belong to one user.
 - Whether CI runs `npm run e2e`: unknown
-- Host capabilities: model lists not checked in this example. Codex and Cursor stay `auto`.
+- Host capabilities: model lists not checked in this example. A real plan lists every provider, its status, and its model ids. Only Cursor stays `auto`.
 
 ## Requirements
 | ID | Requirement | Source |
@@ -144,9 +144,9 @@ Rules: plan only · no commit or push without the user · AGENT_FINISHED is not 
 ## Model assignment
 | Slice | Goal | Agent | Model | Effort | Reviewer | Fallback |
 |---|---|---|---|---|---|---|
-| 1 | One tag saved and shown | Claude | opus | high | Claude (opus/high, fresh session) | Codex (auto) |
-| 2 | Filter notes by tag in the API | Codex | auto | auto | Claude (sonnet/medium) | Claude (opus/high) |
-| 3 | Filter notes by tag in the UI | Cursor | auto | auto | Claude (sonnet/medium) | Codex (auto) |
+| 1 | One tag saved and shown | Claude | opus | high | Claude (opus/high, fresh session) | Codex (gpt-6.1-sol/high) |
+| 2 | Filter notes by tag in the API | Codex | gpt-6.1-terra | medium | Claude (sonnet/medium) | Claude (opus/high) |
+| 3 | Filter notes by tag in the UI | Cursor | auto | auto | Claude (sonnet/medium) | Codex (gpt-6.1-terra/medium) |
 | 4 | Integrate and test end to end | Claude | sonnet | medium | Claude (opus/high, fresh session) | Claude (sonnet/medium, fresh session) |
 
 - Slice 1: the schema and the API contract cross three layers. That is Claude contract work. A cross-layer tracer gets a fresh Claude session as reviewer, not Codex.
@@ -159,7 +159,7 @@ Rules: plan only · no commit or push without the user · AGENT_FINISHED is not 
 - Goal: a tag typed on a note is saved and shows on that note after reload
 - Model: Claude (opus/high)
 - Review: Claude (opus/high, fresh session)
-- Fallback: Codex (auto)
+- Fallback: Codex (gpt-6.1-sol/high)
 - Wave: 1 sequential
 - Depends on: none
 - Files: db/migrations/003_tags.sql, server/tags.js, server/tags.test.js, server/routes.js, web/TagInput.jsx
@@ -171,7 +171,7 @@ Rules: plan only · no commit or push without the user · AGENT_FINISHED is not 
 
 ### Slice 2: filter API
 - Goal: GET /notes?tag=food returns only the notes tagged "food"
-- Model: Codex (auto)
+- Model: Codex (gpt-6.1-terra/medium)
 - Review: Claude (sonnet/medium)
 - Fallback: Claude (opus/high)
 - Wave: 2 parallel
@@ -187,7 +187,7 @@ Rules: plan only · no commit or push without the user · AGENT_FINISHED is not 
 - Goal: a click on a tag chip shows only the notes with that tag
 - Model: Cursor (auto)
 - Review: Claude (sonnet/medium)
-- Fallback: Codex (auto)
+- Fallback: Codex (gpt-6.1-terra/medium)
 - Wave: 2 parallel
 - Depends on: slice 1
 - Files: web/TagFilter.jsx, web/TagFilter.test.jsx
@@ -266,7 +266,7 @@ Rules: demo before polish · mock only the receipt reader, and say so in the dem
 
 ## Loop
 1. Build the tracer: typed items split into totals · Claude (opus/medium)
-2. Build the receipt reader and the share screen in parallel · Codex (auto), Cursor (auto)
+2. Build the receipt reader and the share screen in parallel · Codex (gpt-6.1-terra/medium), Cursor (auto)
 3. Integrate and write the demo script · Claude (sonnet/medium)
 4. Rehearse the demo · user
 
@@ -307,9 +307,9 @@ Rules: demo before polish · mock only the receipt reader, and say so in the dem
 ## Model assignment
 | Slice | Goal | Agent | Model | Effort | Reviewer | Fallback |
 |---|---|---|---|---|---|---|
-| 1 | Typed items split into totals | Claude | opus | medium | Claude (opus/high, fresh session) | Codex (auto) |
-| 2 | Sample receipt fills the items | Codex | auto | auto | Claude (sonnet/medium) | Claude (opus/high) |
-| 3 | Share screen shows the totals | Cursor | auto | auto | Claude (sonnet/medium) | Codex (auto) |
+| 1 | Typed items split into totals | Claude | opus | medium | Claude (opus/high, fresh session) | Codex (gpt-6.1-sol/high) |
+| 2 | Sample receipt fills the items | Codex | gpt-6.1-terra | medium | Claude (sonnet/medium) | Claude (opus/high) |
+| 3 | Share screen shows the totals | Cursor | auto | auto | Claude (sonnet/medium) | Codex (gpt-6.1-terra/medium) |
 | 4 | Integrated demo and script | Claude | sonnet | medium | user | Claude (sonnet/medium, fresh session) |
 
 - Slice 1: sets the shared shape for all later slices. Medium effort is enough for a small app. A cross-layer tracer gets a fresh Claude session as reviewer.
@@ -322,7 +322,7 @@ Rules: demo before polish · mock only the receipt reader, and say so in the dem
 - Goal: typed items and names show per-person totals on the page
 - Model: Claude (opus/medium)
 - Review: Claude (opus/high, fresh session)
-- Fallback: Codex (auto)
+- Fallback: Codex (gpt-6.1-sol/high)
 - Wave: 1 sequential
 - Depends on: none
 - Files: app/server.js, app/split.js, app/split.test.js, app/public/index.html
@@ -333,7 +333,7 @@ Rules: demo before polish · mock only the receipt reader, and say so in the dem
 
 ### Slice 2: receipt reader (fixture)
 - Goal: an upload of the sample receipt fills the item list
-- Model: Codex (auto)
+- Model: Codex (gpt-6.1-terra/medium)
 - Review: Claude (sonnet/medium)
 - Fallback: Claude (opus/high)
 - Wave: 2 parallel
@@ -349,7 +349,7 @@ Rules: demo before polish · mock only the receipt reader, and say so in the dem
 - Goal: the totals show as one large card per person
 - Model: Cursor (auto)
 - Review: Claude (sonnet/medium)
-- Fallback: Codex (auto)
+- Fallback: Codex (gpt-6.1-terra/medium)
 - Wave: 2 parallel
 - Depends on: slice 1
 - Files: app/public/share.js, app/public/share.css, app/public/share.test.js

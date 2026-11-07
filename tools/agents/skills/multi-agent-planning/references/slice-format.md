@@ -22,7 +22,7 @@ One `### Slice N: name` heading per slice. One field per line, in this order.
 ```markdown
 ### Slice 2: tag API
 - Goal: POST /tags saves a tag and returns it
-- Model: Codex (auto)
+- Model: Codex (gpt-6.1-terra/medium)
 - Review: Claude (sonnet/medium)
 - Fallback: Claude (opus/high)
 - Wave: 2 parallel
@@ -33,14 +33,14 @@ One `### Slice N: name` heading per slice. One field per line, in this order.
 - Verify: `npm test -- server/tags.test.js`
 - State: PLANNED
 - Evidence: none
-- [ ] Write the route and its test · Codex (auto) · Verify command passes · revert the two files
+- [ ] Write the route and its test · Codex (gpt-6.1-terra/medium) · Verify command passes · revert the two files
 ```
 
 | Field | Required | Value |
 |---|---|---|
 | `Goal:` | yes | One observable result: user-visible or API-visible |
 | `Covers:` | contracts only | The `REQ-n` the slice delivers |
-| `Model:` | yes | The builder: `Agent (model/effort)` or `Agent (auto)` |
+| `Model:` | yes | The builder: `Claude (tier/effort)`, `Codex (model-id/effort)`, `Antigravity (model-id)`, or `Cursor (auto)` |
 | `Review:` | yes | The independent reviewer. Never the builder's session. `CI` is allowed for a mechanical slice. Grok is allowed only here, as an optional critic |
 | `Fallback:` | yes | The new owner after the escalation step fails. Not a higher-effort rerun of the builder. A different agent or session from `Review:` |
 | `Wave:` | yes | `N sequential`, `N parallel`, or `N integration` |
@@ -53,12 +53,15 @@ One `### Slice N: name` heading per slice. One field per line, in this order.
 | `Evidence:` | yes | `none`, or a pointer to the proof: command and result, log line, commit, review file |
 
 ### Agent names
-`Claude`, `Codex`, `Cursor`, `Grok`, `user`, `CI`. Antigravity is excluded by default. The lint warns when it appears.
+`Claude`, `Codex`, `Antigravity`, `Cursor`, `Grok`, `user`, `CI`. Antigravity is routable like any other provider (T3 driverKind `antigravity`).
 - Grok never appears in `Model:` or `Fallback:`. The lint warns when it does. In `Review:`, name a stand-in reviewer in Risks.
 
 ### Model values
 - Claude: `Claude (haiku/medium)`, `Claude (sonnet/medium)`, `Claude (opus/high)`, and so on. The rungs are in the `html-explainer` skill.
-- Codex and Cursor: always `Codex (auto)` and `Cursor (auto)` in `Model:`, `Review:`, and `Fallback:`. Write discovery results, such as the Codex config default model or the T3 model id used, in Existing state and in the Worker tracking table.
+- Codex: `Codex (model-id/effort)`, for example `Codex (gpt-6.1-terra/low)`. The effort must be one that discovery advertises for the model. The lint warns on `Codex (auto)` in `Model:`, `Review:`, and `Fallback:`. Old plans that say `Codex (auto)` still parse.
+- Antigravity: `Antigravity (model-id)`, for example `Antigravity (gemini-3.8-flash-low)`. The effort is part of the id.
+- Cursor: `Cursor (auto)`. Only Cursor stays `auto`.
+- Pick each value from `model-tiers.md`. Write discovery results, such as the T3 model id used, in Existing state and in the Worker tracking table.
 - Grok: `Grok (default)`, in `Review:` only.
 - `unverified` is only for a Claude model that the host did not list. Write the rung plus `unverified`, for example `Claude (opus/high, unverified)`.
 - Add `fresh session` when a reviewer must be a new session of the builder's agent, for example `Claude (opus/high, fresh session)`.

@@ -165,7 +165,7 @@ function sliceBody(title: string, omit = "", overrides: Record<string, string> =
     ["Goal:", "one result"],
     ["Model:", "Cursor (auto)"],
     ["Review:", "Claude (opus/high)"],
-    ["Fallback:", "Codex (auto)"],
+    ["Fallback:", "Codex (gpt-6.1-terra/medium)"],
     ["Wave:", "1 sequential"],
     ["Depends on:", "none"],
     ["Files:", "a.ts"],
@@ -223,17 +223,31 @@ test("planner lint warns when VERIFIED, ACCEPTED, or INTEGRATED has no evidence"
 
 test("planner lint warns when Review equals Model", () => {
   const b = build("review.md", plannerPage("standard", sliceBody("Slice 1: tracer", "", {
-    "Model:": " codex (auto)",
-    "Review:": "Codex (auto)",
+    "Model:": " codex (gpt-6-sol/low)",
+    "Review:": "Codex (gpt-6-sol/low)",
   })));
   assert.equal(b.r.status, 0);
   assert.deepEqual(b.warns, ["warn: Slice 1: tracer: Review: equals Model:"]);
 });
 
-test("planner lint warns when Antigravity is routed", () => {
-  const b = build("anti.md", plannerPage("standard", sliceBody("Slice 1: tracer", "", { "Fallback:": "antigravity" })));
+test("planner lint accepts a named Antigravity model and a named Codex model with an effort", () => {
+  const b = build("anti.md", plannerPage("standard", sliceBody("Slice 1: tracer", "", {
+    "Model:": "Antigravity (gemini-3.8-flash-low)",
+    "Review:": "Codex (gpt-6.1-terra/low)",
+    "Fallback:": "Antigravity (gemini-3.8-flash-high)",
+  })));
   assert.equal(b.r.status, 0);
-  assert.deepEqual(b.warns, ["warn: Slice 1: tracer: Antigravity in Fallback:"]);
+  assert.deepEqual(b.warns, []);
+});
+
+test("planner lint warns on Codex (auto) in Model, Review, and Fallback, but not on Cursor (auto)", () => {
+  for (const field of ["Model:", "Review:", "Fallback:"]) {
+    const b = build("codex-auto.md", plannerPage("standard", sliceBody("Slice 1: tracer", "", { [field]: "Codex (auto)" })));
+    assert.equal(b.r.status, 0);
+    assert.deepEqual(b.warns, [`warn: Slice 1: tracer: Codex (auto) in ${field}; name a model and effort`], field);
+  }
+  const cursor = build("cursor-auto.md", plannerPage("standard", sliceBody("Slice 1: tracer", "", { "Model:": "Cursor (auto)", "Fallback:": "Cursor (auto)", "Review:": "Claude (opus/high)" })));
+  assert.deepEqual(cursor.warns, []);
 });
 
 test("planner lint warns when Wave is not a number and a kind", () => {

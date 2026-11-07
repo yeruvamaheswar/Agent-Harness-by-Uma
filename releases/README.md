@@ -10,6 +10,8 @@ Do not edit anything in this folder by hand. To change the policy, publish a new
 
 | Version | Created (UTC) | Source | Digest (SHA-256, first 12) |
 | --- | --- | --- | --- |
+| [1.5.9](1.5.9/) | 2026-11-07 | Local files (`--bootstrap`) | `4e30bf0804c1` |
+| [1.5.8](1.5.8/) | 2026-11-07 | Local files (`--bootstrap`) | `14de141faa64` |
 | [1.5.6](1.5.6/) | 2026-11-06 | Local files (`--bootstrap`) | `ecf3ff7753fc` |
 | [1.5.5](1.5.5/) | 2026-11-05 | Local files (`--bootstrap`) | `69ed4a6d71c8` |
 | [1.5.4](1.5.4/) | 2026-11-05 | Local files (`--bootstrap`) | `0da09b780120` |
@@ -33,6 +35,11 @@ The full digest and provenance of each release are in its `release.json` and its
 
 ### What changed
 
+- **1.5.9**
+  - "Context and agents" now says `auto` applies on Cursor only. A Codex slice names its model and effort, for example `gpt-6.1-terra/medium`.
+- **1.5.8**
+  - "Context and agents" adds a model rule. Give each slice the cheapest model and effort that can meet its goal. Rerun one level higher only after a failed check.
+  - The `subagent-budget` line no longer says it caps child count. It sets no fixed cap.
 - **1.5.6**
   - "Show work visually" adds a click rule. In an HTML diagram, each box opens a short TL;DR when clicked, through `popovertarget` and no script.
   - `references/agent-design.md` adds section 7, "Clickable Report Diagrams", with a reusable HTML pattern.
