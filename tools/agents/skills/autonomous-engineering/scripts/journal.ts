@@ -401,9 +401,9 @@ export function nextBatch(journal: Journal, plan: Plan, capacity?: CapacityDecis
   return { batch, waiting, deferred, slots, running: running.map(r => r.id) };
 }
 
-// The same wave, sequential, and overlap rules as a fixed profile, with no fixed width. Then each slice needs room in
-// its class limit (and in the total limit, which exists only without measured signals). The lowest READY slice keeps
-// its place: when it waits for capacity, slices of other waves wait too, and a sequential slice still runs alone.
+// The same sequential and overlap rules as a fixed profile (parallel slices cross waves), with no fixed width. Then each
+// slice needs room in its class limit (and in the total limit, which exists only without measured signals). A sequential
+// or integration slice keeps its place: when it waits for capacity, later slices wait too, and it still runs alone.
 function adaptiveBatch(ready: Slice[], running: Slice[], runningSerial: boolean, cap: CapacityDecision) {
   const batch: Slice[] = [], deferred: { id: string; reason: string }[] = [];
   const left: Record<'total' | 'normal' | 'heavy', number | null> = { total: cap.total.starts, normal: cap.normal.starts, heavy: cap.heavy.starts };
@@ -412,11 +412,13 @@ function adaptiveBatch(ready: Slice[], running: Slice[], runningSerial: boolean,
   let anchor: Slice | undefined;
   for (const s of ready) {
     if (runningSerial) { deferred.push({ id: s.id, reason: 'a sequential or integration slice is running' }); continue; }
-    const used = [...running, ...batch], ctx = used.length ? used : anchor ? [anchor] : [];
-    if (ctx.length && (s.wave.kind !== 'parallel' || ctx.some(u => u.wave.kind !== 'parallel' || u.wave.n !== s.wave.n))) {
-      const reason = !used.length ? `waits for slice ${anchor!.id} (${anchor!.wave.n} ${anchor!.wave.kind}), which waits for capacity`
-        : s.wave.kind === 'parallel' ? 'different wave from running work' : `${s.wave.kind} slice runs alone`;
-      deferred.push({ id: s.id, reason }); continue;
+    const used = [...running, ...batch];
+    if (used.length && (s.wave.kind !== 'parallel' || used.some(u => u.wave.kind !== 'parallel'))) {
+      deferred.push({ id: s.id, reason: s.wave.kind !== 'parallel' ? `${s.wave.kind} slice runs alone` : 'a sequential or integration slice is in the batch' }); continue;
+    }
+    // A waiting slice that must run alone, or a later slice that must, keeps its place; parallel slices of any wave do not wait for each other.
+    if (!used.length && anchor && (anchor.wave.kind !== 'parallel' || s.wave.kind !== 'parallel')) {
+      deferred.push({ id: s.id, reason: `waits for slice ${anchor.id} (${anchor.wave.n} ${anchor.wave.kind}), which waits for capacity` }); continue;
     }
     const clash = used.find(u => overlap(u.files, s.files));
     if (clash) { deferred.push({ id: s.id, reason: `files overlap slice ${clash.id}` }); continue; }

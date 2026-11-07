@@ -201,7 +201,7 @@ test('EVAL-3: at warn, one normal slice starts only when none runs; at critical,
   assert.deepEqual((await r.next()).ids, ['2', '3']);
 });
 
-test('adaptive keeps the sequential rule, and the lowest READY slice keeps its place while it waits', async () => {
+test('adaptive keeps the sequential rule, and a waiting sequential slice keeps its place; other waves join like a fixed profile', async () => {
   const r = repo([{ n: 1, wave: '1 sequential', cls: 'heavy' }, { n: 2, wave: '2 parallel' }, { n: 3, wave: '2 parallel' }]);
   await r.run('init', r.plan, '--profile', 'adaptive');
   let n = await r.next();
@@ -211,18 +211,17 @@ test('adaptive keeps the sequential rule, and the lowest READY slice keeps its p
   r.tick(61);
   n = await r.next();
   assert.deepEqual(n.ids, ['1']);
-  assert.equal(n.why('2'), 'different wave from running work');
+  assert.equal(n.why('2'), 'a sequential or integration slice is in the batch');
   await r.run('start', r.plan, '1');
   assert.equal((await r.next()).why('3'), 'a sequential or integration slice is running');
-  // a waiting parallel heavy slice lets its own wave start, and holds the other waves back
+  // a waiting parallel heavy slice holds nobody back: slices of any wave start, as in a fixed profile (PR 15)
   const w = repo([{ n: 1, cls: 'heavy' }, { n: 2 }, { n: 3, wave: '2 parallel' }]);
   await w.run('init', w.plan, '--profile', 'adaptive');
   const wn = await w.next();
-  assert.deepEqual(wn.ids, ['2']);
-  assert.equal(wn.why('3'), 'different wave from running work');
+  assert.deepEqual(wn.ids, ['2', '3'], 'a later wave starts beside a slice that waits for capacity');
   const alone = repo([{ n: 1, cls: 'heavy' }, { n: 3, wave: '2 parallel' }]);
   await alone.run('init', alone.plan, '--profile', 'adaptive');
-  assert.equal((await alone.next()).why('3'), 'waits for slice 1 (1 parallel), which waits for capacity');
+  assert.deepEqual((await alone.next()).ids, ['3'], 'a heavy parallel slice that waits does not hold a later wave back');
 });
 
 // ---- EVAL-4 and EVAL-5: heavy slices ----
