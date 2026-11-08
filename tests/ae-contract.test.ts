@@ -14,6 +14,9 @@ import { z } from 'zod';
 import { journalPath, loadJournal, saveJournal, withLock } from '../tools/agents/skills/autonomous-engineering/scripts/journal.ts';
 import type { Journal } from '../tools/agents/skills/autonomous-engineering/scripts/journal.ts';
 import { main } from '../tools/agents/skills/autonomous-engineering/scripts/ae.ts';
+import { MAX_DECISION_EVIDENCE, MAX_DECISION_HISTORY, MAX_DECISION_TEXT, MAX_DECISIONS, MAX_WATCH } from '../tools/agents/skills/autonomous-engineering/scripts/contract.ts';
+import { interruptedHook, moduleCommand, register, resultFields, sections } from '../tools/agents/skills/autonomous-engineering/scripts/hooks.ts';
+import type { HookCtx } from '../tools/agents/skills/autonomous-engineering/scripts/hooks.ts';
 
 const FIXTURE = join(dirname(fileURLToPath(import.meta.url)), 'fixtures', 'ae-journal-66c3cd6.json');
 const LEAD = 'Claude (opus/high)';
@@ -179,4 +182,40 @@ test('Accept 4: every journal written in a run that uses every new field passes 
   for (const w of r.written) assertContract(w.text, `after "${w.cmd}"`);
   // and the .bak the last save kept
   assertContract(readFileSync(r.jfile + '.bak', 'utf8'), '.bak');
+});
+
+// Review 1 (F9): the contract caps keep a worst-case ledger well under 1 MiB, so ACC (2 MiB) never drops it for size.
+test('Review 1: 100 decisions at every contract cap stay under 1 MiB and pass the ACC decoder', () => {
+  const j = JSON.parse(readFileSync(FIXTURE, 'utf8'));
+  const t = (c: string, n: number) => c.repeat(n);
+  const at = '2026-11-08T06:00:00.000Z';
+  j.decisions = Array.from({ length: MAX_DECISIONS }, (_, i) => ({
+    id: `D${i + 1}`, key: `k.${'x'.repeat(70)}${i}`.slice(0, 80), scope: 'slice:1', risk: 'amber', status: 'assumed',
+    question: t('q', MAX_DECISION_TEXT), answer: t('a', MAX_DECISION_TEXT), recommended: t('r', MAX_DECISION_TEXT), rollback: t('b', MAX_DECISION_TEXT),
+    source: t('s', MAX_DECISION_TEXT), provenance: 'attested', by: LEAD, sliceDigest: 'd'.repeat(12),
+    evidence: Array.from({ length: MAX_DECISION_EVIDENCE }, () => t('e', 100)),
+    watch: Array.from({ length: MAX_WATCH }, (_, w) => ({ path: `src/some/deep/folder/file-${w}.ts`, fp: 'f'.repeat(12), fpv: 2 })),
+    at, updatedAt: at, history: Array.from({ length: MAX_DECISION_HISTORY }, () => ({ at, status: 'assumed', by: LEAD })),
+  }));
+  const text = JSON.stringify(j, null, 2), bytes = Buffer.byteLength(text);
+  assert.ok(bytes < 1024 * 1024, `worst-case ledger is ${bytes} bytes`);
+  assertContract(text, 'worst-case ledger');
+});
+
+// Review 1 (F1): the hook surface later tracks plug into. Each helper is inert with no module and refuses ambiguity.
+test('Review 1: hook helpers merge module output and refuse collisions', () => {
+  const c = { command: 'block' } as unknown as HookCtx;
+  try {
+    assert.equal(moduleCommand('attach'), undefined, 'no module provides attach yet');
+    assert.deepEqual(resultFields(c, { state: 'BLOCKED' }), {});
+    register('t-a', { result: () => ({ loop: 'same-blocker' }), commands: { attach: () => ({ ok: true }) }, interrupted: () => undefined });
+    register('t-b', { interrupted: () => ({ block: { reason: 'refusal', cause: 'refusal' } }), statusSection: (_j, env) => ({ env: env?.root ?? 'none' }) });
+    assert.deepEqual(resultFields(c, { state: 'BLOCKED' }), { loop: 'same-blocker' });
+    assert.throws(() => resultFields(c, { loop: 'x' }), /already returns/);
+    assert.deepEqual(moduleCommand('attach')!({} as never), { ok: true });
+    assert.deepEqual(interruptedHook(c, {} as never, {} as never), { block: { reason: 'refusal', cause: 'refusal' } });
+    assert.deepEqual(sections('statusSection', {} as never, { root: '/r' } as never).env, '/r');
+    register('t-c', { commands: { attach: () => ({}) } });
+    assert.throws(() => moduleCommand('attach'), /both provide attach/);
+  } finally { for (const n of ['t-a', 't-b', 't-c']) register(n, {}); }
 });

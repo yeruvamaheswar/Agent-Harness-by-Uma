@@ -10,12 +10,16 @@
 // Shrinking: tier 3 (sections 7, 8) first, then tier 2 (5, 6), then tier 1 (3, 4) down to its floor. Sections 1, 2, 9
 // and the floors never shrink. Files, Out of scope, and Verify are copied byte for byte, never masked: when
 // redaction would change one, the packet is refused. When the fixed parts do not fit, it is an error.
+//
+// The packet renders every contract field a later track fills (checkpoint check, health, snapshot; interruption
+// operation), so slices 4, 7, 8, and 9 fill fields and register hooks without editing this file.
 import { basename } from 'node:path';
 import { AUTHORITY_LINE, PACKET_CAPS, PACKET_SECTIONS } from './contract.ts';
 import type { Packet, PacketItem, PacketMode, PacketSection, PacketSectionKey } from './contract.ts';
 import { settledFor, waitingFor } from './decisions.ts';
 import { openInterruptions } from './failover.ts';
 import { redact } from './guard.ts';
+import { decisionStale } from './hooks.ts';
 import { evidenceLine } from './journal.ts';
 import type { Attempt, Checkpoint, Handoff, Journal } from './journal.ts';
 import type { Slice } from './plan.ts';
@@ -27,6 +31,7 @@ export type PacketEnv = {
   // Observed now, by the caller: blob ids of the checkpoint's changed files, and the slice fingerprint.
   blobs?: Record<string, string>;
   fingerprintNow?: string;
+  root?: string; // when given, modules may mark a settled decision stale by its watched files (hooks.ts decisionStale)
 };
 
 const WAITING_MAX = 8;
@@ -83,7 +88,7 @@ function compose(journal: Journal, s: Slice, mode: PacketMode, env: PacketEnv) {
     ? `Waiting on the user (RED): ${waiting.slice(0, WAITING_MAX).map(d => `${d.key} (${d.id})`).join(', ')}${waiting.length > WAITING_MAX ? `, +${waiting.length - WAITING_MAX} more` : ''}. Do not do it; finish other work.`
     : null;
 
-  const settled = settledFor(journal, s.id, rec.definitionDigest);
+  const settled = settledFor(journal, s.id, rec.definitionDigest).map(x => ({ ...x, stale: x.stale || (env.root !== undefined && decisionStale(journal, x.d, env.root)) }));
   const settledText = (x: (typeof settled)[number], n: number) =>
     `${x.d.id} ${x.d.key} = ${clip(x.d.answer, n)} (${x.d.risk}, ${x.d.status}${x.d.rollback ? `; rollback: ${clip(x.d.rollback, n)}` : ''})${x.stale ? ' [re-check, do not rely]' : ''}`;
 
@@ -96,8 +101,17 @@ function compose(journal: Journal, s: Slice, mode: PacketMode, env: PacketEnv) {
   const nextLines = (cp?.next ?? '').split('\n');
   const nextText = nextLines[0].startsWith('interrupted:') ? nextLines.slice(1).join(' ') : cp?.next;
 
+  const failureText = (i: NonNullable<typeof failure>) => `${i.class}${i.code ? ` code ${i.code}` : ''} at ${i.at}, source ${i.source}${i.resetAt ? `, reset ${i.resetAt}` : ''}${i.operation ? `, during: ${i.operation}` : ''}`;
+  // the engine-run check of the checkpoint (slice 7): observed when stable, unknown when files changed during it
+  const check = cp?.check;
+  const checkText = (n: number) => check ? `${clip(check.command, 120)}: ${check.timedOut ? 'timed out' : `exit ${check.exitCode ?? 'unknown'}`}${check.tail ? `; tail: ${clip(check.tail, n)}` : ''}` : '';
+
   const unknown: string[] = [];
   if (cp && env.fingerprintNow && env.fingerprintNow !== cp.fingerprint) unknown.push(`slice files changed after the checkpoint (fingerprint ${cp.fingerprint} -> ${env.fingerprintNow}); inspect them before you trust the checkpoint`);
+  if (check && !check.stable) unknown.push(`the engine check ran while slice files changed (${check.fpBefore} -> ${check.fpAfter}); its result proves nothing`);
+  for (const h of cp?.health ?? []) unknown.push(`health: ${h}`);
+  // unprobed T3 behavior, worst case (DEC-29; probes P5 and P6)
+  if (failure?.source === 't3') unknown.push('T3 may still auto-resume the previous worker (probe P5 not settled); if a slice file changes that you did not write, stop and report');
 
   // ---- the text at one shrink level ----
   const build = (t3: number, t2: number, t1: number) => {
@@ -118,13 +132,15 @@ function compose(journal: Journal, s: Slice, mode: PacketMode, env: PacketEnv) {
     if (waitingLine) lines.push(waitingLine);
     if (cont) {
       lines.push(`Continuation: you take over slice ${s.id} from ${cont.h.from.label} (${clip(cont.h.reason, 120)}). Work already done stays; do not rebuild it.`);
-      if (failure) lines.push(`Failure (observed): ${failure.class}${failure.code ? ` code ${failure.code}` : ''} at ${failure.at}, source ${failure.source}${failure.resetAt ? `, reset ${failure.resetAt}` : ''}.`);
+      if (failure) lines.push(`Failure (observed): ${clip(failureText(failure), 300)}.`);
       lines.push(`Checkpoint ${cp!.at}: branch ${cp!.branch}, head ${cp!.gitHead.slice(0, 9)}, slice files fingerprint ${cp!.fingerprint}.`);
       const n = TIER1[t1], shown = changed.slice(0, n);
       if (!changedCount) lines.push('Changed so far: none (nothing written yet).');
       else if (!n) lines.push(`Changed so far: ${changedCount} files done (hash-checked); the list is in the packet JSON.`);
       else lines.push(`Changed so far: ${shown.map(p => p + blob(p)).join(', ')}${changedCount > shown.length ? `, and ${changedCount - shown.length} more` : ''}.`);
       lines.push(`Last check: ${clip(cp!.lastCheck, 200)}.`);
+      if (check?.stable) lines.push(`Engine check (observed): ${checkText(TIER2[t2])}.`);
+      if (cp!.snapshot) lines.push(`Snapshot of the owned files: ${cp!.snapshot}.`);
     }
     if (settled.length) {
       const n = TIER1[t1];
@@ -153,13 +169,15 @@ function compose(journal: Journal, s: Slice, mode: PacketMode, env: PacketEnv) {
   const item = (label: PacketItem['label'], x: string): PacketItem => ({ label, text: redact(x) });
   const items: Record<PacketSectionKey, PacketItem[]> = {
     contract: [contract.plan, contract.own, contract.only, contract.constraints, contract.run, contract.identity, contract.authority, contract.data].map(x => ({ label: 'observed' as const, text: x })),
-    waiting: waiting.map(d => item('unknown', `${d.id} ${d.key} (${d.risk}, ${d.status}): ${d.question}`)),
+    waiting: waiting.map(d => item('observed', `${d.id} ${d.key} (${d.risk}, ${d.status}): ${d.question}`)),
     observed: cont ? [
-      ...(failure ? [item('observed', `failure: ${failure.class}${failure.code ? ` code ${failure.code}` : ''} at ${failure.at}, source ${failure.source}`)] : []),
+      ...(failure ? [item('observed', `failure: ${failureText(failure)}`)] : []),
       item('observed', `checkpoint ${cp!.at}: branch ${cp!.branch}, head ${cp!.gitHead}, fingerprint ${cp!.fingerprint}`),
       ...changed.map(p => item('observed', `changed: ${p}${blob(p)}`)),
       ...(changedCount > changed.length ? [item('observed', `and ${changedCount - changed.length} more changed paths`)] : []),
       item('observed', `last check: ${cp!.lastCheck}`),
+      ...(check?.stable ? [item('observed', `engine check: ${checkText(2000)}`)] : []),
+      ...(cp!.snapshot ? [item('observed', `snapshot: ${cp!.snapshot}`)] : []),
     ] : [],
     settled: settled.map(x => item(x.d.status === 'approved' ? 'settled-user' : 'settled-agent', settledText(x, 400))),
     unknown: unknown.map(x => item('unknown', x)),

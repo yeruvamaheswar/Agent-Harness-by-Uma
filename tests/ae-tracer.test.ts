@@ -11,6 +11,9 @@ import { dirname, join, relative } from 'node:path';
 import { journalPath } from '../tools/agents/skills/autonomous-engineering/scripts/journal.ts';
 import type { Journal } from '../tools/agents/skills/autonomous-engineering/scripts/journal.ts';
 import { main } from '../tools/agents/skills/autonomous-engineering/scripts/ae.ts';
+import { register } from '../tools/agents/skills/autonomous-engineering/scripts/hooks.ts';
+import { packet } from '../tools/agents/skills/autonomous-engineering/scripts/packet.ts';
+import { parsePlan } from '../tools/agents/skills/autonomous-engineering/scripts/plan.ts';
 
 const LEAD = 'Claude (opus/high)';
 type S = { files: string; oos: string; verify: string };
@@ -228,4 +231,49 @@ test('Accept 2: with 50 decisions and 40 changed files the text still fits and k
   assert.equal(sec('settled').length, 40);
   assert.equal(sec('observed').filter((i: any) => i.text.startsWith('changed: ')).length, 40);
   assert.deepEqual(nullPaths(r.journal()), []);
+});
+
+// Review 1 (F6, F13): the packet renders the contract fields later tracks fill, and the staleness hook, without a
+// packet.ts edit. The fields are written into the journal by hand here, as slice 7 and slice 4 will write them.
+test('Review 1: the continuation packet shows the check, health, snapshot, operation, the T3 worst case, and hook staleness', async () => {
+  const r = repo({ files: 'a.ts', oos: 'src/', verify: '`grep -q done a.ts`' });
+  await r.run('init', r.plan);
+  await r.run('next', r.plan);
+  await r.run('decide', r.plan, '--key', 'storage.engine', '--risk', 'amber', '--status', 'assumed', '--question', 'Which storage engine?',
+    '--answer', 'sqlite', '--rollback', 'back to JSON files', '--lead', LEAD);
+  await r.run('start', r.plan, '1');
+  r.put('a.ts', 'export const a = "half');
+  await r.run('interrupt', r.plan, '1', '--class', 'api', '--source', 't3', '--operation', 'npm test', '--lead', LEAD);
+  await r.run('checkpoint', r.plan, '1', '--kind', 'post-mortem', '--next', 'finish a.ts');
+  await r.run('prepare', r.plan, '1', '--to', 'Claude (opus/high)', '--lead', LEAD, '--reason', 'api error');
+  await r.run('transfer', r.plan, '1', '--lead', LEAD);
+  const jf = journalPath(r.plan);
+  const edit = (f: (cp: any) => void) => { const j = r.journal(); f(j.slices['1'].checkpoints!.at(-1)); writeFileSync(jf, JSON.stringify(j, null, 2)); };
+  const check = { command: 'grep -q done a.ts', exitCode: 1, tail: 'no match', at: '2026-11-08T04:10:00.000Z', fpBefore: 'f1', fpAfter: 'f1', stable: true };
+  edit(cp => { cp.check = check; cp.health = ['merge-marker in a.ts']; cp.snapshot = 'refs/ae/snapshots/p/1/a1'; });
+
+  let h = await r.run('handoff', r.plan, '1');
+  assert.match(h.text, /^Failure \(observed\): api at .*, source t3, during: npm test\.$/m);
+  assert.match(h.text, /^Engine check \(observed\): grep -q done a\.ts: exit 1; tail: no match\.$/m);
+  assert.match(h.text, /^Snapshot of the owned files: refs\/ae\/snapshots\/p\/1\/a1\.$/m);
+  assert.match(h.text, /^Unknown: health: merge-marker in a\.ts; T3 may still auto-resume the previous worker/m);
+  const sec = (k: string) => h.packet.sections.find((x: any) => x.key === k).items.map((i: any) => `${i.label} ${i.text}`);
+  assert.ok(sec('observed').includes('observed engine check: grep -q done a.ts: exit 1; tail: no match'));
+  assert.ok(sec('observed').includes('observed snapshot: refs/ae/snapshots/p/1/a1'));
+
+  // an unstable check is never shown as observed
+  edit(cp => { cp.check = { ...check, fpAfter: 'f2', stable: false }; });
+  h = await r.run('handoff', r.plan, '1');
+  assert.doesNotMatch(h.text, /Engine check \(observed\)/);
+  assert.match(h.text, /the engine check ran while slice files changed \(f1 -> f2\); its result proves nothing/);
+  assert.ok(!sec('observed').some((x: string) => x.includes('engine check')));
+
+  // staleness by a module hook: only when the caller gives the root
+  const plan = parsePlan(readFileSync(r.plan, 'utf8'), r.plan);
+  const s = plan.slices[0], env = { planPath: r.plan, journalFile: jf, label: 'Claude (opus/high)' };
+  register('test-stale', { decisionStale: (_j, d) => d.key === 'storage.engine' });
+  try {
+    assert.doesNotMatch(packet(r.journal(), s, 'continuation', env).text, /re-check/);
+    assert.match(packet(r.journal(), s, 'continuation', { ...env, root: r.dir }).text, /D1 storage\.engine = sqlite .*\[re-check, do not rely\]/);
+  } finally { register('test-stale', {}); }
 });

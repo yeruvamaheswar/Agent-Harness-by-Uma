@@ -26,8 +26,15 @@ export interface Decision {
 }
 export const MAX_DECISIONS = 100;
 export const MAX_DECISION_HISTORY = 10;
+// Size caps that keep the worst-case journal under 1 MiB (REQ-23; ACC drops a journal over 2 MiB). A writer refuses
+// longer text with a clear error; it never cuts it silently. Superseded decisions count toward MAX_DECISIONS.
+export const MAX_DECISION_TEXT = 500; // question, answer, recommended, rollback, source: characters each (about 5.5 KB a decision at most)
+export const MAX_DECISION_EVIDENCE = 5; // evidence locators per decision, 100 characters each
+export const MAX_WATCH = 10; // watched files per decision
 
 // attempt.interruptions, at most MAX_INTERRUPTIONS. An interruption is not a failed attempt (DEC-21).
+// The lead sets `class` from what it observed. T3 gives no failure class, code, or reset time, only free text
+// (probe P4); a reset time comes from a CLI's JSON. Free text is never classified (NOT-3).
 export type InterruptionSource = 't3' | 'cli' | 'lead';
 export const INTERRUPTION_SOURCES: readonly InterruptionSource[] = ['t3', 'cli', 'lead'];
 export interface Interruption {
@@ -36,6 +43,7 @@ export interface Interruption {
   resolved?: 'same-thread' | 'handed-off';
 }
 export const MAX_INTERRUPTIONS = 5;
+export const MAX_INTERRUPTION_TEXT = 200; // code and operation: characters each
 
 export interface LeadLease {
   id: string; label: string; claimedAt: string; renewedAt: string; ttlS: number;
