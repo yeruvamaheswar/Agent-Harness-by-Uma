@@ -340,3 +340,150 @@ test('Accept 1 and 2: the class sets no switch: an option is a ranked list for t
   }
   assert.equal(r.journal().slices['1'].attempts.length, 1, 'no attempt was opened by the engine');
 });
+
+// Slice 15 whole-branch review F4: the continuation names the worker that really ran, not the slice's planned Model.
+test('S15 F4: a substituted worker is named as the worker; the planned Model is a valid replacement, not "the current worker"', async () => {
+  const r = repo();
+  await started(r, '--provider', 'claudeAgent', '--model', 'claude-sonnet-5-5', '--effort', 'high');
+  await interrupt(r, 'quota');
+  await r.run('checkpoint', r.plan, '1', '--kind', 'post-mortem');
+  // the real worker is Claude sonnet: naming it as the replacement is "the current worker"
+  await assert.rejects(r.run('prepare', r.plan, '1', '--to', 'Claude (sonnet/high)', '--lead', LEAD, '--reason', 'r'), /is the current worker/);
+  // the plan's Model (Codex) is not the current worker: it is allowed
+  const p = await r.run('prepare', r.plan, '1', '--to', MODEL, '--lead', LEAD, '--reason', 'quota');
+  assert.equal(p.handoff.from.label, 'Claude (sonnet/high)');
+  await r.run('transfer', r.plan, '1', '--lead', LEAD);
+  const h = await r.run('handoff', r.plan, '1');
+  assert.match(h.text, /you take over slice 1 from Claude \(sonnet\/high\)/);
+  assert.doesNotMatch(h.text, /take over slice 1 from Codex/);
+});
+test('S15 F4: without a recorded provider and model the label stays the slice Model (no change)', async () => {
+  const r = repo();
+  await started(r);
+  await interrupt(r, 'quota');
+  await r.run('checkpoint', r.plan, '1', '--kind', 'post-mortem');
+  const p = await r.run('prepare', r.plan, '1', '--to', FALLBACK, '--lead', LEAD, '--reason', 'quota');
+  assert.equal(p.handoff.from.label, MODEL);
+});
+
+// Slice 15 fix-round review (Codex) R1 and R2.
+test('S15 R1: a refusal by a substituted worker names that worker; moving to another provider needs the provider-change decision', async () => {
+  const r = repo();
+  await started(r, '--provider', 'claudeAgent', '--model', 'claude-sonnet-5-5', '--effort', 'high');
+  const out = await interrupt(r, 'refusal', '--code', 'permission_error', '--source', 't3');
+  assert.match(out.blocked.reason, /refusal by Claude \(sonnet\/high\)/, 'not the planned Codex model');
+  await r.run('unblock', r.plan, '1', '--reason', 'the user reworded the task');
+  await r.run('checkpoint', r.plan, '1', '--kind', 'post-mortem');
+  const before = r.raw();
+  // the planned Fallback is Codex: another provider than the Claude worker that refused
+  await assert.rejects(r.run('prepare', r.plan, '1', '--to', FALLBACK, '--lead', LEAD, '--reason', 'switch'), /Claude \(sonnet\/high\) refused slice 1 .*provider-change/);
+  assert.equal(r.raw(), before, 'nothing was written');
+  // the same provider as the refusing worker needs no decision
+  assert.equal((await r.run('prepare', r.plan, '1', '--to', LEAD, '--lead', LEAD, '--reason', 'same provider')).handoff.to, LEAD);
+});
+test('S15 R2: recovery never recommends a label the slice may not use (a substituted worker is no new candidate)', async () => {
+  const r = repo();
+  await started(r, '--provider', 'codex', '--model', 'gpt-6.1-terra', '--effort', 'medium');
+  const out = await interrupt(r, 'context', '--source', 't3');
+  assert.equal(out.recovery.current, 'Codex (gpt-6.1-terra/medium)');
+  const all = out.recovery.options.flatMap((o: any) => o.candidates ?? []);
+  assert.ok(all.length > 0, 'some authorized candidate remains');
+  assert.ok(all.every((c: string) => !/gpt-6\.1-terra/.test(c)), all.join());
+});
+
+// Slice 15 fix review 2 (Codex) R1a, R1b, R2.
+const approveProviderChange = async (r: R) => {
+  await r.run('decide', r.plan, '1', '--key', 'provider-change', '--risk', 'red', '--question', 'May slice 1 move to another provider?', '--lead', LEAD);
+  await r.run('decide', r.plan, '1', '--key', 'provider-change', '--status', 'approved', '--answer', 'yes', '--source', 'user-cli', '--lead', LEAD);
+};
+test('S15 R1a: a transfer whose launch flags name another provider than the handoff target is refused; nothing is written', async () => {
+  const r = repo();
+  await started(r, '--provider', 'claudeAgent', '--model', 'claude-sonnet-5-5', '--effort', 'high');
+  await interrupt(r, 'refusal', '--code', 'permission_error', '--source', 't3');
+  await r.run('unblock', r.plan, '1', '--reason', 'reworded');
+  await r.run('checkpoint', r.plan, '1', '--kind', 'post-mortem');
+  await approveProviderChange(r);
+  await r.run('prepare', r.plan, '1', '--to', FALLBACK, '--lead', LEAD, '--reason', 'approved switch');
+  await r.run('checkpoint', r.plan, '1', '--kind', 'pre-handoff');
+  const before = r.raw();
+  await assert.rejects(r.run('transfer', r.plan, '1', '--lead', LEAD, '--provider', 'claudeAgent', '--model', 'claude-sonnet-5-5', '--effort', 'high'), /launch flags name Claude, but the handoff target is Codex/);
+  assert.equal(r.raw(), before);
+  // the matching launch works
+  await r.run('transfer', r.plan, '1', '--lead', LEAD, '--provider', 'codex', '--model', 'gpt-6-astra', '--effort', 'medium');
+});
+test('S15 R1b: a Cursor worker that refuses is not mistaken for the planned Codex agent', async () => {
+  const r = repo();
+  await started(r, '--provider', 'cursor', '--model', 'auto');
+  await interrupt(r, 'refusal', '--code', 'permission_error', '--source', 't3');
+  await r.run('unblock', r.plan, '1', '--reason', 'reworded');
+  await r.run('checkpoint', r.plan, '1', '--kind', 'post-mortem');
+  await assert.rejects(r.run('prepare', r.plan, '1', '--to', FALLBACK, '--lead', LEAD, '--reason', 'switch'), /provider-change/);
+  // an unknown provider text fails closed too
+  const r2 = repo();
+  await started(r2, '--provider', 'somethingnew', '--model', 'x');
+  await interrupt(r2, 'refusal', '--code', 'permission_error', '--source', 't3');
+  await r2.run('unblock', r2.plan, '1', '--reason', 'reworded');
+  await r2.run('checkpoint', r2.plan, '1', '--kind', 'post-mortem');
+  await assert.rejects(r2.run('prepare', r2.plan, '1', '--to', FALLBACK, '--lead', LEAD, '--reason', 'switch'), /provider-change/);
+});
+test('S15 R2: recovery after an interrupt uses the --policy pool, as prepare does', async () => {
+  const r = repo();
+  r.put('policy.json', JSON.stringify({ pool: [] }));
+  await started(r);
+  const out = await interrupt(r, 'context', '--source', 't3', '--policy', 'policy.json');
+  const all = out.recovery.options.flatMap((o: any) => o.candidates ?? []);
+  assert.ok(all.every((c: string) => !/^Claude \(opus\/high\)/.test(c)), all.join());
+});
+
+// Slice 15 fix review 3 (Codex) R1 to R4 and R6.
+async function refusedThenUnblocked(r: R, ...startFlags: string[]) {
+  await started(r, ...startFlags);
+  await interrupt(r, 'refusal', '--code', 'permission_error', '--source', 't3');
+  await r.run('unblock', r.plan, '1', '--reason', 'reworded');
+  await r.run('checkpoint', r.plan, '1', '--kind', 'post-mortem');
+}
+test('S15 R1: a worker that recorded only a model is attributed by its model family', async () => {
+  const r = repo();
+  await refusedThenUnblocked(r, '--model', 'claude-sonnet-5-5');
+  await assert.rejects(r.run('prepare', r.plan, '1', '--to', FALLBACK, '--lead', LEAD, '--reason', 'switch'), /provider-change/);
+  const r2 = repo();
+  await refusedThenUnblocked(r2, '--model', 'some-unknown-model');
+  await assert.rejects(r2.run('prepare', r2.plan, '1', '--to', FALLBACK, '--lead', LEAD, '--reason', 'switch'), /provider-change/, 'an unknown model fails closed');
+});
+test('S15 R2: the worker that continues after unblock keeps its identity, so a second refusal is not blamed on the planned agent', async () => {
+  const r = repo();
+  await refusedThenUnblocked(r, '--provider', 'claudeAgent', '--model', 'claude-sonnet-5-5', '--effort', 'high');
+  const a = r.journal().slices['1'].attempts.filter(x => x.kind === 'work');
+  assert.deepEqual([a[1].provider, a[1].model, a[1].effort], ['claudeAgent', 'claude-sonnet-5-5', 'high']);
+  await interrupt(r, 'refusal', '--code', 'permission_error', '--source', 't3');
+  await r.run('unblock', r.plan, '1', '--reason', 'reworded again');
+  await r.run('checkpoint', r.plan, '1', '--kind', 'post-mortem');
+  await assert.rejects(r.run('prepare', r.plan, '1', '--to', FALLBACK, '--lead', LEAD, '--reason', 'switch'), /Claude \(sonnet\/high\) refused slice 1 .*provider-change/);
+});
+test('S15 R3: block and fail refuse a refusal class; only interrupt records one', async () => {
+  const r = repo();
+  await started(r);
+  const before = r.raw();
+  await assert.rejects(r.run('block', r.plan, '1', '--reason', 'x', '--class', 'refusal', '--code', 'permission_error'), /ae interrupt --class refusal/);
+  await assert.rejects(r.run('fail', r.plan, '1', '--reason', 'x', '--code', 'permission_error'), /ae interrupt --class refusal/);
+  assert.equal(r.raw(), before);
+});
+test('S15 R4: after a refusal, a start with another provider needs the provider-change decision', async () => {
+  const r = repo();
+  await started(r, '--provider', 'claudeAgent', '--model', 'claude-sonnet-5-5', '--effort', 'high');
+  await interrupt(r, 'refusal', '--code', 'permission_error', '--source', 't3');
+  await r.run('unblock', r.plan, '1', '--reason', 'reworded');
+  await r.run('fail', r.plan, '1', '--reason', 'tests failed');
+  const before = r.raw();
+  await assert.rejects(r.run('start', r.plan, '1', '--provider', 'OpenAI', '--model', 'gpt-6.1-terra'), /start refused: .* provider switch and needs an approved RED decision provider-change/);
+  assert.equal(r.raw(), before);
+  // the same provider, and a launch after the user approved, work
+  await r.run('start', r.plan, '1', '--provider', 'claudeAgent', '--model', 'claude-sonnet-5-5');
+});
+test('S15 R6: api recovery does not recommend the CLI of a current worker that is not an authorized label', async () => {
+  const r = repo();
+  await started(r, '--provider', 'codex', '--model', 'gpt-6.1-terra', '--effort', 'medium');
+  const out = await interrupt(r, 'api', '--source', 't3');
+  assert.ok(!out.recovery.options.some((o: any) => o.n === 3), JSON.stringify(out.recovery.options.map((o: any) => o.n)));
+  assert.match(out.recovery.excluded.find((x: any) => x.n === 3).reason, /not an authorized label/);
+});

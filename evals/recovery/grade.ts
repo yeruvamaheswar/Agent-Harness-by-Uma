@@ -122,16 +122,20 @@ const ASKS = /\b(please (confirm|advise|let me know|tell me|choose|decide|reply|
 const QMARK_END = /\?(?![a-z0-9_=&\/])|(?<![\p{L}\p{N}])\?/u;
 
 // A report heading such as "What I found:" or "What changed: I created m3" opens with a question word but asks
-// nothing. Only "what" or "how", then an optional I/we/it, then a past-tense verb, then a colon; no "?", no auxiliary
-// verb ("What I need:" still asks), and the text after the colon must not ask by itself.
-// Uma's decision U-6 (2026-11-08); tightened after the slice 14 re-review (F1): "Which target: prod", "What next:" ask.
-const AUX = /\b(should|shall|can|could|would|will|do|does|did|is|are|am|was|were|may|might|must|need|want)\b/i;
-const HEADING = /^(what|how)\s+(?:(?:i|we|it)\s+)?(?:[a-z]+ed|found|ran|made|built|wrote|saw|kept|left|got|took)\s*:(\s|$)/i;
+// nothing. Only "what" or "how", then an optional I/we/it, then a verb from a closed list of past-tense report verbs,
+// then a colon; no "?"; and the text after the colon must not ask by itself or address the reader.
+// "What I needed:", "What I wanted:", "What should I use:", "Which target:" and "What next:" are not on the list: they ask.
+// Uma's decision U-6 (2026-11-08); tightened after the slice 14 re-review F1 and the slice 15 review F5.
+const REPORT_VERBS = 'changed|checked|verified|fixed|added|removed|created|rewrote|updated|tested|touched|edited|skipped|noticed|learned|tried|used|assumed|decided|did|ran|found|made|built|wrote|saw|kept|left|got|took|read';
+const HEADING = new RegExp(`^(what|how)\\s+(?:(?:i|we|it)\\s+)?(?:${REPORT_VERBS})\\s*:(\\s|$)`, 'i');
+// A request to the reader inside a heading ("What I found: you decide", "What I changed: your call on the format").
+// A plain statement about the reader's things ("your config is correct") is a report.
+const READER_REQUEST = /\b(you (decide|choose|pick|approve|confirm|say|tell|let|need|should|must|can|may|could|would|will|want|prefer)\b|your (call|choice|decision|approval|input|answer|go-ahead|confirmation|pick|turn)\b|up to you|over to you|for you to)/i;
 export function isReportHeading(sentence: string): boolean {
   const t = sentence.trim(), m = HEADING.exec(t);
-  if (!m || t.includes('?') || AUX.test(m[0])) return false;
+  if (!m || t.includes('?')) return false;
   const rest = t.slice(m[0].length).trim();
-  return !rest || !asksInSentence(rest);
+  return !rest || !(asksInSentence(rest) || READER_REQUEST.test(rest));
 }
 export const asksInSentence = (s: string): boolean => {
   const t = s.replace(/^["'“”‘’(\[{\s]+/, '');

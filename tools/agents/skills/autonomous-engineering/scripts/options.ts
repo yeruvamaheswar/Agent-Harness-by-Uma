@@ -84,8 +84,52 @@ export function currentLabel(s: Slice, rec: SliceRecord): string {
   const a = openWork(rec), h = a?.handoff === undefined ? undefined : rec.handoffs?.[a.handoff];
   return h?.phase === 'TRANSFERRED' ? h.to : s.model;
 }
-// Who ran one attempt: the replacement named by its handoff, else the slice's Model.
-const attemptLabel = (s: Slice, rec: SliceRecord, a: Attempt) => (a.handoff === undefined ? undefined : rec.handoffs?.[a.handoff]?.to) ?? s.model;
+// Who is really working: the open work attempt's own provider, model and effort when `ae start` recorded them and no handoff
+// names the worker; else currentLabel. For the "from" label, the self-check and the ranking only. The authorization list
+// keeps currentLabel: a worker the lead substituted does not widen what a replacement may be (slice 15 review F4).
+export function workerLabel(s: Slice, rec: SliceRecord): string {
+  const base = currentLabel(s, rec), a = openWork(rec);
+  return a && a.handoff === undefined ? recordedLabel(a) ?? base : base;
+}
+// The agent label an attempt recorded for itself at `ae start` (provider, model, effort), or undefined when it recorded none
+// or an unknown provider. Claude keeps its tier (opus, sonnet, haiku); Codex keeps the model id.
+function recordedLabel(a: Attempt): string | undefined {
+  if (!a.provider || !a.model) return undefined;
+  const family = familyOfProvider(a.provider), agent = family === 'Claude' ? 'Claude' : family === 'OpenAI' ? 'Codex' : undefined;
+  if (!agent) return undefined;
+  const model = agent === 'Claude' ? /(opus|sonnet|haiku)/i.exec(a.model)?.[1].toLowerCase() : a.model;
+  if (!model) return undefined;
+  const label = `${agent} (${model}${a.effort ? `/${a.effort}` : ''})`;
+  return tryRef(label) ? label : undefined;
+}
+// The agent an attempt recorded for itself at `ae start`, from its provider; an unknown provider keeps its own text, so a
+// refusal by it never counts as a refusal by the planned agent (fail closed).
+function recordedAgent(a: { provider?: string; model?: string }): string | undefined {
+  const t = a.provider?.trim().toLowerCase();
+  if (!t) {
+    // a model with no provider: the model's family names the agent; an unknown model keeps its own text (fail closed)
+    const m = a.model?.trim();
+    if (!m) return undefined;
+    const f = familyOfText(m);
+    return f === 'Claude' ? 'Claude' : f === 'OpenAI' ? 'Codex' : m.toLowerCase();
+  }
+  if (['claude', 'claudeagent', 'anthropic'].includes(t)) return 'Claude';
+  if (['codex', 'openai'].includes(t)) return 'Codex';
+  if (t === 'cursor') return 'Cursor';
+  if (t === 'antigravity') return 'Antigravity';
+  if (['grok', 'xai'].includes(t)) return 'Grok';
+  return t;
+}
+// Who ran one attempt, for messages: what the attempt recorded for itself, else the replacement named by its handoff, else the slice's Model.
+const attemptLabel = (s: Slice, rec: SliceRecord, a: Attempt) => recordedLabel(a)
+  ?? (recordedAgent(a) ? `${recordedAgent(a)}${a.model ? ` (${a.model})` : ''}` : undefined)
+  ?? (a.handoff === undefined ? undefined : rec.handoffs?.[a.handoff]?.to) ?? s.model;
+// Every agent the journal names for one attempt: what it recorded, the handoff target, and the planned Model only when
+// neither exists. A refusal binds all of them: a switch away from any of them needs the provider-change decision (DEC-22).
+const attemptAgents = (s: Slice, rec: SliceRecord, a: Attempt): string[] => {
+  const out = [recordedAgent(a), a.handoff === undefined ? undefined : agentOf(rec.handoffs?.[a.handoff]?.to ?? '')].filter((x): x is string => !!x);
+  return out.length ? [...new Set(out)] : [agentOf(s.model) ?? s.model];
+};
 const tryRef = (text: string | undefined): ModelRef | undefined => { try { return text?.trim() ? parseModelRef(text) : undefined; } catch { return undefined; } };
 
 // ---- authorization (REQ-15) ----
@@ -132,13 +176,13 @@ export const PROVIDER_CHANGE = 'provider-change';
 const agentOf = (label: string) => tryRef(label)?.agent;
 
 // The latest refusal on the slice and the agent that refused.
-export function lastRefusal(s: Slice, rec: SliceRecord): { at: string; label: string; agent: string } | undefined {
-  let hit: { at: string; label: string } | undefined;
+export function lastRefusal(s: Slice, rec: SliceRecord): { at: string; label: string; agent: string; agents: string[] } | undefined {
+  let hit: { at: string; label: string; agents: string[] } | undefined;
   for (const a of rec.attempts) {
     if (a.kind !== 'work') continue;
-    for (const i of a.interruptions ?? []) if (i.class === 'refusal' && (!hit || i.at >= hit.at)) hit = { at: i.at, label: attemptLabel(s, rec, a) };
+    for (const i of a.interruptions ?? []) if (i.class === 'refusal' && (!hit || i.at >= hit.at)) hit = { at: i.at, label: attemptLabel(s, rec, a), agents: attemptAgents(s, rec, a) };
   }
-  return hit && { ...hit, agent: agentOf(hit.label) ?? hit.label };
+  return hit && { ...hit, agent: hit.agents[0] };
 }
 
 const approvedAt = (d: Decision) => d.history.filter(h => h.status === 'approved').at(-1)?.at ?? d.updatedAt;
@@ -150,7 +194,7 @@ export function providerChangeApproval(journal: Journal, slice: string, since: s
 
 function checkRefusal(c: RunCtx, s: Slice, rec: SliceRecord, label: string, what: string) {
   const r = lastRefusal(s, rec), to = agentOf(label);
-  if (!r || !to || to === r.agent) return;
+  if (!r || !to || r.agents.every(a => a.toLowerCase() === to.toLowerCase())) return;
   if (providerChangeApproval(c.journal, s.id, r.at, c.root)) return;
   throw new Error(`${what} refused: ${r.label} refused slice ${s.id} at ${r.at}. A switch to another provider (${label}) needs an approved RED decision ${PROVIDER_CHANGE} for slice:${s.id}, approved after the refusal (DEC-22). Ask the user; record the answer with ae decide PLAN ${s.id} --key ${PROVIDER_CHANGE} --risk red --status approved --source S; then prepare again. Nothing was written`);
 }
@@ -235,6 +279,8 @@ const SWITCH_BACK = 'never automatic: a return to an earlier agent is a new ae p
 export type RankInput = {
   slice: { id?: string; model: string; fallback?: string }; current: string; i: Interruption;
   threadId?: string; deadline?: string; pool?: readonly string[];
+  // Keeps only the labels the slice may use (the unchanged REQ-15 rules); a substituted worker's fresh session is not one of them.
+  authorize?: (label: string) => boolean;
 };
 
 function waitable(i: Interruption, deadline?: string): { ok: boolean; why: string } {
@@ -250,7 +296,7 @@ function waitable(i: Interruption, deadline?: string): { ok: boolean; why: strin
 export function rankOptions(input: RankInput): Recovery {
   const { slice, current, i, threadId, deadline } = input, cls = i.class;
   const policy = { ...DEFAULT_POLICY, pool: [...(input.pool ?? DEFAULT_POLICY.pool)] };
-  const ranked = (fresh: boolean) => rankCandidates(slice, current, fresh, { agents: {} }, policy, { caps: null, host: 't3' }).candidates.map(x => x.label);
+  const ranked = (fresh: boolean) => rankCandidates(slice, current, fresh, { agents: {} }, policy, { caps: null, host: 't3' }).candidates.map(x => x.label).filter(l => input.authorize?.(l) ?? true);
   const options: RecoveryOption[] = [], excluded: Recovery['excluded'] = [];
   const add = (n: OptionNo, when: string, candidates?: string[]) => options.push({ n, name: NAMES[n], identity: IDENTITY[n], when, ...(candidates ? { candidates } : {}) });
   const no = (n: OptionNo, reason: string) => excluded.push({ n, reason });
@@ -283,7 +329,8 @@ export function rankOptions(input: RankInput): Recovery {
       break;
     case 'api': case 'auth':
       notQuota(); add(2, RESUME_WHEN);
-      add(3, `after option 2 fails (DEC-11): ae prepare --to "${current}", ae checkpoint, ae transfer --mode cli; attach cli:<pid>@<host>`, [current]);
+      if (input.authorize?.(current) ?? true) add(3, `after option 2 fails (DEC-11): ae prepare --to "${current}", ae checkpoint, ae transfer --mode cli; attach cli:<pid>@<host>`, [current]);
+      else no(3, 'the current worker is not an authorized label for this slice, so its own CLI is not a valid replacement');
       no(4, 'option 4 is for an account limit');
       withCandidates(5, 'after option 3 fails: another provider, the Fallback, then the pool, cheapest capable first', ranked(false));
       break;
@@ -304,10 +351,10 @@ export function rankOptions(input: RankInput): Recovery {
   return out(options.length ? undefined : 'no option qualifies: ae checkpoint, then ae block, and tell the user');
 }
 
-function recoveryFor(journal: Journal, s: Slice, rec: SliceRecord): Recovery | undefined {
+function recoveryFor(journal: Journal, s: Slice, rec: SliceRecord, pool: readonly string[] = DEFAULT_POLICY.pool): Recovery | undefined {
   const open = openWork(rec), i = openInterruptions(open).at(-1);
   if (!open || !i) return undefined;
-  return rankOptions({ slice: s, current: currentLabel(s, rec), i, threadId: open.threadId, deadline: journal.run?.deadline });
+  return rankOptions({ slice: s, current: workerLabel(s, rec), i, threadId: open.threadId, deadline: journal.run?.deadline, pool, authorize: l => isAuthorized(l, s, rec, pool) });
 }
 
 export const optionHooks: Hooks = {
@@ -322,6 +369,25 @@ export const optionHooks: Hooks = {
     if (c.command === 'transfer' && rec.state === 'IN_PROGRESS') {
       const h = rec.handoffs?.at(-1);
       if (h && handoffOpen(h)) checkRefusal(c, s, rec, h.to, 'transfer');
+    }
+    // A refusal is recorded only by `ae interrupt --class refusal`: block and fail would drop it and leave the guard blind (slice 15 R3).
+    if ((c.command === 'block' || c.command === 'fail') && (c.flags.get('class') === 'refusal' || (c.flags.get('code') !== undefined && classForCode(c.flags.get('code')!) === 'refusal'))) {
+      throw new Error(`${c.command} refused: a refusal is recorded with ae interrupt --class refusal, which blocks the slice and arms the provider-change rule (DEC-22). Nothing was written`);
+    }
+    // The launch flags name the worker. After a refusal a launch with another provider is a provider switch (R4); a transfer must launch the handoff target.
+    if ((c.command === 'start' || c.command === 'transfer') && (c.flags.has('provider') || c.flags.has('model'))) {
+      const launch = recordedAgent({ provider: c.flags.get('provider'), model: c.flags.get('model') });
+      if (launch) {
+        if (c.command === 'start') {
+          const r = lastRefusal(s, rec);
+          if (r && !r.agents.every(a => a.toLowerCase() === launch.toLowerCase()) && !providerChangeApproval(c.journal, s.id, r.at, c.root)) {
+            throw new Error(`start refused: ${r.label} refused slice ${s.id} at ${r.at}. A launch as ${launch} is a provider switch and needs an approved RED decision ${PROVIDER_CHANGE} for slice:${s.id}, approved after the refusal (DEC-22). Nothing was written`);
+          }
+        } else {
+          const h = rec.handoffs?.at(-1), to = h && handoffOpen(h) ? agentOf(h.to) : undefined;
+          if (to && to.toLowerCase() !== launch.toLowerCase()) throw new Error(`transfer refused: the launch flags name ${launch}, but the handoff target is ${h!.to}. Launch the target, or prepare a new handoff. Nothing was written`);
+        }
+      }
     }
     if (c.command === 'review') guardReviewer(c, s, rec);
   },
@@ -345,9 +411,9 @@ export const optionHooks: Hooks = {
     if (c.command === 'interrupt') {
       if (c.rec.state === 'BLOCKED') {
         const i = c.rec.attempts.flatMap(a => a.interruptions ?? []).at(-1);
-        return i ? { recovery: { class: i.class, current: currentLabel(c.s, c.rec), options: [], excluded: [], block: c.rec.blocker?.reason ?? 'BLOCKED', decidedBy: 'the user, then the Claude lead', switchBack: SWITCH_BACK } } : undefined;
+        return i ? { recovery: { class: i.class, current: workerLabel(c.s, c.rec), options: [], excluded: [], block: c.rec.blocker?.reason ?? 'BLOCKED', decidedBy: 'the user, then the Claude lead', switchBack: SWITCH_BACK } } : undefined;
       }
-      const r = recoveryFor(c.journal, c.s, c.rec);
+      const r = recoveryFor(c.journal, c.s, c.rec, poolFor(c));
       return r ? { recovery: r } : undefined;
     }
     if (c.command === 'review') {

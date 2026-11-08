@@ -33,7 +33,7 @@ When two rules conflict, the stricter rule wins. This skill never grants itself 
 2. Read the plan's "Waiting on you" list. Ask the user once, in one batch, for all authority and RED items, grouped by level (see `references/authority.md`).
 3. Run `ae init PLAN --profile P --allow LIST` with only the values the user granted. Omit `--allow` when none.
 4. Run `ae lead PLAN --claim --lead-id ID --label "Claude (...)"`.
-5. Record each answer of the batch: `ae decide PLAN [N] --key K --risk R --status approved --question Q --answer A --source S`. S says where the user answered, such as `t3:<thread>:<item>`.
+5. Record each answer of the batch: `ae decide PLAN [N] --key K --risk R --status approved --question Q --answer A --lead "Claude (...)" --lead-id ID --source S`. S says where the user answered, such as `t3:<thread>:<item>`.
 6. Run `ae status PLAN`. Report the counts.
 
 ## EXECUTE mode
@@ -63,7 +63,7 @@ A worker stopped before it reported. An interruption is not a failed attempt: th
 1. Read the stop: T3 `task_status`, or the CLI's JSON. Run `ae interrupt PLAN N --class C --code X --source t3 --lead "Claude (...)"`. Set the class from what you observed; free text is never a class. Pass `--reset-at` only from an observed reset time.
 2. Read `recovery.options` in the result, and take the first one (engine.md, "Recovery options"). A refusal, or three stops with no progress, blocks the slice: tell the user.
 3. Options 1 and 2 keep the attempt: wait for the reset, or resend on the same thread after `task_status` is terminal, then `ae attach` the new task as an alias.
-4. Options 3 to 5 hand off. Run `ae checkpoint PLAN N --kind post-mortem`, then `ae prepare PLAN N --to LABEL --lead "Claude (...)" --reason TEXT`. Stop the old worker. Run `ae transfer PLAN N --lead "Claude (...)" --mode M --disarmed STATUS,METHOD,READ_AT`.
+4. Options 3 to 5 hand off. Run `ae checkpoint PLAN N --kind post-mortem`, then `ae prepare PLAN N --to LABEL --lead "Claude (...)" --reason TEXT`. For a context stop, or any stop where the replacement is the same model, name the target with `, fresh session` (for example `Claude (sonnet/high, fresh session)`); without it `prepare` refuses the target as the current worker. Stop the old worker. Run `ae transfer PLAN N --lead "Claude (...)" --mode M --disarmed STATUS,METHOD,READ_AT`.
 5. Run `ae handoff PLAN N --caps FILE --host H` for the continuation packet. Delegate it with the new launch key, then run `ae attach`. A provider change after a refusal needs an approved `provider-change` decision.
 
 ## OVERNIGHT mode

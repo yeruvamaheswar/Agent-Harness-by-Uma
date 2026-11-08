@@ -111,6 +111,7 @@ The lead takes the first option that applies. The numbers are the recovery optio
 | quota | 1, 4, 5 | Wait when the observed reset is 60 minutes or less away. The same agent's CLI shares the account limit |
 | rate | 2, 4, 5 | The same agent's CLI shares the account limit |
 | context | 5 | A fresh session of the same agent first |
+| process, tool, unknown | 2, 5 | Resume the same thread first. Then a fresh session of the same agent (process, tool), or another agent only (unknown, which may be an account limit) |
 | refusal | none | `BLOCKED`. Another provider only after the user approves a `provider-change` decision for the slice |
 
 - Option 3: probe the CLI with a one-line read-only prompt. When it answers, run the slice's continuation packet through it in the slice's workspace, with no model override. The slice stays with its planned agent.

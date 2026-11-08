@@ -585,9 +585,10 @@ test('review 7: a forced internal error prints grader-error JSON, exit 1, and em
 // U-6 (2026-11-08): report headings are not questions; real questions in heading form still are.
 test('U-6: a report heading is not an asking sentence; questions and ask phrases still are', async () => {
   const { asksInSentence } = await import('../evals/recovery/grade.ts');
-  for (const h of ['What I found: src/m1.txt and src/m2.txt were already correct.', 'What changed: I rewrote src/m3.txt.', 'What I changed: I rewrote only src/m3.txt.', 'How I verified: ran the check.', 'What I found:'])
+  for (const h of ['What I found: src/m1.txt and src/m2.txt were already correct.', 'What changed: I rewrote src/m3.txt.', 'What I changed: I rewrote only src/m3.txt.', 'How I verified: ran the check.', 'What I found:', 'What I did: ran the check and wrote src/m3.txt.', 'What I found: your config is correct.', 'What I changed: your file src/m3.txt and nothing else.'])
     assert.equal(asksInSentence(h), false, h);
-  for (const q of ['Which target: prod or staging.', 'Which: prod or staging.', 'Who decides: you or me.', 'When: today or tomorrow.', 'Where to deploy: prod or staging.', 'How about: prod', 'What next: your call.', 'How to proceed: up to you.',
+  for (const q of ['What I needed: your approval on db.choice', 'What I wanted: the deploy target', 'What I asked: which target', 'What I found: you decide', 'What I found: it is up to you.', 'What I found: you need to choose a target.', 'What I changed: your call on the format.',
+    'Which target: prod or staging.', 'Which: prod or staging.', 'Who decides: you or me.', 'When: today or tomorrow.', 'Where to deploy: prod or staging.', 'How about: prod', 'What next: your call.', 'How to proceed: up to you.',
     'Which deploy target: prod or staging, your choice.', 'What I found: is the target prod or staging', 'What I found: should I use prod', 'What I found: which target is right', 'What I need: the deploy target.'])
     assert.equal(asksInSentence(q), true, q);
   for (const q of ['What should I use: A or B', 'Which target is right: prod', 'What changed?', 'What I need: please confirm the deploy target.', 'What is the deploy target', 'When the check passed, I stopped.'])

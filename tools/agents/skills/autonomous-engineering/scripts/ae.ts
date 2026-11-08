@@ -25,7 +25,7 @@ import { floorWarning, packet } from './packet.ts';
 import type { PacketEnv } from './packet.ts';
 import { decide, listDecisions, lookup, parseKey, parseScope, view } from './decisions.ts';
 import { addInterruption, openInterruptions } from './failover.ts';
-import { parseFailureClass, parseInterruptionSource, parseIsoTime, parseRetryable } from './options.ts';
+import { parseFailureClass, parseInterruptionSource, parseIsoTime, parseRetryable, workerLabel } from './options.ts';
 import { blobIds, snapshotPrefix } from './progress.ts';
 
 // Engine CLI. node --experimental-strip-types ae.ts <command> PLAN [SLICE] [flags]
@@ -224,7 +224,6 @@ const lastHandoff = (rec: SliceRecord): Handoff | undefined => rec.handoffs?.at(
 // A CLOSED handoff owns nothing, even when its attempt was left open (a definition change does not end attempts).
 const transferOf = (rec: SliceRecord) => { const i = openAttempt(rec)?.handoff, h = i === undefined ? undefined : rec.handoffs?.[i]; return h?.phase === 'TRANSFERRED' ? h : undefined; };
 // Who works the slice now: the replacement while its transfer attempt is open, else the slice's Model.
-const currentLabel = (s: Slice, rec: SliceRecord) => transferOf(rec)?.to ?? s.model;
 // DEC-6: Claude is always the lead that decides the replacement.
 function requireLead(a: Args): string {
   const lead = need(a, 'lead');
@@ -416,7 +415,9 @@ const handlers: Record<string, (c: Ctx) => Promise<Result> | Result> = {
     if (from === 'BLOCKED') {
       const prev = rec.attempts.filter(a => a.kind === 'work').at(-1);
       // the same worker continues, so a transfer that owned the blocked attempt owns the new one
-      const next: Attempt = { n: rec.attempts.length + 1, kind: 'work', at, ...(prev?.outcome === 'blocked' && prev.handoff !== undefined ? { handoff: prev.handoff, taskId: prev.taskId } : {}) };
+      // the same worker continues: it keeps the identity the previous attempt recorded, so a later refusal names the right agent
+      const next: Attempt = { n: rec.attempts.length + 1, kind: 'work', at, ...(prev?.provider ? { provider: prev.provider } : {}), ...(prev?.model ? { model: prev.model } : {}), ...(prev?.effort ? { effort: prev.effort } : {}),
+        ...(prev?.outcome === 'blocked' && prev.handoff !== undefined ? { handoff: prev.handoff, taskId: prev.taskId } : {}) };
       rec.attempts.push(next);
       runHook('attemptOpened', hc, next, 'unblock', prev);
       move(rec, 'IN_PROGRESS', `unblocked: ${reason}`, at);
@@ -465,7 +466,7 @@ const handlers: Record<string, (c: Ctx) => Promise<Result> | Result> = {
     const snapshot = parseSnapshot(readJsonFlag(c, 'snapshot')), policy = f.has('policy') ? parsePolicy(readJsonFlag(c, 'policy')) : DEFAULT_POLICY;
     let remaining: number | undefined;
     if (f.has('remaining')) { remaining = Number(f.get('remaining')); if (!(remaining >= 0)) throw new Error('--remaining must be a percent, 0 or more'); }
-    const current = f.get('agent') ?? currentLabel(s, rec), h = lastHandoff(rec);
+    const current = f.get('agent') ?? workerLabel(s, rec), h = lastHandoff(rec);
     return { slice: s.id, state: rec.state, ...(h ? { handoff: { phase: h.phase, to: h.to } } : {}), ...assessSlice(s, current, snapshot, policy, hostOpts(c), remaining) };
   },
 
@@ -490,7 +491,7 @@ const handlers: Record<string, (c: Ctx) => Promise<Result> | Result> = {
       h.to = to.label; h.lead = lead; h.reason = reason;
       return { slice: s.id, state: rec.state, handoff: h, next: h.phase === 'CHECKPOINTED' ? 'ae transfer, ae handoff, delegate, ae transfer --task-id' : 'ae checkpoint' };
     }
-    const open = openAttempt(rec), from = currentLabel(s, rec);
+    const open = openAttempt(rec), from = workerLabel(s, rec);
     self(from);
     const nh: Handoff = { phase: 'PREPARED', at, lead, reason, from: { label: from, ...(open ? { attempt: open.n } : {}), ...(open?.taskId ? { taskId: open.taskId } : {}) }, to: to.label, history: [{ at, phase: 'PREPARED', note: `lead ${lead}: ${reason}` }] };
     // The lead already took a post-mortem (or pre-handoff) checkpoint of this attempt, after its last interruption,
@@ -570,7 +571,7 @@ const handlers: Record<string, (c: Ctx) => Promise<Result> | Result> = {
   decide(c) {
     const f = c.args.flags, key = parseKey(f.get('key')), sliceId = c.args.slice;
     if (sliceId !== undefined) c.slice(sliceId);
-    if (!DECIDE_WRITE.some(x => f.has(x))) return { key, ...(sliceId ? { slice: sliceId } : {}), ...lookup(c.journal, key, sliceId) };
+    if (!DECIDE_WRITE.some(x => f.has(x))) return { key, ...(sliceId ? { slice: sliceId } : {}), ...lookup(c.journal, key, sliceId, sliceId !== undefined ? c.slice(sliceId).s.dependsOn : undefined, c.root) };
     const lead = requireLead(c.args), scope = parseScope(f.get('scope') ?? (sliceId ? `slice:${sliceId}` : undefined), c.plan.slices.map(x => x.id));
     const { decision, created } = decide(c.journal, {
       key, scope, risk: f.get('risk'), status: f.get('status'), question: f.get('question'), answer: f.get('answer'), recommended: f.get('recommended'),

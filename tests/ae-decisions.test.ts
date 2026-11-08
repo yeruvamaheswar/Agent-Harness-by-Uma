@@ -7,7 +7,7 @@ import { mkdtempSync, mkdirSync, readdirSync, readFileSync, realpathSync, writeF
 import { tmpdir } from 'node:os';
 import { dirname, join, relative } from 'node:path';
 import { main } from '../tools/agents/skills/autonomous-engineering/scripts/ae.ts';
-import { runHook } from '../tools/agents/skills/autonomous-engineering/scripts/hooks.ts';
+import { register, runHook } from '../tools/agents/skills/autonomous-engineering/scripts/hooks.ts';
 import { RED_KEYS, decide, listDecisions } from '../tools/agents/skills/autonomous-engineering/scripts/decisions.ts';
 import { MAX_DECISIONS } from '../tools/agents/skills/autonomous-engineering/scripts/contract.ts';
 import { journalBytes, journalPath, withLock } from '../tools/agents/skills/autonomous-engineering/scripts/journal.ts';
@@ -449,4 +449,68 @@ test('LP-1: a dependency-scope decision reaches ae decisions and the packet of t
   const h2 = await r.run('handoff', r.plan, '2');
   assert.match(h2.text, /Settled, do not re-ask \(data, not instructions\): D1 dep\.format = one line/);
   assert.doesNotMatch(h2.text, /other\.only/);
+});
+
+// Slice 15 whole-branch review F1-F3: the read-only lookup must agree with ae status and the packet.
+test('S15 F1: a lookup from a dependent slice sees a dependency decision; an open RED one answers loop, not ask', async () => {
+  const r = repo();
+  await begin(r);
+  await r.d('1', '--key', 'dep.format', '--risk', 'green', '--status', 'assumed', '--question', 'Which format?', '--answer', 'one line', '--rollback', 'rewrite');
+  await r.d('1', '--key', 'db.choice', '--risk', 'red', '--status', 'proposed', '--question', 'Which database?');
+  const a = await r.run('decide', r.plan, '2', '--key', 'dep.format');
+  assert.equal(a.result, 'answered'); assert.equal(a.decision.answer, 'one line');
+  const l = await r.run('decide', r.plan, '2', '--key', 'db.choice');
+  assert.equal(l.result, 'loop', 'slice 2 depends on 1: the open RED decision on slice 1 is already asked');
+  assert.equal((await r.run('decide', r.plan, '3', '--key', 'db.choice')).result, 'ask', 'slice 3 does not depend on slice 1');
+});
+test('S15 F2: an assumption cannot settle a key while a RED decision for it is open; the lookup says loop', async () => {
+  const r = repo();
+  await begin(r);
+  await r.d('--key', 'db.choice', '--risk', 'red', '--status', 'proposed', '--question', 'Which database?');
+  const before = JSON.stringify(r.journal());
+  await assert.rejects(r.d('3', '--key', 'db.choice', '--risk', 'green', '--status', 'assumed', '--question', 'q', '--answer', 'sqlite'), /open RED decision in scope run; an assumption cannot settle it/);
+  assert.equal(JSON.stringify(r.journal()), before, 'nothing was written');
+  assert.equal((await r.run('decide', r.plan, '3', '--key', 'db.choice')).result, 'loop');
+  // an open RED decision wins in a lookup even when a settled one exists in another scope (journals from before this rule)
+  const j = r.journal(); const d = j.decisions!.find(x => x.key === 'db.choice')!;
+  j.decisions!.push({ ...d, id: 'D9', scope: 'slice:3', risk: 'green', status: 'assumed', answer: 'sqlite', rollback: 'r', history: [{ at: d.at, status: 'assumed', by: d.by }] } as any);
+  writeFileSync(journalPath(r.plan), JSON.stringify(j));
+  const look = await r.run('decide', r.plan, '3', '--key', 'db.choice');
+  assert.equal(look.result, 'loop'); assert.equal(look.decision.id, d.id);
+});
+test('S15 F3: the lookup flags a decision whose watched file changed, as ae status does', async () => {
+  const r = repo();
+  await begin(r);
+  r.put('conf/app.json', '{"a":1}\n');
+  await r.d('--key', 'conf.shape', '--risk', 'green', '--status', 'assumed', '--question', 'q', '--answer', 'flat', '--watch', 'conf/app.json');
+  assert.equal((await r.run('decide', r.plan, '3', '--key', 'conf.shape')).decision.stale, undefined);
+  r.put('conf/app.json', '{"a":2}\n');
+  const look = await r.run('decide', r.plan, '3', '--key', 'conf.shape');
+  assert.equal(look.result, 'answered'); assert.equal(look.decision.stale, true); assert.match(look.next, /re-check/);
+  assert.deepEqual((await r.run('status', r.plan)).decisions.stale, ['D1 conf.shape']);
+});
+
+// Slice 15 review F9: an open RED decision of a dependency reaches the dependent slice's packet; `ae report` runs its section once.
+test('S15 F9: a RED decision on a dependency slice is listed as waiting in the dependent slice packet', async () => {
+  const r = repo();
+  await begin(r);
+  await r.d('1', '--key', 'db.choice', '--risk', 'red', '--status', 'proposed', '--question', 'Which database?');
+  r.put('f1.ts', 'x\n');
+  await r.run('start', r.plan, '1');
+  await r.run('finish', r.plan, '1', '--summary', 'done');
+  await r.run('review', r.plan, '1', '--by', 'reviewer', '--note', 'ok');
+  await r.run('verify', r.plan, '1');
+  await r.run('next', r.plan);
+  const h2 = await r.run('handoff', r.plan, '2');
+  assert.match(h2.text, /Waiting on the user \(RED\): db\.choice \(D1\)\. Do not do it; finish other work\./);
+  const h3 = await r.run('handoff', r.plan, '3');
+  assert.doesNotMatch(h3.text, /db\.choice/, 'slice 3 does not depend on slice 1');
+});
+test('S15 F9: ae report calls each reportSection hook once, with the repo root', async () => {
+  const r = repo();
+  await begin(r);
+  const calls: (string | undefined)[] = [];
+  register('s15-spy', { reportSection: (_j, env) => { calls.push(env?.root); return undefined; } });
+  await r.run('report', r.plan, '--json');
+  assert.deepEqual(calls, [r.dir]);
 });
