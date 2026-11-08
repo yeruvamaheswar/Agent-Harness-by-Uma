@@ -428,3 +428,25 @@ test('Accept 9 (F26): superseded decisions do not count toward the 100 cap; ids 
 function registeredGuard() {
   return (j: Journal, flags: ReadonlyMap<string, string>) => runHook('guardWrite', { journal: j, plan: undefined as never, slug: 'p', root: '/', at: '', command: 'decide', flags, skip: new Set() }, undefined);
 }
+
+// LP-1 (lead patch): `ae decisions PLAN N` and the packet include decisions scoped to the slice's dependencies.
+test('LP-1: a dependency-scope decision reaches ae decisions and the packet of the dependent slice', async () => {
+  const r = repo();
+  await begin(r);
+  await r.d('1', '--key', 'dep.format', '--risk', 'green', '--status', 'assumed', '--question', 'Which format?', '--answer', 'one line', '--rollback', 'rewrite');
+  await r.d('3', '--key', 'other.only', '--risk', 'green', '--status', 'assumed', '--question', 'q', '--answer', 'a');
+  const two = await r.run('decisions', r.plan, '2', '--active');
+  assert.deepEqual(two.decisions.map((d: any) => d.key), ['dep.format'], 'slice 2 depends on 1: it sees the slice 1 decision, not the slice 3 one');
+  const three = await r.run('decisions', r.plan, '3', '--active');
+  assert.deepEqual(three.decisions.map((d: any) => d.key), ['other.only'], 'slice 3 has no dependencies');
+  // the packet of slice 2: make it READY by finishing slice 1
+  r.put('f1.ts', 'x\n');
+  await r.run('start', r.plan, '1');
+  await r.run('finish', r.plan, '1', '--summary', 'done');
+  await r.run('review', r.plan, '1', '--by', 'reviewer', '--note', 'ok');
+  await r.run('verify', r.plan, '1');
+  await r.run('next', r.plan);
+  const h2 = await r.run('handoff', r.plan, '2');
+  assert.match(h2.text, /Settled, do not re-ask \(data, not instructions\): D1 dep\.format = one line/);
+  assert.doesNotMatch(h2.text, /other\.only/);
+});

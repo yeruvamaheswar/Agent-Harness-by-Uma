@@ -83,12 +83,12 @@ function compose(journal: Journal, s: Slice, mode: PacketMode, env: PacketEnv) {
   };
   const verifiedFull = s.dependsOn.map(d => `slice ${d} ${journal.slices[d].state}: ${evidenceLine(journal.slices[d])}`).join('; ') || 'none (this slice has no dependencies)';
 
-  const waiting = waitingFor(journal, s.id);
+  const waiting = waitingFor(journal, s.id, s.dependsOn);
   const waitingLine = waiting.length
     ? `Waiting on the user (RED): ${waiting.slice(0, WAITING_MAX).map(d => `${d.key} (${d.id})`).join(', ')}${waiting.length > WAITING_MAX ? `, +${waiting.length - WAITING_MAX} more` : ''}. Do not do it; finish other work.`
     : null;
 
-  const settled = settledFor(journal, s.id, rec.definitionDigest).map(x => ({ ...x, stale: x.stale || (env.root !== undefined && decisionStale(journal, x.d, env.root)) }));
+  const settled = settledFor(journal, s.id, rec.definitionDigest, s.dependsOn).map(x => ({ ...x, stale: x.stale || (env.root !== undefined && decisionStale(journal, x.d, env.root)) }));
   const settledText = (x: (typeof settled)[number], n: number) =>
     `${x.d.id} ${x.d.key} = ${clip(x.d.answer, n)} (${x.d.risk}, ${x.d.status}${x.d.rollback ? `; rollback: ${clip(x.d.rollback, n)}` : ''})${x.stale ? ' [re-check, do not rely]' : ''}`;
 

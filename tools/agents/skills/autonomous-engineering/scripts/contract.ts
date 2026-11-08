@@ -27,7 +27,7 @@ export interface Decision {
 export const MAX_DECISIONS = 100;
 export const MAX_DECISION_HISTORY = 10;
 // Size caps that keep the worst-case journal under 1 MiB (REQ-23; ACC drops a journal over 2 MiB). A writer refuses
-// longer text with a clear error; it never cuts it silently. Superseded decisions count toward MAX_DECISIONS.
+// longer text with a clear error; it never cuts it silently. Superseded decisions do not count toward MAX_DECISIONS (F26).
 export const MAX_DECISION_TEXT = 500; // question, answer, recommended, rollback, source: characters each (about 5.5 KB a decision at most)
 export const MAX_DECISION_EVIDENCE = 5; // evidence locators per decision, 100 characters each
 export const MAX_WATCH = 10; // watched files per decision

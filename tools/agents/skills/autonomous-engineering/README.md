@@ -53,14 +53,23 @@ Never delete the copy. Run both commands from this repo's root, so `.state/backu
 - Sprint: `/autonomous-engineering execute plans/demo.md with the sprint profile`
 - Adaptive: `/autonomous-engineering execute plans/demo.md with the adaptive profile`
 - Usage handoff: `/autonomous-engineering Codex is at 88% on slice 3 of plans/tags.md; hand it over`. Claude is always the lead that picks the replacement. See "Usage handoff" in `references/engine.md`.
+- Failover: `/autonomous-engineering the Codex worker on slice 3 of plans/tags.md stopped at its usage limit; recover it`. The lead records the stop with `ae interrupt`, takes the first recovery option, and hands the replacement one continuation packet. See "Recovery options" in `references/engine.md`.
 
 The sprint profile runs up to 4 slices in parallel. The adaptive profile has no fixed number. At each `ae next`, it reads memory signals on macOS. It starts every safe normal slice while memory pressure is normal. It starts a heavy slice (`Class: heavy`) only on measured headroom, and it backs off after timeouts, memory pressure, or failures. To change the profile of a plan that runs, the lead runs `ae set-profile PLAN --profile NAME`. No profile relaxes a safety rule. See "Adaptive width" in `references/engine.md`.
+
+## Decisions and failover
+- `ae decide PLAN [N] --key K` looks a decision up: `answered`, `loop` (asked and still open), or `ask`. With `--risk`, `--status`, and the other fields, the Claude lead records one. An approval needs `--source`, the place where the user answered.
+- `ae decisions PLAN [N] --active` lists the decisions in force. RECOVER mode runs it first.
+- `ae lead PLAN --claim --lead-id ID --label L` claims the lead lease. Then every lead write passes `--lead-id ID`. `--takeover` and `--release` hand it on.
+- `ae interrupt PLAN N --class C --lead L` records a stopped worker. It is not a failed attempt. The result ranks the recovery options.
+- `ae attach PLAN N --launch-key K --thread-id T --task-id X` binds the launched worker to its attempt.
+- Every command, flag, and rule is in `references/engine.md`: "Commands", "Decisions", "Lead lease and identity", "Progress capture", "Recovery options", "Loop rules", and "Known limits".
 
 ## Files
 | File | Content |
 |---|---|
-| `SKILL.md` | The agent instructions: precedence, the modes (with USAGE), stop conditions, report |
-| `references/engine.md` | Commands, states, profiles and adaptive width, budget, journal, dispatch, usage handoff (snapshot, thresholds, policy, phases) |
+| `SKILL.md` | The agent instructions: precedence, the modes (PLAN, EXECUTE, FAILOVER, OVERNIGHT, USAGE, REVIEW, RECOVER), stop conditions, report |
+| `references/engine.md` | Commands, states, profiles and adaptive width, budget, loop rules, journal, dispatch, usage handoff, decisions, lead lease, progress capture, recovery options, known limits |
 | `references/authority.md` | Authority levels, `--allow` values, enforcement, prompt injection, secrets |
 | `agents/openai.yaml` | Codex flag that keeps the skill hidden |
 | `scripts/` | The engine |
@@ -71,6 +80,9 @@ Tests: `tests/ae-*.test.ts`. Run `node --experimental-strip-types --test tests/a
 - The engine guard checks only the commands the engine runs. Claude Code enforces `controls/controls.json`. Codex, Cursor, and Grok have no harness locks.
 - Verify runs in the checkout that holds the plan. Changes in a separate worktree are not seen until they are in that checkout.
 - A T3 worktree starts from the last local commit. Uncommitted files are not copied.
+- The engine cannot prove who called it. `--lead`, `--lead-id`, and launch keys are strings; the lease prevents honest mistakes, not attacks.
+- The lock text is now `pid:hex`. An older installed engine reads only a pid. Install all engine copies at once.
+- A decision write is refused once the journal reaches 1 MiB, other growing writes above 1.5 MiB, and every write at 1.75 MiB. Then archive the journal and start a new one.
 - Subscription quotas cannot be measured by the engine. The lead passes what it observed to `ae usage`; a missing number is `unknown`. `intensity` is a relative estimate.
 - Adaptive width reads memory signals on macOS only. On other systems it runs like balanced, with one heavy slice at a time. The heavy RSS estimate starts at 2048 MB; measure one heavy run and set it with `ae set-profile`.
 - Not tested: whether Cursor and Grok load skills from `~/.agents/skills/`.

@@ -585,8 +585,8 @@ const handlers: Record<string, (c: Ctx) => Promise<Result> | Result> = {
   // Read-only, no lock.
   decisions(c) {
     const f = c.args.flags, sliceId = c.args.slice;
-    if (sliceId !== undefined) c.slice(sliceId);
-    const list = listDecisions(c.journal, { active: f.has('active'), key: f.get('key'), slice: sliceId });
+    const dependsOn = sliceId !== undefined ? c.slice(sliceId).s.dependsOn : undefined;
+    const list = listDecisions(c.journal, { active: f.has('active'), key: f.get('key'), slice: sliceId, dependsOn });
     return { plan: c.journal.plan, count: list.length, decisions: list.map(d => ({ ...view(d), by: d.by, at: d.at, updatedAt: d.updatedAt })) };
   },
 
@@ -977,7 +977,7 @@ export async function main(argv: string[], deps: Deps): Promise<Result> {
   if (isReadOnly(args)) {
     const l = loadJournal(jfile);
     // report.ts merges the report sections without the env; the env-aware ones replace them here.
-    if (args.command === 'report') return { ...buildReport({ journal: l.journal, journalFile: jfile, root, planText: text, now }), ...sections('reportSection', l.journal, sectionEnv(base)), ...(l.recoveredFromBackup ? { recoveredFromBackup: true } : {}) };
+    if (args.command === 'report') return { ...buildReport({ journal: l.journal, journalFile: jfile, root, planText: text, now, env: sectionEnv(base) }), ...(l.recoveredFromBackup ? { recoveredFromBackup: true } : {}) };
     syncJournal(l.journal, plan, now); // in memory only
     closeStaleHandoffs(l.journal, now.toISOString());
     assertFiles(plan, root, l.journal.authority.allow);

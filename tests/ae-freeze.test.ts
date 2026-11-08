@@ -18,7 +18,7 @@ const ae = read('ae.ts');
 const line = (re: RegExp, what: string) => { const m = ae.match(re); assert.ok(m, `ae.ts has the ${what}`); return m[0]; };
 
 const FROZEN = {
-  'contract.ts': '7d37ec5db5811910b76ce174c5ed81e66ba832da38fb0c51f20f685022903e67',
+  'contract.ts': '58bfb5bf7db5cedc3738bce99cb0f426ea5b23a0e3910c9219f41d5f7cb9158c',
   'hooks.ts': 'ca74c483e264a67efd62505a631fc044eeca240ab05e4e87652f21175f5524b1',
   'packet section list': 'fcbab8b12e3a2d302540efda9d5f4a78d2c3361db6d6f45a96e4bf49706b6395',
   'COMMANDS line': 'ed8fd3f95ae19fb0522ab455dac64fc0b666148be0130a979b3b30721e21ea99',
