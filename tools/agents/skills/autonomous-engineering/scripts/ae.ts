@@ -12,7 +12,7 @@ import { assessCapacity, DEFAULT_HEAVY_RSS_MB, emptyCapacity, MAX_HEAVY_RSS_MB, 
 import type { CapacityDecision, ProbeReading } from './capacity.ts';
 import {
   AUTHORITY, FIX_BUDGET, JOURNAL_CAP_BYTES, JOURNAL_WARN_BYTES, MAX_CHECKPOINTS, MAX_WAIT_LOCK_S, PROFILE_NAMES, awaiting, closeStaleHandoffs, handoffOpen, createJournal, evidenceLine, failureSignature, failures, fingerprint, inspectLock, isProfile, journalBytes, journalPath, loadJournal, LockBusy, move,
-  nextBatch, orphanTempFiles, outputTail, profileForMode, promoteReady, recordFailure, refuseSymlinks, saveJournal, settled, syncJournal, within, withLock, writeAtomic,
+  faultPoint, nextBatch, orphanTempFiles, outputTail, profileForMode, promoteReady, recordFailure, refuseSymlinks, saveJournal, settled, syncJournal, within, withLock, writeAtomic,
 } from './journal.ts';
 import type { Attempt, Checkpoint, Evidence, Handoff, Journal, ProfileChange, SliceRecord } from './journal.ts';
 import { parsePlan, setSliceFields, verifyCommand } from './plan.ts';
@@ -26,7 +26,7 @@ import type { PacketEnv } from './packet.ts';
 import { decide, listDecisions, lookup, parseKey, parseScope, view } from './decisions.ts';
 import { addInterruption, openInterruptions } from './failover.ts';
 import { parseFailureClass, parseInterruptionSource, parseIsoTime, parseRetryable } from './options.ts';
-import { blobIds } from './progress.ts';
+import { blobIds, snapshotPrefix } from './progress.ts';
 
 // Engine CLI. node --experimental-strip-types ae.ts <command> PLAN [SLICE] [flags]
 // JSON on stdout. Errors on stderr with exit 1. `check` exits 0 for allow and 2 for ask or deny.
@@ -37,7 +37,7 @@ type Args = { command: string; plan: string; slice?: string; flags: Map<string, 
 // Files the engine itself rewrites, as canonical repo paths: real root to real plan folder. They never count toward a slice fingerprint.
 const engineOwned = (root: string, planPath: string, jfile: string) => {
   const realRoot = realpathSync(root), dir = realpathSync(dirname(planPath));
-  return new Set([planPath, planPath.replace(/\.md$/, '.html'), jfile, jfile + '.bak', jfile + '.lock', ...orphanTempFiles(planPath, jfile)].map(p => relative(realRoot, join(dir, basename(p)))));
+  return new Set([planPath, planPath.replace(/\.md$/, '.html'), jfile, jfile + '.bak', jfile + '.lock', ...orphanTempFiles(planPath, jfile, jfile + '.bak')].map(p => relative(realRoot, join(dir, basename(p)))));
 };
 type Base = { args: Args; plan: Plan; now: Date; root: string; planPath: string; cwd: string; jfile: string; probe: () => ProbeReading };
 // `discard`: the handler found that nothing may be recorded (an unstable two-phase run); the save is skipped.
@@ -617,6 +617,7 @@ function takeCheckpoint(c: Ctx, check?: CheckpointCheck): Result {
     ...(open ? { attempt: open.n } : {}), role, ...(kind ? { kind } : {}), ...(check ? { check } : {}),
   };
   runHook('checkpointTaken', hc, cp, open);
+  faultPoint('checkpoint:taken');
   rec.checkpoints = [...(rec.checkpoints ?? []), cp].slice(-MAX_CHECKPOINTS);
   const h = lastHandoff(rec);
   if (role === 'lead' && h && handoffOpen(h)) {
@@ -817,7 +818,14 @@ async function recover(b: Base, text: string, waitMs: number): Promise<Result> {
     const found = changedFiles(root), changed = found ?? [];
     const engineFiles = engineOwned(root, planPath, jfile);
     const ownedBy = (p: string) => plan.slices.some(s => s.files.some(f => within(p, f)));
-    const tempFiles = orphanTempFiles(planPath, jfile).map(p => relative(root, p));
+    const tempFiles = orphanTempFiles(planPath, jfile, jfile + '.bak').map(p => relative(root, p));
+    // Removed slices can still name snapshots. Retained refs with pruned checkpoint rows are unreferenced too.
+    // Report only this plan's refs; keep all refs intact.
+    const namedSnapshots = new Set([...Object.values(journal.slices), ...Object.values(journal.removed ?? {})]
+      .flatMap(rec => (rec.checkpoints ?? []).flatMap(cp => cp.snapshot ? [cp.snapshot] : [])));
+    const prefix = snapshotPrefix(basename(planPath, '.md'), 'x').replace(/\/x$/, '/');
+    const orphanSnapshotRefs = (git(root, 'for-each-ref', '--format=%(refname)', prefix) ?? '').split('\n')
+      .filter(ref => ref.startsWith(prefix) && /\/\d+\/\d+$/.test(ref) && !namedSnapshots.has(ref)).sort();
     const unowned = changed.filter(p => !engineFiles.has(p) && !/^BLOCKED[^/]*\.md$/.test(p) && !ownedBy(p));
 
     let applied: Result[] = [];
@@ -842,13 +850,13 @@ async function recover(b: Base, text: string, waitMs: number): Promise<Result> {
     if (apply) {
       const planText = reconcile(text, plan, journal);
       if (l.recoveredFromBackup || l.scrubbed || JSON.stringify(journal) !== before) saveJournal(jfile, journal, now);
-      if (planText !== text) { writeAtomic(planPath, planText, jfile); planChanged = true; }
+      if (planText !== text) { faultPoint('save:before-plan'); writeAtomic(planPath, planText, jfile); faultPoint('save:after-plan'); planChanged = true; }
     }
     return {
       plan: journal.plan, readOnly: !apply, ...(l.recoveredFromBackup ? { recoveredFromBackup: true } : {}),
       lock: lockBefore && { pid: lockBefore.pid, alive: lockBefore.alive, stale: lockBefore.stale, note: lockBefore.stale ? (apply ? 'stale lock (dead pid) taken over' : 'stale lock (dead pid); a writing command takes it over') : 'held by a live process; this report may be out of date' },
       ...(apply && lockBefore?.stale ? { staleLockTakenOver: true } : {}),
-      synced, planDrift, staleEvidence, inProgress, handoffs, tempFiles, ...awaiting(journal, plan), blockedFiles,
+      synced, planDrift, staleEvidence, inProgress, handoffs, tempFiles, orphanSnapshotRefs, orphanSnapshotCount: orphanSnapshotRefs.length, ...awaiting(journal, plan), blockedFiles,
       git: { branch: git(root, 'symbolic-ref', '--short', '-q', 'HEAD') ?? 'detached or none', head: git(root, 'rev-parse', 'HEAD') ?? 'none', changedFiles: found, unowned },
       filesProblems: problems.map(p => p.text),
       next: { batch: nb.batch.map(s => s.id), running: nb.running, waiting: nb.waiting, deferred: nb.deferred, ...(capacity ? { capacity } : {}) },
@@ -928,7 +936,7 @@ function locked(b: Base, text: string, waitMs: number, fn: (c: Ctx) => Promise<R
     const write = args.command === 'init' || recovered || scrubbed || JSON.stringify(journal) !== before;
     if (write && args.command !== 'init') assertSize(c, beforeBytes, beforeStates);
     if (write) saveJournal(jfile, journal, now);
-    if (planText !== text) writeAtomic(planPath, planText, jfile);
+    if (planText !== text) { faultPoint('save:before-plan'); writeAtomic(planPath, planText, jfile); faultPoint('save:after-plan'); }
     return { ...result, ...(recovered ? { recoveredFromBackup: true } : {}), ...(planText !== text ? { rebuild: `~/.agents/bin/md-view.sh ${args.plan}` } : {}) };
   }, waitMs);
 }

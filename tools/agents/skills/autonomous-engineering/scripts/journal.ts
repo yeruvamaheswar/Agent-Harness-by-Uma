@@ -141,18 +141,31 @@ export function refuseSymlinks(...paths: string[]) {
   for (const p of paths) if (isLink(p)) throw new Error(`refusing to use ${p}: it is a symlink; remove it and run the command again`);
 }
 
+// Test-only process death: no finally block releases the lock or cleans up a temp file.
+// Call only from save paths and multi-step flows. Unset (the normal case) is inert.
+export function faultPoint(point: string) {
+  if (process.env.AE_FAULT_POINT === point) process.kill(process.pid, 'SIGKILL');
+}
+
 // Writes a fresh temp file, created exclusively under a unique name (it never follows a planted link),
 // then renames it over `file`. Rename replaces a link at `file` itself, never the link's target.
 // With `lockedBy` (a journal path), it writes only while this process holds that journal's lock.
 // Crash safety: the temp file is fsynced before the rename, and its folder after it, so a crash at any step leaves
 // either the old whole file or the new whole file, never a part (plus at most one orphan temp file, which recover reports).
-export function writeAtomic(file: string, data: string | Buffer, lockedBy?: string) {
+export function writeAtomic(file: string, data: string | Buffer, lockedBy?: string, faultScope?: 'backup' | 'journal') {
   if (lockedBy) assertLockHeld(lockedBy);
   const tmp = `${file}.${process.pid}.${randomBytes(6).toString('hex')}.tmp`;
   const fd = openSync(tmp, 'wx', 0o644);
-  try { writeFileSync(fd, data); fsyncSync(fd); } finally { closeSync(fd); }
+  try {
+    writeFileSync(fd, data);
+    if (faultScope) faultPoint(`${faultScope}:temp-written`);
+    fsyncSync(fd);
+    if (faultScope) faultPoint(`${faultScope}:temp-synced`);
+  } finally { closeSync(fd); }
   try { renameSync(tmp, file); } catch (e) { try { unlinkSync(tmp); } catch { /* already gone */ } throw e; }
+  if (faultScope) faultPoint(`${faultScope}:renamed`);
   fsyncDir(dirname(file));
+  if (faultScope) faultPoint(`${faultScope}:dir-synced`);
 }
 // The rename lives in the folder entry; fsync the folder so the rename survives a power loss.
 // Windows cannot open a folder as a file, and NTFS journals the rename itself.
@@ -184,9 +197,10 @@ export function saveJournal(file: string, journal: Journal, now: Date = new Date
   journal.updatedAt = now.toISOString();
   const text = journalText;
   const old = existsSync(file) ? readJson(file) : null, bak = old ? null : existsSync(file + '.bak') ? readJson(file + '.bak') : null;
-  if (old) writeAtomic(file + '.bak', text(scrub(old)));
-  else if (bak && JSON.stringify(scrub(bak)) !== JSON.stringify(bak)) writeAtomic(file + '.bak', text(scrub(bak)));
-  writeAtomic(file, text(journal), file);
+  faultPoint('save:before');
+  if (old) writeAtomic(file + '.bak', text(scrub(old)), undefined, 'backup');
+  else if (bak && JSON.stringify(scrub(bak)) !== JSON.stringify(bak)) writeAtomic(file + '.bak', text(scrub(bak)), undefined, 'backup');
+  writeAtomic(file, text(journal), file, 'journal');
 }
 
 export function pidAlive(pid: number): boolean {
