@@ -198,6 +198,92 @@ test('fingerprint walks folders, skips .git and node_modules, and marks missing 
   assert.notEqual(fingerprint(r.dir, ['d/', 'gone.txt']), fingerprint(r.dir, ['d/']));
 });
 
+// ---- fingerprint in a Git repo: only files Git lists (tracked, or untracked and not ignored) count inside a walked folder ----
+const gitAdd = (dir: string, ...paths: string[]) => execFileSync('git', ['add', '-f', ...paths], { cwd: dir });
+
+test('fingerprint ignores git-ignored files and folders inside an owned folder', () => {
+  const r = repo([{ n: 1 }]);
+  r.put('.gitignore', 'd/.build/\n*.log\n');
+  r.put('d/a.txt', 'a');
+  const base = fingerprint(r.dir, ['d/']);
+  r.put('d/.build/out.o', '1'); r.put('d/.build/deep/x.o', '1'); r.put('d/run.log', '1');
+  assert.equal(fingerprint(r.dir, ['d/']), base, 'new ignored files do not count');
+  r.put('d/.build/out.o', '2'); r.put('d/run.log', '2');
+  assert.equal(fingerprint(r.dir, ['d/']), base, 'changed ignored files do not count');
+  assert.equal(fingerprint(r.dir, ['.']), fingerprint(r.dir, ['.']), 'owning the whole repo works too');
+});
+
+test('fingerprint still counts a tracked file change and a new untracked, not-ignored file', () => {
+  const r = repo([{ n: 1 }]);
+  r.put('.gitignore', 'd/.build/\n');
+  r.put('d/a.txt', 'a');
+  gitAdd(r.dir, 'd/a.txt');
+  const base = fingerprint(r.dir, ['d/']);
+  r.put('d/a.txt', 'changed');
+  const tracked = fingerprint(r.dir, ['d/']);
+  assert.notEqual(tracked, base, 'a tracked file change counts');
+  r.put('d/new.txt', 'n');
+  assert.notEqual(fingerprint(r.dir, ['d/']), tracked, 'an untracked, not-ignored file counts');
+});
+
+test('fingerprint: a tracked file deleted from disk leaves the fingerprint as if it never existed', () => {
+  const r = repo([{ n: 1 }]);
+  r.put('d/a.txt', 'a'); gitAdd(r.dir, 'd/a.txt');
+  const base = fingerprint(r.dir, ['d/']);
+  r.put('d/b.txt', 'b'); gitAdd(r.dir, 'd/b.txt'); commit(r.dir);
+  assert.notEqual(fingerprint(r.dir, ['d/']), base);
+  unlinkSync(join(r.dir, 'd/b.txt'));
+  assert.equal(fingerprint(r.dir, ['d/']), base, 'same as the old walk: a missing file under a folder is just absent');
+});
+
+test('fingerprint keeps counting an explicitly owned path that git ignores', () => {
+  const r = repo([{ n: 1 }]);
+  r.put('.gitignore', 'secret-ish.txt\nout/\n');
+  r.put('secret-ish.txt', '1'); r.put('out/x.bin', '1');
+  const file = fingerprint(r.dir, ['secret-ish.txt']), folder = fingerprint(r.dir, ['out/']);
+  r.put('secret-ish.txt', '2'); r.put('out/x.bin', '2');
+  assert.notEqual(fingerprint(r.dir, ['secret-ish.txt']), file, 'an owned ignored file counts');
+  assert.notEqual(fingerprint(r.dir, ['out/']), folder, 'an owned ignored folder counts');
+});
+
+test('fingerprint falls back to the plain walk when the root is not a git repo', () => {
+  const dir = realpathSync(mkdtempSync(join(tmpdir(), 'ae-nogit-')));
+  mkdirSync(join(dir, 'd/.build'), { recursive: true });
+  writeFileSync(join(dir, 'd/a.txt'), 'a'); writeFileSync(join(dir, 'd/.build/x'), '1');
+  const base = fingerprint(dir, ['d/']);
+  assert.match(base, /^[0-9a-f]{12}$/);
+  writeFileSync(join(dir, 'd/.build/x'), '2');
+  assert.notEqual(fingerprint(dir, ['d/']), base, 'without Git every file counts, as before');
+});
+
+test('fingerprint of an empty folder is stable and does not throw', () => {
+  const r = repo([{ n: 1 }]);
+  mkdirSync(join(r.dir, 'empty'));
+  assert.equal(fingerprint(r.dir, ['empty/']), fingerprint(r.dir, []));
+  assert.equal(fingerprint(r.dir, ['empty/']), fingerprint(r.dir, ['empty/']));
+});
+
+test('fingerprint: the skip set still wins over a Git-listed file', () => {
+  const r = repo([{ n: 1 }]);
+  r.put('d/a.txt', 'a'); r.put('d/page.html', 'p');
+  const base = fingerprint(r.dir, ['d/'], new Set(['d/page.html']));
+  r.put('d/page.html', 'changed');
+  assert.equal(fingerprint(r.dir, ['d/'], new Set(['d/page.html'])), base);
+});
+
+test('evidence stays fresh when a build writes git-ignored files inside an owned folder', async () => {
+  const r = repo([{ n: 1, files: 'src/' }]);
+  r.put('.gitignore', 'src/.build/\n');
+  r.put('src/a.ts', 'a');
+  await r.run(...initArgs(r));
+  await r.run('next', r.plan);
+  assert.equal((await r.drive('1')).state, 'VERIFIED');
+  r.put('src/.build/out.o', 'compiled');
+  assert.deepEqual((await r.run('recover', r.plan)).staleEvidence, [], 'a build does not make the evidence stale');
+  r.put('src/a.ts', 'edited');
+  assert.equal((await r.run('recover', r.plan)).staleEvidence.length, 1, 'a real edit still does');
+});
+
 test('outputTail keeps 40 lines and 4000 chars; the signature ignores digits', () => {
   const t = outputTail(Array.from({ length: 100 }, (_, i) => `line ${i}`).join('\n') + '\n\n');
   assert.equal(t.split('\n').length, 40);
