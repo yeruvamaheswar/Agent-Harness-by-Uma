@@ -1,6 +1,7 @@
 import { intensity, isUnavailable, parseModelRef, resolveTarget } from './dispatch.ts';
 import type { ModelRef, Opts } from './dispatch.ts';
 import { redact } from './guard.ts';
+import { classForCode } from './options.ts';
 
 // Usage risk and replacement ranking (plans/usage-continuity.md). Pure functions; no I/O, no provider calls.
 // The lead writes the snapshot from what it observed. A missing or unusable number is `unknown`, never a guess.
@@ -27,12 +28,12 @@ export const DEFAULT_POLICY: Policy = {
 const ORDER: Level[] = ['normal', 'unknown', 'assess', 'prepare', 'transfer', 'exhausted'];
 const worse = (a: Level, b: Level) => (ORDER.indexOf(a) >= ORDER.indexOf(b) ? a : b);
 const BUSY: Level[] = ['prepare', 'transfer', 'exhausted']; // too close to a limit to take on a slice
-// Exact provider codes only. Free text is never read: the lead says which kind of limit it is, with `reached`.
-const CODE_KIND = new Map<string, LimitKind>([
-  ['usage_limit_reached', 'quota'], ['insufficient_quota', 'quota'],
-  ['rate_limit_exceeded', 'rate'], ['rate_limited', 'rate'],
-  ['context_length_exceeded', 'context'], ['context_window_exceeded', 'context'],
-]);
+// Exact provider codes only, through the one code table in options.ts (REQ-11). Free text is never read: the lead
+// says which kind of limit it is, with `reached`. A code of a class that is no limit (api, auth, refusal) sets no limit.
+const codeKind = (code: string): LimitKind | undefined => {
+  const k = classForCode(code);
+  return k && (LIMIT_KINDS as readonly string[]).includes(k) ? k as LimitKind : undefined;
+};
 // Every other field is refused, so a limit the lead meant to set cannot be dropped in silence.
 const AGENT_FIELDS = ['limits', 'code', 'observedAt'], LIMIT_FIELDS = ['kind', 'usedPct', 'reached', 'resetAt', 'source'];
 
@@ -57,7 +58,7 @@ function agentKey(name: string): string | null {
 }
 
 // Snapshot shape: {"agents": {"Codex": {"limits": [{"kind": "quota", "usedPct": 88}, {"kind": "quota", "reached": true}], "code": "usage_limit_reached"}}}
-// `reached: true` means the limit is at 100 percent. `code` must be an exact entry in CODE_KIND; any other code is ignored.
+// `reached: true` means the limit is at 100 percent. `code` must be an exact limit code of the code table; any other code is ignored.
 // Free text is redacted here, before anything can store or print it. Unknown keys are listed in `ignored`, redacted.
 export function parseSnapshot(raw: unknown): Snapshot & { ignored: string[] } {
   const agents = (raw as Snapshot)?.agents;
@@ -74,7 +75,7 @@ export function parseSnapshot(raw: unknown): Snapshot & { ignored: string[] } {
     const limits = u.limits ?? [];
     if (!Array.isArray(limits)) fail(`agent "${key}": "limits" must be a list`);
     // redact the text as written; lower-casing first would hide case-sensitive secret shapes such as AKIA keys
-    const raw = (typeof u.code === 'string' ? u.code : '').trim(), fromCode = CODE_KIND.get(raw.toLowerCase());
+    const raw = (typeof u.code === 'string' ? u.code : '').trim(), fromCode = codeKind(raw);
     if (raw && !fromCode) out.ignored.push(redact(raw).slice(0, 60));
     const code = raw.toLowerCase();
     const prev = out.agents[key] ?? { limits: [] };

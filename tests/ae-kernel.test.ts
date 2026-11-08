@@ -15,6 +15,7 @@ import { JOURNAL_CAP_BYTES, JOURNAL_WARN_BYTES, journalPath, loadJournal, saveJo
 import type { Journal } from '../tools/agents/skills/autonomous-engineering/scripts/journal.ts';
 import { register } from '../tools/agents/skills/autonomous-engineering/scripts/hooks.ts';
 import type { Hooks } from '../tools/agents/skills/autonomous-engineering/scripts/hooks.ts';
+import { optionHooks } from '../tools/agents/skills/autonomous-engineering/scripts/options.ts';
 import { identityHooks } from '../tools/agents/skills/autonomous-engineering/scripts/failover.ts';
 
 const AE = join(dirname(fileURLToPath(import.meta.url)), '..', 'tools/agents/skills/autonomous-engineering/scripts/ae.ts');
@@ -364,6 +365,8 @@ test('Accept 6: every hook in hooks.ts is called from ae.ts, and the F2 flags pa
   register('kernel-test', hooks);
   // this test's module provides attach and lead, so failover.ts lends it the two commands
   register('failover', { ...identityHooks, commands: undefined });
+  // this test's module is the only one that answers an interruption (options.ts would block a refusal first)
+  register('options', {});
   try {
     const r = repo([{ n: 1 }, { n: 2 }]);
     await r.run('init', r.plan);
@@ -425,7 +428,7 @@ test('Accept 6: every hook in hooks.ts is called from ae.ts, and the F2 flags pa
     assert.equal((await r.run('report', r.plan, '--json')).kernelReportRoot, r.dir);
     await r.run('recover', r.plan, '--apply', '--lead-id', 'L1');
     assert.ok(calls.includes('guardWrite:recover:-'), 'recover --apply runs guardWrite');
-  } finally { register('kernel-test', {}); register('failover', identityHooks); }
+  } finally { register('kernel-test', {}); register('failover', identityHooks); register('options', optionHooks); }
 });
 
 test('Accept 6: the other F2 flags parse (values and booleans) without a module', async () => {
