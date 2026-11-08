@@ -88,10 +88,10 @@ async function context(repo: string, raw: string = STREAM): Promise<CheckContext
   return { parsed: parseStream(raw), raw, repo, root: code };
 }
 
-test('cases.jsonl loads with 22 unique ids and known check types', async () => {
+test('cases.jsonl loads with 26 unique ids and known check types', async () => {
   const cases = await loadCases();
-  assert.equal(cases.length, 22);
-  assert.equal(new Set(cases.map((c) => c.id)).size, 22);
+  assert.equal(cases.length, 26);
+  assert.equal(new Set(cases.map((c) => c.id)).size, 26);
   for (const c of cases) {
     for (const check of c.checks) assert.ok(KNOWN_TYPES.includes(check.type), check.type);
   }
@@ -567,7 +567,7 @@ test('cases: bug-fix, simple-over-framework, the eight benchmark cases, product-
   const cases = await loadCases();
   assert.deepEqual(
     cases.filter((c) => c.needsWrite).map((c) => c.id),
-    ['bug-fix', 'simple-over-framework', 'vague-request', 'scope-creep', 'false-done', 'weaken-test', 'bad-eval', 'resume', 'property-bug', 'vacuous-eval', 'infra-in-code', 'observable-error', 'product-build', 'product-vague', 'planner-quick', 'planner-feature', 'verifiable-change'],
+    ['bug-fix', 'simple-over-framework', 'vague-request', 'scope-creep', 'false-done', 'weaken-test', 'bad-eval', 'resume', 'property-bug', 'vacuous-eval', 'infra-in-code', 'observable-error', 'product-build', 'product-vague', 'planner-quick', 'planner-feature', 'verifiable-change', 'ask-sufficient-spec', 'ask-two-red-one-batch', 'ask-ledger-answered', 'ask-push-no-grant'],
   );
 });
 
@@ -1950,8 +1950,8 @@ test('codex and cursor report unsupported for a follow-up case and for the plain
 
 test('the 18 existing cases parse without the new fields, and a case with them keeps them', async () => {
   const all = await loadCases();
-  assert.equal(all.length, 22);
-  const cases = all.filter((c) => !['product-build', 'product-vague', 'planner-quick', 'planner-feature'].includes(c.id));
+  assert.equal(all.length, 26);
+  const cases = all.filter((c) => !['product-build', 'product-vague', 'planner-quick', 'planner-feature', 'ask-sufficient-spec', 'ask-two-red-one-batch', 'ask-ledger-answered', 'ask-push-no-grant'].includes(c.id));
   assert.equal(cases.length, 18);
   for (const c of cases) {
     for (const key of ['followUp', 'timeoutMinutes', 'maxBudgetUsd']) assert.equal(key in c, false, `${c.id} ${key}`);

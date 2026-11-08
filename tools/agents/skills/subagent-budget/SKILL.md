@@ -58,4 +58,8 @@ Checked 2026-10-26 against `delegate_task` and `orchestrator_capabilities`.
 
 ## After a failed check
 
-Raise one child by one rung, or switch it to the next-best provider, and say why. Do not raise the others. After three failed attempts on one task, stop and ask.
+Follow the attempt ladder: the first failure gets one bounded fix by the builder; the second gets the escalation step (one rung up, or the next-best provider); the third goes to the `Fallback:` owner. The next failure sets FAILED. Say why at each step. Do not raise the other children.
+
+An interruption is not a failed attempt. A quota stop, a provider error, a host restart, or a lost session does not use the budget. Checkpoint the work and hand it to a replacement. Three interruptions in a row with no fingerprint progress set BLOCKED.
+
+Ask the user only when no fallback is left. Report the missing fact once, with your recommended answer.

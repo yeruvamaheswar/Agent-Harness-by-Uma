@@ -96,7 +96,7 @@ These skills live in `tools/agents/skills/`. Install one with `npm run harness -
 | --- | --- | --- | --- |
 | autonomous-engineering | beta | Execute, review, and recover a multi-agent-planning plan to VERIFIED slices, with an engine that records state and evidence and refuses unsafe commands. | /autonomous-engineering; Codex $autonomous-engineering. Also loads by description. |
 | babysit-pr | experimental | Monitor a pull request through review and CI. | /babysit-pr; Codex $babysit-pr. Also loads by description. |
-| continue-work | beta | Resume a task in a new session from the prior trail and the real repo state, then stop at the resume point. | /continue-work; Codex $continue-work. Load only by name. |
+| continue-work | beta | Resume a task in a new session from the prior trail and the real repo state, then continue from the resume point. | /continue-work; Codex $continue-work. Load only by name. |
 | council | experimental | Trigger this if the user says 'council'. | /council; Codex $council. Also loads by description. |
 | file-pr | beta | File a concise pull request. | /file-pr; Codex $file-pr. Also loads by description. |
 | full-send | experimental | Trigger this if the user says 'full send'. | /full-send; Codex $full-send. Load only by name. |

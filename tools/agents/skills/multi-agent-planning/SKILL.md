@@ -30,8 +30,8 @@ Goal: a plan page where each slice has one owner, one reviewer, one check, and o
 ## Default: plan only
 - Write the plan page. Start no worker.
 - The lead may start as many read-only research children during planning as the work needs, to finish faster: probe code, check host capabilities, draft slice sections. Load `subagent-budget` first. It sets no fixed count. Each child gets the cheapest model and effort that can do its task, per `subagent-budget`. A research child never edits a file. The lead reviews every result and owns the plan, so speed does not lower quality. The lead writes the final page.
-- Start workers only when the user asks for execution or the task explicitly authorizes implementation.
-- Explicit authorization means that the user asks, in this conversation, to execute, run, or implement the plan or named slices. A plain feature request, such as "add tags to notes", is a planning request.
+- Start workers only when the user asks for execution, answers yes to the preflight "May I start?", or the task explicitly authorizes implementation.
+- Explicit authorization means that the user asks, in this conversation, to execute, run, or implement the plan or named slices. For a plain feature request, such as "add tags to notes", the one preflight batch also asks whether to start. After the answer, start the tracer. "Plan only" applies when the user asks only for a plan.
 - Planning creates no branch and no worktree. Every slice stays `PLANNED`.
 - In the reply, say that nothing was launched.
 
@@ -75,7 +75,7 @@ Understand → Design → Slice → Implement → Test → Review → Integrate 
 ## Execution (only when authorized)
 1. Validate the plan: build the page, fix its `warn:` lines, confirm `--check` prints `fresh`.
 2. For a feature, confirm that `## Requirements`, `## Decisions`, and `## Evals` exist. Start no worker before they do.
-3. Confirm each approval that the plan lists under "Waiting on you".
+3. List the approvals under "Waiting on you" that neither the plan nor the ledger (`ae decisions --active`) already records, and ask for them in one batch. Do not re-ask a recorded approval.
 4. Run `git status` and `git worktree list`. Stop when unrelated user work is at risk.
 5. Delegate the tracer to its `Model:` worker. The coordinator does not build it.
 6. The `Review:` agent, in another session, reads the diff and runs `Verify:`. Set `REVIEWED` from that review.
