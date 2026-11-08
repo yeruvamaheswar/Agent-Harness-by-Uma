@@ -3,6 +3,7 @@ import { relative } from 'node:path';
 import { redact } from './guard.ts';
 import { settled, type Journal } from './journal.ts';
 import { runStop } from './run.ts';
+import { sections } from './hooks.ts';
 import type { State } from './plan.ts';
 
 // A snapshot of recorded facts. Do not sync definitions, infer verification, or write files here.
@@ -61,6 +62,7 @@ export function buildReport({ journal, journalFile, root, planText, now = new Da
     handoffs: slices.flatMap(s => s.handoffs.map(h => ({ slice: s.id, ...h }))),
     charter: journal.run ?? null, stop: runStop(journal, now),
     journal: journalFile, readOnly: true,
+    ...sections('reportSection', journal),
   };
   // Redact every output string, including Git and plan labels. The journal loader already scrubs old records.
   return JSON.parse(JSON.stringify(report, (_key, value: unknown) => typeof value === 'string' ? redact(value) : value)) as typeof report;

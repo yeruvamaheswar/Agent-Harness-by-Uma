@@ -7,6 +7,7 @@ import { definitionDigest } from './plan.ts';
 import type { Plan, Slice, State } from './plan.ts';
 import type { RunCharter } from './run.ts';
 import type { CapacityDecision, CapacityState } from './capacity.ts';
+import type { AttemptAdditions, BlockerAdditions, CheckpointAdditions, EvidenceAdditions, HandoffAdditions, JournalAdditions } from './contract.ts';
 
 // Run journal: plans/<slug>.run.json. The journal is canonical for the engine (DEC-4).
 
@@ -31,15 +32,15 @@ export type Attempt = {
   n: number; kind: 'work' | 'verify' | 'review'; at: string; endedAt?: string; outcome?: 'finished' | 'failed' | 'blocked' | 'handed-off';
   provider?: string; model?: string; effort?: string; taskId?: string; handoff?: number; // index into SliceRecord.handoffs
   summary?: string; reason?: string; exitCode?: number | null; signature?: string; outputTail?: string;
-};
+} & AttemptAdditions;
 export type Evidence = {
   kind: 'command' | 'manual'; command?: string; exitCode?: number; durationMs?: number; outputTail?: string; note?: string;
   by: string; at: string; gitHead: string; fingerprint: string; stale?: boolean;
-};
+} & EvidenceAdditions;
 export type Move = { at: string; from: State; to: State; reason: string; claim?: { state: string; evidence: string } };
 export type SliceRecord = {
   state: State; definitionDigest: string; attempts: Attempt[]; evidence: Evidence[];
-  review?: { by: string; note: string; at: string }; blocker?: { reason: string; at: string };
+  review?: { by: string; note: string; at: string }; blocker?: { reason: string; at: string } & BlockerAdditions;
   budgetFrom?: number; integratedRef?: string; history: Move[];
   checkpoints?: Checkpoint[]; handoffs?: Handoff[];
 };
@@ -47,7 +48,7 @@ export type SliceRecord = {
 export type Checkpoint = {
   at: string; by: string; gitHead: string; branch: string; fingerprint: string; changed: string[]; unowned: string[];
   lastCheck: string; done?: string; next?: string; note?: string;
-};
+} & CheckpointAdditions;
 // A usage handoff. The slice stays IN_PROGRESS in the plan; the phase lives here (plans/usage-continuity.md DEC-3).
 // It is not a failed attempt: the old attempt ends `handed-off`, and the fix budget carries over.
 export const MAX_CHECKPOINTS = 5;
@@ -81,7 +82,7 @@ export function closeStaleHandoffs(journal: Journal, at: string) {
 export type Handoff = {
   phase: HandoffPhase; at: string; lead: string; reason: string; from: { label: string; attempt?: number; taskId?: string };
   to: string; checkpointAt?: string; taskId?: string; history: { at: string; phase: HandoffPhase; note: string }[];
-};
+} & HandoffAdditions;
 // One row per `ae set-profile` that changed something. `heavyRssMB` is the new estimate, when it changed.
 export type ProfileChange = { at: string; from: ProfileName; to: ProfileName; reason?: string; heavyRssMB?: number };
 export type Journal = {
@@ -90,7 +91,7 @@ export type Journal = {
   createdAt: string; updatedAt: string; run?: RunCharter;
   slices: Record<string, SliceRecord>; removed?: Record<string, SliceRecord>;
   capacity?: CapacityState; profileChanges?: ProfileChange[];
-};
+} & JournalAdditions;
 
 export const journalPath = (planPath: string) => planPath.replace(/\.md$/, '') + '.run.json';
 const hex12 = (text: string) => createHash('sha256').update(text).digest('hex').slice(0, 12);

@@ -1,0 +1,291 @@
+{
+  "schemaVersion": 1,
+  "plan": "p.md",
+  "profile": "sprint",
+  "authority": {
+    "allow": [
+      "deps"
+    ],
+    "grantedBy": "user",
+    "at": "2026-11-07T12:00:01.000Z"
+  },
+  "createdAt": "2026-11-07T12:00:01.000Z",
+  "updatedAt": "2026-11-07T12:00:17.000Z",
+  "slices": {
+    "1": {
+      "state": "VERIFIED",
+      "definitionDigest": "dcb3bf409eff",
+      "attempts": [
+        {
+          "n": 1,
+          "kind": "work",
+          "at": "2026-11-07T12:00:03.000Z",
+          "provider": "codex",
+          "model": "gpt-6.1-sol",
+          "effort": "high",
+          "taskId": "task-a",
+          "outcome": "handed-off",
+          "endedAt": "2026-11-07T12:00:07.000Z",
+          "reason": "Codex quota reached"
+        },
+        {
+          "n": 2,
+          "kind": "work",
+          "at": "2026-11-07T12:00:07.000Z",
+          "handoff": 0,
+          "taskId": "task-b",
+          "provider": "claudeAgent",
+          "model": "claude-sonnet-5-5",
+          "effort": "high",
+          "outcome": "finished",
+          "endedAt": "2026-11-07T12:00:09.000Z",
+          "summary": "a.ts done"
+        },
+        {
+          "n": 3,
+          "kind": "review",
+          "at": "2026-11-07T12:00:10.000Z",
+          "outcome": "finished",
+          "endedAt": "2026-11-07T12:00:10.000Z",
+          "summary": "diff read"
+        }
+      ],
+      "evidence": [
+        {
+          "kind": "command",
+          "command": "test -f a.ts",
+          "exitCode": 0,
+          "durationMs": 6,
+          "outputTail": "",
+          "by": "engine",
+          "at": "2026-11-07T12:00:11.000Z",
+          "gitHead": "none",
+          "fingerprint": "bd20d7f39136"
+        }
+      ],
+      "history": [
+        {
+          "at": "2026-11-07T12:00:02.000Z",
+          "from": "PLANNED",
+          "to": "READY",
+          "reason": "dependencies verified"
+        },
+        {
+          "at": "2026-11-07T12:00:03.000Z",
+          "from": "READY",
+          "to": "IN_PROGRESS",
+          "reason": "start"
+        },
+        {
+          "at": "2026-11-07T12:00:07.000Z",
+          "from": "IN_PROGRESS",
+          "to": "IN_PROGRESS",
+          "reason": "handoff: Codex (gpt-6.1-sol/high) -> Claude (sonnet/high) (lead Claude (opus/high)): Codex quota reached; not a failed attempt"
+        },
+        {
+          "at": "2026-11-07T12:00:09.000Z",
+          "from": "IN_PROGRESS",
+          "to": "AGENT_FINISHED",
+          "reason": "worker reported done (a claim, not verified)"
+        },
+        {
+          "at": "2026-11-07T12:00:10.000Z",
+          "from": "AGENT_FINISHED",
+          "to": "REVIEWED",
+          "reason": "reviewed by reviewer-1"
+        },
+        {
+          "at": "2026-11-07T12:00:11.000Z",
+          "from": "REVIEWED",
+          "to": "VERIFIED",
+          "reason": "verify command exit 0"
+        }
+      ],
+      "checkpoints": [
+        {
+          "at": "2026-11-07T12:00:04.000Z",
+          "by": "lead",
+          "gitHead": "none",
+          "branch": "main",
+          "fingerprint": "bd20d7f39136",
+          "changed": [
+            "a.ts"
+          ],
+          "unowned": [],
+          "lastCheck": "none",
+          "done": "a.ts written",
+          "next": "review a.ts"
+        },
+        {
+          "at": "2026-11-07T12:00:06.000Z",
+          "by": "lead",
+          "gitHead": "none",
+          "branch": "main",
+          "fingerprint": "bd20d7f39136",
+          "changed": [
+            "a.ts"
+          ],
+          "unowned": [],
+          "lastCheck": "none",
+          "done": "a.ts written",
+          "next": "add the test"
+        }
+      ],
+      "handoffs": [
+        {
+          "phase": "CLOSED",
+          "at": "2026-11-07T12:00:05.000Z",
+          "lead": "Claude (opus/high)",
+          "reason": "Codex quota reached",
+          "from": {
+            "label": "Codex (gpt-6.1-sol/high)",
+            "attempt": 1,
+            "taskId": "task-a"
+          },
+          "to": "Claude (sonnet/high)",
+          "history": [
+            {
+              "at": "2026-11-07T12:00:05.000Z",
+              "phase": "PREPARED",
+              "note": "lead Claude (opus/high): Codex quota reached"
+            },
+            {
+              "at": "2026-11-07T12:00:06.000Z",
+              "phase": "CHECKPOINTED",
+              "note": "checkpoint after prepare"
+            },
+            {
+              "at": "2026-11-07T12:00:07.000Z",
+              "phase": "TRANSFERRED",
+              "note": "lead Claude (opus/high) transferred to Claude (sonnet/high); no task yet"
+            },
+            {
+              "at": "2026-11-07T12:00:08.000Z",
+              "phase": "TRANSFERRED",
+              "note": "task task-b attached by lead Claude (opus/high)"
+            },
+            {
+              "at": "2026-11-07T12:00:09.000Z",
+              "phase": "CLOSED",
+              "note": "the replacement no longer owns the slice (attempt finished; slice AGENT_FINISHED)"
+            }
+          ],
+          "checkpointAt": "2026-11-07T12:00:06.000Z",
+          "taskId": "task-b"
+        }
+      ],
+      "review": {
+        "by": "reviewer-1",
+        "note": "diff read",
+        "at": "2026-11-07T12:00:10.000Z"
+      }
+    },
+    "2": {
+      "state": "READY",
+      "definitionDigest": "527a506837d7",
+      "attempts": [
+        {
+          "n": 1,
+          "kind": "work",
+          "at": "2026-11-07T12:00:12.000Z",
+          "provider": "codex",
+          "model": "gpt-6-astra",
+          "effort": "medium",
+          "outcome": "finished",
+          "endedAt": "2026-11-07T12:00:13.000Z"
+        },
+        {
+          "n": 2,
+          "kind": "review",
+          "at": "2026-11-07T12:00:14.000Z",
+          "outcome": "finished",
+          "endedAt": "2026-11-07T12:00:14.000Z",
+          "summary": "ok"
+        },
+        {
+          "n": 3,
+          "kind": "verify",
+          "at": "2026-11-07T12:00:15.000Z",
+          "exitCode": 1,
+          "outputTail": "",
+          "signature": "e3b0c44298fc",
+          "outcome": "failed",
+          "endedAt": "2026-11-07T12:00:15.000Z",
+          "reason": "verify failed (exit 1): false"
+        }
+      ],
+      "evidence": [],
+      "history": [
+        {
+          "at": "2026-11-07T12:00:02.000Z",
+          "from": "PLANNED",
+          "to": "READY",
+          "reason": "dependencies verified"
+        },
+        {
+          "at": "2026-11-07T12:00:12.000Z",
+          "from": "READY",
+          "to": "IN_PROGRESS",
+          "reason": "start"
+        },
+        {
+          "at": "2026-11-07T12:00:13.000Z",
+          "from": "IN_PROGRESS",
+          "to": "AGENT_FINISHED",
+          "reason": "worker reported done (a claim, not verified)"
+        },
+        {
+          "at": "2026-11-07T12:00:14.000Z",
+          "from": "AGENT_FINISHED",
+          "to": "REVIEWED",
+          "reason": "reviewed by reviewer-2"
+        },
+        {
+          "at": "2026-11-07T12:00:15.000Z",
+          "from": "REVIEWED",
+          "to": "READY",
+          "reason": "verify failed (exit 1): false; failure 1/4"
+        }
+      ]
+    },
+    "3": {
+      "state": "BLOCKED",
+      "definitionDigest": "6e5ae5c90f0c",
+      "attempts": [
+        {
+          "n": 1,
+          "kind": "work",
+          "at": "2026-11-07T12:00:16.000Z",
+          "outcome": "blocked",
+          "endedAt": "2026-11-07T12:00:17.000Z",
+          "reason": "needs a user decision on storage"
+        }
+      ],
+      "evidence": [],
+      "history": [
+        {
+          "at": "2026-11-07T12:00:02.000Z",
+          "from": "PLANNED",
+          "to": "READY",
+          "reason": "dependencies verified"
+        },
+        {
+          "at": "2026-11-07T12:00:16.000Z",
+          "from": "READY",
+          "to": "IN_PROGRESS",
+          "reason": "start"
+        },
+        {
+          "at": "2026-11-07T12:00:17.000Z",
+          "from": "IN_PROGRESS",
+          "to": "BLOCKED",
+          "reason": "needs a user decision on storage"
+        }
+      ],
+      "blocker": {
+        "reason": "needs a user decision on storage",
+        "at": "2026-11-07T12:00:17.000Z"
+      }
+    }
+  }
+}
