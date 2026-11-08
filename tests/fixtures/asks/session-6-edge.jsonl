@@ -1,0 +1,12 @@
+{"uuid":"u6_1","sessionId":"session-6","type":"user","timestamp":"2026-11-06T10:00:00.000Z","message":{"role":"user","content":[{"type":"text","text":"Edge case testing."}]}}
+not valid json line here
+12345
+null
+["an","array"]
+{"uuid":"u6_2","sessionId":"session-6","type":"assistant","timestamp":"2026-11-06T10:00:10.000Z","message":{"id":"msg_edge_1","role":"assistant","content":[{"type":"text","text":"Should we proceed first?"},{"type":"tool_use","id":"tool_ask_sub","name":"AskUserQuestion","input":{"questions":[null,"Is this question valid with null sibling?"]}}]}}
+{"uuid":"u6_3","sessionId":"session-6","type":"user","timestamp":"2026-11-06T12:00:00.000Z","message":{"role":"user","content":[{"type":"tool_result","tool_use_id":"tool_ask_sub","content":"Yes."}]}}
+{"uuid":"u6_4","sessionId":"session-6","type":"assistant","timestamp":"2026-11-06T12:00:10.000Z","message":{"id":"msg_edge_2","role":"assistant","content":[{"type":"text","text":"Is this done?"},{"type":"tool_use","id":"tool_calc","name":"Calculate","input":{}}]}}
+{"uuid":"u6_5","sessionId":"session-6","type":"user","timestamp":"2026-11-06T12:00:20.000Z","message":{"role":"user","content":[{"type":"tool_result","tool_use_id":"tool_calc","content":"Done."}]}}
+{"uuid":"u6_6","sessionId":"session-6","type":"assistant","timestamp":"2026-11-06T12:00:30.000Z","message":{"id":"msg_edge_3","role":"assistant","content":[{"type":"text","text":"Ready?"}]}}
+{"uuid":"u6_7","sessionId":"session-6","type":"user","timestamp":"2026-11-06T12:00:40.000Z","message":{"role":"user","content":[{"type":"text","text":"Ready."}]}}
+{"uuid":"u6_8","sessionId":"session-6","type":"assistant","timestamp":"2026-11-06T12:00:50.000Z","message":{"id":"msg_edge_4","role":"assistant","content":[{"type":"tool_use","id":"tool_ask_end","name":"AskUserQuestion","input":{"questions":["Unanswered final question?"]}}]}}

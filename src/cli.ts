@@ -18,6 +18,7 @@ import {importNotion,importPluginExport} from './notion.ts';
 import {indexRelease,vectorSearch} from './supabase.ts';
 import type {EmbeddingBatch} from './supabase.ts';
 import type {Config} from './core.ts';
+import {computeAsksMetrics,formatAsksSummary} from './asks.ts';
 
 const args=process.argv.slice(2), root=harnessRoot(args), command=args[0];
 function option(name:string){const i=args.indexOf(name);return i>=0?args[i+1]:undefined;}
@@ -99,6 +100,22 @@ try {
     }
     case 'context': if(args[1]!=='audit')throw new Error('Unknown context command. Run help.');output(await contextAudit(root,{save:args.includes('--save'),claudeContext:args.includes('--claude-context')?required(option('--claude-context'),'--claude-context FILE'):undefined}));break;
     case 'eval': {const e=await evalCommand(root,args);output(e.value);if(e.failed)process.exitCode=1;break;}
+    case 'asks': {
+      const dir=required(option('--dir')??(args[1]?.startsWith('--')?undefined:args[1]),'--dir DIR');
+      const daysIndex=args.indexOf('--days');
+      let days:number|undefined;
+      if(daysIndex>=0){
+        const val=args[daysIndex+1];
+        if(!val||val.startsWith('--'))throw new Error('Missing value for --days. Must be a positive finite number.');
+        const n=Number(val);
+        if(isNaN(n)||!isFinite(n)||n<=0)throw new Error('Invalid value for --days. Must be a positive finite number.');
+        days=n;
+      }
+      const m=await computeAsksMetrics(dir,{days});
+      if(args.includes('--json'))output(m);
+      else console.log(formatAsksSummary(m));
+      break;
+    }
     case 'status': {
       let active;try{active=await current(root);}catch{}
       const names=await readdir(join(root,'.state/installations')).catch(()=>[]);
@@ -107,6 +124,6 @@ try {
     }
     case 'search': {const r=option('--release')?await readRelease(root,option('--release')!):await current(root);output({mode:'local-keyword',release:r.version,results:localSearch(r,required(args[1],'query'),5,option('--domain'))});break;}
     case 'get-document': {const r=option('--release')?await readRelease(root,option('--release')!):await current(root);const d=r.documents.find(d=>d.id===args[1]);if(!d)throw new Error('Document not found in this release.');output({release:r.version,...d});break;}
-    default: console.log(`Agentic Harness\n\npreview\nimport-notion\nimport-notion-export FILE\nexport-chunks VERSION\nindex VERSION --embeddings FILE\nsearch-vector VERSION MODEL VECTOR_JSON_FILE [--domain engineering]\npublish VERSION --approve-sha DIGEST [--bootstrap]\nactivate VERSION\ninstall codex|claude|cursor-files|generic [--version VERSION]\nverify PLATFORM\nuninstall PLATFORM\nconfirm cursor-user-rules [--version VERSION]\nrepo install PATH [--version VERSION] [--adopt] [--pointer] [--dry-run]\nrepo verify PATH\nrepo uninstall PATH [--dry-run]\nrepo bar PATH\ncontrols list\ncontrols install|verify|uninstall claude\nskills catalog [--write|--check]\nskills status [NAME...] [--repo PATH]\nskills install NAME... [--repo PATH] [--replace]\nskills verify [NAME...] [--repo PATH]\nskills uninstall NAME... [--repo PATH]\npack add AUTHOR/ID@VERSION --platform claude|codex|cursor [--approve-sha DIGEST]\npack remove AUTHOR/ID --platform claude|codex|cursor\npack list\ncatalog build\nrules scan [--show-ignored]\nrules preview PROPOSAL_ID...\nrules apply PROPOSAL_ID... --approve-sha DIGEST\nrules undo RECEIPT_ID|APPLY_ID\nrules verify\nrules retire RECEIPT_ID --reason TEXT\nrules ignore FINDING_ID --reason TEXT\nrules unignore FINDING_ID\ncontext audit [--save] [--claude-context FILE]\neval list\neval run --platform claude|codex|cursor --case ID [--keep] [--no-log] [--trials N]\neval results [--case ID] [--platform P] [--last N]\neval compare VERSION_A [VERSION_B] [--platform P]\nstatus\nsearch "QUERY" [--release VERSION] [--domain engineering]\nget-document ID [--release VERSION]\nrollback VERSION\n\nRun from anywhere: node --experimental-strip-types "${join(CODE_ROOT,'src/cli.ts')}" [--root DIR] COMMAND\nRead README.md for cloud setup and limitations.`);
+    default: console.log(`Agentic Harness\n\npreview\nimport-notion\nimport-notion-export FILE\nexport-chunks VERSION\nindex VERSION --embeddings FILE\nsearch-vector VERSION MODEL VECTOR_JSON_FILE [--domain engineering]\npublish VERSION --approve-sha DIGEST [--bootstrap]\nactivate VERSION\ninstall codex|claude|cursor-files|generic [--version VERSION]\nverify PLATFORM\nuninstall PLATFORM\nconfirm cursor-user-rules [--version VERSION]\nrepo install PATH [--version VERSION] [--adopt] [--pointer] [--dry-run]\nrepo verify PATH\nrepo uninstall PATH [--dry-run]\nrepo bar PATH\ncontrols list\ncontrols install|verify|uninstall claude\nskills catalog [--write|--check]\nskills status [NAME...] [--repo PATH]\nskills install NAME... [--repo PATH] [--replace]\nskills verify [NAME...] [--repo PATH]\nskills uninstall NAME... [--repo PATH]\npack add AUTHOR/ID@VERSION --platform claude|codex|cursor [--approve-sha DIGEST]\npack remove AUTHOR/ID --platform claude|codex|cursor\npack list\ncatalog build\nrules scan [--show-ignored]\nrules preview PROPOSAL_ID...\nrules apply PROPOSAL_ID... --approve-sha DIGEST\nrules undo RECEIPT_ID|APPLY_ID\nrules verify\nrules retire RECEIPT_ID --reason TEXT\nrules ignore FINDING_ID --reason TEXT\nrules unignore FINDING_ID\ncontext audit [--save] [--claude-context FILE]\neval list\neval run --platform claude|codex|cursor --case ID [--keep] [--no-log] [--trials N]\neval results [--case ID] [--platform P] [--last N]\neval compare VERSION_A [VERSION_B] [--platform P]\nasks --dir DIR [--days N] [--json]\nstatus\nsearch "QUERY" [--release VERSION] [--domain engineering]\nget-document ID [--release VERSION]\nrollback VERSION\n\nRun from anywhere: node --experimental-strip-types "${join(CODE_ROOT,'src/cli.ts')}" [--root DIR] COMMAND\nRead README.md for cloud setup and limitations.`);
   }
 } catch(e){console.error((e as Error).message);process.exitCode=1;}
