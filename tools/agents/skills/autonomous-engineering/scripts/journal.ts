@@ -1,3 +1,4 @@
+import { execFileSync } from 'node:child_process';
 import { createHash, randomBytes } from 'node:crypto';
 import { closeSync, existsSync, lstatSync, openSync, readdirSync, readFileSync, readlinkSync, renameSync, statSync, unlinkSync, writeFileSync } from 'node:fs';
 import { basename, dirname, join, posix } from 'node:path';
@@ -296,27 +297,60 @@ export const failureSignature = (tail: string) => hex12(tail.replace(/\d+/g, '')
 // An owned path in one spelling: posix-normalized, no leading ./, no trailing /. '' is the whole repo (. or ./).
 export const normPath = (f: string) => { const p = posix.normalize(f.replace(/\\/g, '/')).replace(/^(\.\/)+/, '').replace(/\/+$/, ''); return p === '.' ? '' : p; };
 
+// What Git lists for `rels` in `root`: tracked, plus untracked and not ignored (git ls-files -co --exclude-standard).
+// `files` holds the listed paths; `dirs` holds every folder above them. Returns null when Git cannot answer (no Git, not a repo):
+// the caller then walks every file. Git runs without a shell, in `root`. Ignored files are never listed, so they are never read.
+// A nested repo or submodule comes as one entry in `files`.
+type Listed = { files: Set<string>; dirs: Set<string> };
+function gitListed(root: string, rels: string[]): Listed | null {
+  try {
+    const out = execFileSync('git', ['ls-files', '-z', '-c', '-o', '--exclude-standard', ...(rels.includes('') ? [] : ['--', ...rels.map(r => `:(literal)${r}`)])],
+      { cwd: root, encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'], maxBuffer: 1 << 30 });
+    const files = new Set(out.split('\0').filter(Boolean).map(normPath)), dirs = new Set<string>();
+    for (const f of files) for (let d = posix.dirname(f); d !== '.' && !dirs.has(d); d = posix.dirname(d)) dirs.add(d);
+    return { files, dirs };
+  } catch { return null; }
+}
+const gitIgnores = (root: string, rel: string) => {
+  try { execFileSync('git', ['check-ignore', '-q', '--', rel], { cwd: root, stdio: 'ignore' }); return true; } catch { return false; }
+};
+
 // Folders are walked; .git and node_modules are skipped; a missing path counts as `missing`.
+// In a Git repo, a walked folder counts only the files Git lists (gitListed): git-ignored build output does not change the
+// fingerprint. A path the plan owns by name always counts, ignored or not: an owned file, or an owned folder that Git ignores.
+// Outside a Git repo, or when Git fails, every file counts, as before. A tracked file deleted from disk is absent, as before.
 // A symlink counts with its link text only. It is never read or followed: its target may be outside the repo
 // or protected. checkPath refuses an owned path that is a symlink, so only links inside owned folders get here.
 // A protected path (checkPath's rules: .env* but not .env.example, *.pem, *.key, .claude/settings*.json, .state/,
-// controls/ at the root) is never read or walked: it counts by its name only.
+// controls/ at the root) is never read or walked: it counts by its name only, ignored or not.
 // `skip` holds the engine's own files (plan, page, journal): the engine rewrites them, so they never count.
 // Every path is normalized first (normPath), so `.`, `./src`, and `src//a.ts` give the same entries and the skip check.
 export function fingerprint(root: string, files: string[], skip: ReadonlySet<string> = new Set()): string {
   const entries: string[] = [], skipped = new Set([...skip].map(normPath));
-  const add = (rel: string) => {
+  const owned = files.map(normPath);
+  let listed: Listed | null | undefined; // lazy: a plan that owns only files never calls Git
+  // mode 'owned': a folder named by the plan. 'filtered': below it, only Git-listed paths. 'open': a listed nested repo, walked whole.
+  const add = (rel: string, mode: 'owned' | 'filtered' | 'open') => {
     if (skipped.has(rel)) return;
     if (protectedRel(rel)) { entries.push(`${rel}\0protected`); return; }
     const full = join(root, rel);
     let st;
     try { st = lstatSync(full); } catch { entries.push(`${rel}\0missing`); return; }
     if (st.isDirectory()) {
-      for (const name of readdirSync(full).sort()) if (name !== '.git' && name !== 'node_modules') add(rel ? `${rel}/${name}` : name);
+      let scope: Listed | null = null;
+      if (mode === 'filtered') scope = listed!;
+      else if (mode === 'owned') { if (listed === undefined) listed = gitListed(root, owned); if (listed && !gitIgnores(root, rel)) scope = listed; }
+      for (const name of readdirSync(full).sort()) {
+        if (name === '.git' || name === 'node_modules') continue;
+        const child = rel ? `${rel}/${name}` : name;
+        if (!scope) add(child, 'open');
+        else if (scope.files.has(child)) add(child, 'open');
+        else if (scope.dirs.has(child)) add(child, 'filtered');
+      }
     } else if (st.isSymbolicLink()) entries.push(`${rel}\0link:${readlinkSync(full)}`);
     else entries.push(`${rel}\0${createHash('sha256').update(readFileSync(full)).digest('hex')}`);
   };
-  for (const f of files) add(normPath(f));
+  for (const f of owned) add(f, 'owned');
   return hex12(entries.sort().join('\n'));
 }
 
