@@ -11,16 +11,16 @@ import { checkPath, classifyCommand, findControls, loadControls, redact } from '
 import { assessCapacity, DEFAULT_HEAVY_RSS_MB, emptyCapacity, MAX_HEAVY_RSS_MB, probeMachine } from './capacity.ts';
 import type { CapacityDecision, ProbeReading } from './capacity.ts';
 import {
-  AUTHORITY, FIX_BUDGET, MAX_CHECKPOINTS, PROFILE_NAMES, awaiting, closeStaleHandoffs, handoffOpen, createJournal, evidenceLine, failureSignature, failures, fingerprint, inspectLock, isProfile, journalPath, loadJournal, move,
+  AUTHORITY, FIX_BUDGET, JOURNAL_CAP_BYTES, JOURNAL_WARN_BYTES, MAX_CHECKPOINTS, MAX_WAIT_LOCK_S, PROFILE_NAMES, awaiting, closeStaleHandoffs, handoffOpen, createJournal, evidenceLine, failureSignature, failures, fingerprint, inspectLock, isProfile, journalBytes, journalPath, loadJournal, LockBusy, move,
   nextBatch, orphanTempFiles, outputTail, profileForMode, promoteReady, recordFailure, refuseSymlinks, saveJournal, settled, syncJournal, within, withLock, writeAtomic,
 } from './journal.ts';
 import type { Attempt, Checkpoint, Evidence, Handoff, Journal, ProfileChange, SliceRecord } from './journal.ts';
 import { parsePlan, setSliceFields, verifyCommand } from './plan.ts';
-import type { Plan, Slice } from './plan.ts';
+import type { Plan, Slice, State } from './plan.ts';
 import { CHECKPOINT_KINDS } from './contract.ts';
-import type { CheckpointKind } from './contract.ts';
-import { runHook, sections } from './hooks.ts';
-import type { EventName, HookCtx } from './hooks.ts';
+import type { CheckpointCheck, CheckpointKind } from './contract.ts';
+import { interruptedHook, moduleCommand, resultFields, runHook, sections } from './hooks.ts';
+import type { EventName, HookCtx, ModuleCommand, RunCtx, SectionEnv } from './hooks.ts';
 import { floorWarning, packet } from './packet.ts';
 import type { PacketEnv } from './packet.ts';
 import { decide, listDecisions, lookup, parseKey, parseScope, view } from './decisions.ts';
@@ -40,24 +40,31 @@ const engineOwned = (root: string, planPath: string, jfile: string) => {
   return new Set([planPath, planPath.replace(/\.md$/, '.html'), jfile, jfile + '.bak', jfile + '.lock', ...orphanTempFiles(planPath, jfile)].map(p => relative(realRoot, join(dir, basename(p)))));
 };
 type Base = { args: Args; plan: Plan; now: Date; root: string; planPath: string; cwd: string; jfile: string; probe: () => ProbeReading };
-type Ctx = Base & { journal: Journal; slice: (id: string | undefined) => { s: Slice; rec: SliceRecord } };
+// `discard`: the handler found that nothing may be recorded (an unstable two-phase run); the save is skipped.
+type Ctx = Base & { journal: Journal; slice: (id: string | undefined) => { s: Slice; rec: SliceRecord }; discard?: boolean };
 type Result = Record<string, unknown>;
 
 const COMMANDS = ['init', 'status', 'next', 'start', 'finish', 'block', 'fail', 'review', 'verify', 'unblock', 'integrate', 'check', 'dispatch', 'handoff', 'recover', 'usage', 'checkpoint', 'prepare', 'transfer', 'report', 'charter', 'set-profile', 'decide', 'decisions', 'interrupt', 'attach', 'lead'];
 const USAGE = `usage: ae.ts <command> PLAN [SLICE] [flags]\n       ae.ts check [PLAN] -- CMD | --path P\ncommands: ${COMMANDS.join(', ')}`;
 const FLAGS = ['allow', 'profile', 'provider', 'model', 'effort', 'task-id', 'summary', 'reason', 'by', 'note', 'timeout', 'ref', 'manual', 'caps', 'host', 'apply', 'reject',
   'snapshot', 'policy', 'agent', 'remaining', 'to', 'lead', 'done', 'next', 'json', 'approval', 'deadline', 'cap', 'branch', 'replace', 'heavy-rss-mb',
-  'key', 'risk', 'status', 'question', 'answer', 'recommended', 'rollback', 'source', 'scope', 'class', 'code', 'retryable', 'reset-at', 'operation', 'launch-key', 'kind', 'active'];
-const BOOLEAN = ['manual', 'apply', 'reject', 'json', 'replace', 'active'];
+  'key', 'risk', 'status', 'question', 'answer', 'recommended', 'rollback', 'source', 'scope', 'class', 'code', 'retryable', 'reset-at', 'operation', 'launch-key', 'kind', 'active',
+  'decision', 'watch', 'supersedes', 'evidence', 'run-check', 'workspace', 'lead-id', 'label', 'claim', 'takeover', 'observed', 'release', 'disarmed', 'thread-id', 'mode', 'exception', 'wait-lock'];
+const BOOLEAN = ['manual', 'apply', 'reject', 'json', 'replace', 'active', 'run-check', 'claim', 'takeover', 'release'];
 // Free text that the journal, the plan, or the output can hold. It is redacted when it is read, before anything stores it.
 const FREE_TEXT = ['summary', 'reason', 'by', 'note', 'ref', 'task-id', 'provider', 'model', 'effort', 'agent', 'to', 'lead', 'done', 'next',
-  'question', 'answer', 'recommended', 'rollback', 'source', 'code', 'operation'];
+  'question', 'answer', 'recommended', 'rollback', 'source', 'code', 'operation', 'evidence', 'label', 'observed', 'exception'];
 const HOSTS = ['t3', 'claude-code', 'other'];
 const READ_ONLY = ['dispatch', 'handoff', 'usage', 'report', 'decisions'];
 // `decide` with only --key is a lookup: read-only, no lock. With any of these flags it is a lead write.
 const DECIDE_WRITE = ['risk', 'status', 'question', 'answer', 'recommended', 'rollback', 'source'];
 const isReadOnly = (a: Args) => READ_ONLY.includes(a.command) || (a.command === 'decide' && !DECIDE_WRITE.some(f => a.flags.has(f)));
 const DEFAULT_TIMEOUT_S = 600;
+// Slice commands whose output a module may extend (hooks.ts `result`).
+const SLICE_COMMANDS = ['start', 'finish', 'fail', 'block', 'unblock', 'checkpoint', 'prepare', 'transfer', 'interrupt', 'review', 'verify'];
+// Phase 3 of a two-phase run waits this long for the lock, so a short command of another process (it holds the lock
+// for well under a second) does not discard a long check. --wait-lock raises it, up to 60 s.
+const RELOCK_WAIT_MS = 5_000;
 
 function parseCheck(rest: string[]): Args {
   const plan = rest[0] && !rest[0].startsWith('--') ? rest.shift()! : '', flags = new Map<string, string>();
@@ -256,14 +263,28 @@ function pickTarget(c: Ctx) {
   return { s, rec, failures: n, ...pick, ...(n === 3 && pick.used === 'model' ? { used: 'fallback' as const } : {}), escalateWhen, intensity: intensity(parseModelRef(pick.target.label)) };
 }
 
-// What a hook sees for one slice (hooks.ts). The slug names the plan in launch keys.
-const hookCtx = (c: Ctx, s: Slice, rec: SliceRecord): HookCtx => ({
-  journal: c.journal, plan: c.plan, slug: basename(c.planPath).replace(/\.md$/, ''), root: c.root, s, rec, at: c.now.toISOString(),
+// What a hook sees (hooks.ts). The slug names the plan in launch keys.
+const runCtx = (c: Base & { journal: Journal }): RunCtx => ({
+  journal: c.journal, plan: c.plan, slug: basename(c.planPath).replace(/\.md$/, ''), root: c.root, at: c.now.toISOString(),
   command: c.args.command, flags: c.args.flags, skip: engineOwned(c.root, c.planPath, c.jfile),
 });
+const hookCtx = (c: Ctx, s: Slice, rec: SliceRecord): HookCtx => ({ ...runCtx(c), s, rec });
+// What a read-only section sees (status, report, recover).
+const sectionEnv = (b: Base): SectionEnv => ({ root: b.root, plan: b.plan, skip: engineOwned(b.root, b.planPath, b.jfile) });
+// The slice a writing command names, for guardWrite: undefined when there is none or it is not valid (the handler reports that).
+const namedSlice = (c: Ctx) => { const id = c.args.slice; return id && /^\d+$/.test(id) && c.plan.slices.some(x => x.id === id) ? c.slice(id) : undefined; };
+// attach and lead come from a track module (hooks.ts `commands`). With SLICE, the module gets a HookCtx (a RunCtx with
+// `s` and `rec`); for attach the event guard runs first. With no module, today's refusal stays.
+function viaModule(c: Ctx, name: ModuleCommand, stub: string): Result {
+  const fn = moduleCommand(name);
+  if (!fn) throw new Error(stub);
+  if (c.args.slice === undefined) return fn(runCtx(c));
+  const { s, rec } = c.slice(c.args.slice);
+  return fn(name === 'attach' ? guard(c, s, rec, 'attach') : hookCtx(c, s, rec));
+}
 const guard = (c: Ctx, s: Slice, rec: SliceRecord, event: EventName) => { const h = hookCtx(c, s, rec); runHook('guardEvent', h, event, openAttempt(rec)); return h; };
 // The packet (packet.ts) is the handoff note. Files, Out of scope, and Verify are copied byte for byte.
-const packetEnv = (c: Base, label: string, extra: Partial<PacketEnv> = {}): PacketEnv => ({ planPath: c.planPath, journalFile: c.jfile, label, ...extra });
+const packetEnv = (c: Base, label: string, extra: Partial<PacketEnv> = {}): PacketEnv => ({ planPath: c.planPath, journalFile: c.jfile, label, root: c.root, ...extra });
 
 const handlers: Record<string, (c: Ctx) => Promise<Result> | Result> = {
   status(c) {
@@ -274,7 +295,10 @@ const handlers: Record<string, (c: Ctx) => Promise<Result> | Result> = {
       const last = rec.history[rec.history.length - 1];
       return { ...brief(s, rec), failures: failures(rec).length, budget: FIX_BUDGET, blocker: rec.blocker?.reason, ...(lastHandoff(rec) ? { handoff: { phase: lastHandoff(rec)!.phase, to: lastHandoff(rec)!.to } } : {}), lastMove: last && `${last.from} -> ${last.to}: ${last.reason}`, evidence: evidenceLine(rec) };
     });
-    return { plan: c.journal.plan, profile: c.journal.profile, authority: c.journal.authority, counts, done: c.plan.slices.every(s => settled(c.journal.slices[s.id].state)), slices, ...sections('statusSection', c.journal) };
+    // REQ-23: the journal size as it is saved. ACC drops a journal above 2 MiB.
+    const bytes = journalBytes(c.journal);
+    const size = { journalBytes: bytes, ...(bytes > JOURNAL_WARN_BYTES ? { journalWarning: `the journal is ${bytes} bytes, above 1 MiB. ACC drops a journal above 2 MiB; above 1.5 MiB the engine refuses writes that grow it, except state moves. Ask the user to archive it` } : {}) };
+    return { plan: c.journal.plan, profile: c.journal.profile, authority: c.journal.authority, counts, done: c.plan.slices.every(s => settled(c.journal.slices[s.id].state)), slices, ...size, ...sections('statusSection', c.journal, sectionEnv(c)) };
   },
 
   charter(c) {
@@ -379,39 +403,7 @@ const handlers: Record<string, (c: Ctx) => Promise<Result> | Result> = {
     return { ...fromTo(rec, s.id, from), next: 'verify' };
   },
 
-  async verify(c) {
-    const { s, rec } = c.slice(c.args.slice), from = rec.state, f = c.args.flags;
-    if (rec.state === 'AGENT_FINISHED' && s.review !== 'CI') throw new Error(`slice ${s.id} is AGENT_FINISHED and not CI-reviewed; run review first`);
-    expect(rec, s.id, 'REVIEWED', 'AGENT_FINISHED');
-    const command = verifyCommand(s), manual = f.has('manual'), controls = controlsFor(c.root);
-    const evidenceBase = () => ({ at: c.now.toISOString(), gitHead: git(c.root, 'rev-parse', 'HEAD') ?? 'none', fingerprint: fingerprint(c.root, s.files, engineOwned(c.root, c.planPath, c.jfile)) });
-    let evidence: Evidence;
-    if (!command) {
-      if (!manual) throw new Error(`slice ${s.id} has a manual Verify step; run verify --manual --by NAME --note TEXT`);
-      evidence = { kind: 'manual', by: need(c.args, 'by'), note: need(c.args, 'note'), ...evidenceBase() };
-    } else {
-      if (manual) throw new Error(`slice ${s.id} has a Verify command; --manual is refused`);
-      // The guard runs first. A command that is not `allow` is never run and nothing is recorded.
-      const v = classifyCommand(command, { allow: c.journal.authority.allow, controls: controls.rules });
-      if (v.decision !== 'allow') throw new Error(`verify refused for slice ${s.id}: decision ${v.decision}, level ${v.level}, rule ${v.rule}, reason: ${v.reason}. Command: ${redact(command)}. Nothing was run or recorded; ask the user.`);
-      const secs = f.has('timeout') ? Number(f.get('timeout')) : DEFAULT_TIMEOUT_S;
-      if (!(secs > 0)) throw new Error(`--timeout must be a positive number of seconds`);
-      const run = await runCommand(command, c.root, Math.round(secs * 1000));
-      const raw = run.timedOut ? `${run.output}\n[timed out after ${secs}s]` : run.output;
-      const tail = outputTail(redact(raw)); // redact first, so a cut-off key block cannot escape
-      if (run.exitCode !== 0) {
-        const attempt: Attempt = { n: rec.attempts.length + 1, kind: 'verify', at: c.now.toISOString(), exitCode: run.exitCode, outputTail: tail, signature: failureSignature(tail) };
-        const out = recordFailure(rec, attempt, c.now.toISOString(), `verify failed (${run.timedOut ? 'timeout' : `exit ${run.exitCode}`}): ${redact(command)}`);
-        return { ...fromTo(rec, s.id, from), verified: false, exitCode: run.exitCode, timedOut: run.timedOut, failures: failures(rec).length, why: out.why, outputTail: tail, ...controls.report };
-      }
-      evidence = { kind: 'command', command: redact(command), exitCode: 0, durationMs: run.durationMs, outputTail: tail, by: 'engine', ...evidenceBase() };
-    }
-    rec.evidence.push(evidence);
-    // VERIFIED only from a command the engine ran. A person's sign-off is ACCEPTED.
-    if (evidence.kind === 'manual') move(rec, 'ACCEPTED', `accepted on a person's note: manual check by ${evidence.by}`, evidence.at);
-    else move(rec, 'VERIFIED', 'verify command exit 0', evidence.at);
-    return { ...fromTo(rec, s.id, from), verified: evidence.kind === 'command', evidence, next: 'run ae next: dependents may be READY', ...(command ? controls.report : {}) };
-  },
+  // verify runs in two phases (PHASED below): the lock is held only to check and to record.
 
   // BLOCKED returns to IN_PROGRESS (the worker continues). FAILED returns to READY. Both restart the fix budget.
   unblock(c) {
@@ -479,31 +471,8 @@ const handlers: Record<string, (c: Ctx) => Promise<Result> | Result> = {
 
   // A lightweight checkpoint at a milestone, or before a handoff. A PREPARED handoff becomes CHECKPOINTED.
   // With --launch-key it is the worker's own checkpoint: a claim for its open attempt that never moves a handoff phase.
-  checkpoint(c) {
-    const { s, rec } = c.slice(c.args.slice), f = c.args.flags, at = c.now.toISOString();
-    expect(rec, s.id, 'IN_PROGRESS');
-    const hc = guard(c, s, rec, 'checkpoint'), open = openAttempt(rec), role = f.has('launch-key') ? 'worker' as const : 'lead' as const;
-    const kind = f.get('kind');
-    if (kind !== undefined && !(CHECKPOINT_KINDS as readonly string[]).includes(kind)) throw new Error(`checkpoint: unknown --kind "${kind}"; use ${CHECKPOINT_KINDS.join(', ')}`);
-    if (role === 'worker' && handoffOpen(lastHandoff(rec))) throw new Error(`checkpoint refused: slice ${s.id} has a ${lastHandoff(rec)!.phase} handoff; the worker stops and the lead takes the checkpoint. Nothing was written`);
-    const changed = changedFiles(c.root) ?? [], engineFiles = engineOwned(c.root, c.planPath, c.jfile);
-    const cp: Checkpoint = {
-      at, by: f.get('by') ?? role, gitHead: git(c.root, 'rev-parse', 'HEAD') ?? 'none', branch: git(c.root, 'symbolic-ref', '--short', '-q', 'HEAD') ?? 'detached or none',
-      fingerprint: fingerprint(c.root, s.files, engineFiles),
-      changed: changed.filter(p => s.files.some(x => within(p, x))),
-      unowned: changed.filter(p => !engineFiles.has(p) && !/^BLOCKED[^/]*\.md$/.test(p) && !c.plan.slices.some(o => o.files.some(x => within(p, x)))),
-      lastCheck: lastCheck(rec), ...(f.get('done') ? { done: f.get('done') } : {}), ...(f.get('next') ? { next: f.get('next') } : {}), ...(f.get('note') ? { note: f.get('note') } : {}),
-      ...(open ? { attempt: open.n } : {}), role, ...(kind ? { kind: kind as CheckpointKind } : {}),
-    };
-    runHook('checkpointTaken', hc, cp, open);
-    rec.checkpoints = [...(rec.checkpoints ?? []), cp].slice(-MAX_CHECKPOINTS);
-    const h = lastHandoff(rec);
-    if (role === 'lead' && h && handoffOpen(h)) {
-      h.history.push({ at, phase: 'CHECKPOINTED', note: h.phase === 'CHECKPOINTED' ? 'checkpoint refreshed' : 'checkpoint after prepare' });
-      h.phase = 'CHECKPOINTED'; h.checkpointAt = at;
-    }
-    return { slice: s.id, state: rec.state, checkpoint: cp, ...(h ? { handoff: { phase: h.phase, to: h.to } } : {}), next: handoffOpen(h) ? 'stop the old worker, then ae transfer (claims ownership), ae handoff, delegate, ae transfer --task-id' : 'continue' };
-  },
+  // With --run-check it runs in two phases (PHASED below) and stores the engine-run check on the checkpoint.
+  checkpoint(c) { return takeCheckpoint(c); },
 
   // The Claude lead's choice of replacement. Idempotent for the same --to.
   prepare(c) {
@@ -542,7 +511,7 @@ const handlers: Record<string, (c: Ctx) => Promise<Result> | Result> = {
   transfer(c) {
     const { s, rec } = c.slice(c.args.slice), lead = requireLead(c.args), taskId = c.args.flags.get('task-id'), f = c.args.flags, at = c.now.toISOString();
     expect(rec, s.id, 'IN_PROGRESS');
-    const h = lastHandoff(rec);
+    const hc = guard(c, s, rec, 'transfer'), h = lastHandoff(rec);
     if (!h) throw new Error(`transfer: slice ${s.id} has no prepared handoff; run ae prepare and ae checkpoint first`);
     if (h.phase === 'TRANSFERRED') {
       const a = openAttempt(rec);
@@ -558,7 +527,7 @@ const handlers: Record<string, (c: Ctx) => Promise<Result> | Result> = {
     if (h.phase !== 'CHECKPOINTED') throw new Error(`transfer: the handoff is ${h.phase}; run ae checkpoint first`);
     const cp = rec.checkpoints!.at(-1)!, now = fingerprint(c.root, s.files, engineOwned(c.root, c.planPath, c.jfile));
     if (now !== cp.fingerprint) throw new Error(`transfer refused: slice ${s.id} files changed after the checkpoint (${cp.fingerprint} -> ${now}). The old worker may still be writing. Stop it, run ae checkpoint again, then transfer. Nothing was written`);
-    const old = openAttempt(rec), hc = hookCtx(c, s, rec);
+    const old = openAttempt(rec);
     if (old) { old.outcome = 'handed-off'; old.endedAt = at; old.reason = h.reason; runHook('attemptEnded', hc, old); }
     const idx = rec.handoffs!.length - 1;
     const next: Attempt = { n: rec.attempts.length + 1, kind: 'work', at, provider: f.get('provider'), model: f.get('model'), effort: f.get('effort'), ...(taskId ? { taskId } : {}), handoff: idx };
@@ -575,15 +544,26 @@ const handlers: Record<string, (c: Ctx) => Promise<Result> | Result> = {
   interrupt(c) {
     const { s, rec } = c.slice(c.args.slice), f = c.args.flags, lead = requireLead(c.args);
     expect(rec, s.id, 'IN_PROGRESS');
-    guard(c, s, rec, 'interrupt');
+    const hc = guard(c, s, rec, 'interrupt'), at = c.now.toISOString();
     const open = openAttempt(rec), before = failures(rec).length;
     const i = addInterruption(s.id, open, {
-      at: c.now.toISOString(), class: parseFailureClass(f.get('class')), code: f.get('code'), source: parseInterruptionSource(f.get('source')),
+      at, class: parseFailureClass(f.get('class')), code: f.get('code'), source: parseInterruptionSource(f.get('source')),
       retryable: parseRetryable(f.get('retryable')), resetAt: parseIsoTime('reset-at', f.get('reset-at')), operation: f.get('operation'),
       fingerprint: fingerprint(c.root, s.files, engineOwned(c.root, c.planPath, c.jfile)),
     });
+    // A module may block the slice (a refusal, or stops with no progress). The attempt then ends as `blocked`, as with
+    // `ae block`, so `unblock` opens the next one. Still not a failed attempt: the fix budget does not move.
+    const stop = interruptedHook(hc, open!, i);
+    if (stop) {
+      const { reason, cause } = stop.block;
+      open!.outcome = 'blocked'; open!.endedAt = at; open!.reason = reason;
+      runHook('attemptEnded', hc, open!);
+      rec.blocker = { reason, at, cause };
+      runHook('blocked', hc, reason);
+      move(rec, 'BLOCKED', reason, at);
+    }
     return { slice: s.id, state: rec.state, attempt: open!.n, ...(open!.launchKey ? { launchKey: open!.launchKey } : {}), interruption: i, lead, failures: before, budget: FIX_BUDGET,
-      next: 'not a failed attempt. Wait or resume the same thread; or ae checkpoint --kind post-mortem, then ae prepare and ae transfer' };
+      ...(stop ? { blocked: stop.block, next: 'BLOCKED: a user decision, then unblock --reason' } : { next: 'not a failed attempt. Wait or resume the same thread; or ae checkpoint --kind post-mortem, then ae prepare and ae transfer' }) };
   },
 
   // A lookup (only --key) is read-only. A write records or moves a decision; only the Claude lead writes (DEC-18).
@@ -597,6 +577,8 @@ const handlers: Record<string, (c: Ctx) => Promise<Result> | Result> = {
       rollback: f.get('rollback'), source: f.get('source'), by: lead, at: c.now.toISOString(),
       ...(scope !== 'run' ? { sliceDigest: c.journal.slices[scope.slice(6)].definitionDigest } : {}),
     });
+    // A module fills what its own flags say (watch, supersedes, evidence), before the save.
+    runHook('decided', runCtx(c), decision, created);
     return { decision, created, next: decision.risk === 'red' && decision.status !== 'approved' ? 'RED: ask the user; block only the work that depends on it' : 'recorded; the next packet lists it under Settled' };
   },
 
@@ -608,9 +590,130 @@ const handlers: Record<string, (c: Ctx) => Promise<Result> | Result> = {
     return { plan: c.journal.plan, count: list.length, decisions: list.map(d => ({ ...view(d), by: d.by, at: d.at, updatedAt: d.updatedAt })) };
   },
 
-  attach() { throw new Error('attach: not built yet (slice 8 binds the thread and task to the open attempt); nothing was written'); },
-  lead() { throw new Error('lead: not built yet (slice 8 adds the lead lease); nothing was written'); },
+  attach(c) { return viaModule(c, 'attach', 'attach: not built yet (slice 8 binds the thread and task to the open attempt); nothing was written'); },
+  lead(c) { return viaModule(c, 'lead', 'lead: not built yet (slice 8 adds the lead lease); nothing was written'); },
 };
+
+// The checks of a checkpoint, before anything is read or written. Phase 1 and phase 3 of --run-check both run them.
+function checkpointGate(c: Ctx) {
+  const { s, rec } = c.slice(c.args.slice), f = c.args.flags;
+  expect(rec, s.id, 'IN_PROGRESS');
+  const hc = guard(c, s, rec, 'checkpoint'), open = openAttempt(rec), role = f.has('launch-key') ? 'worker' as const : 'lead' as const;
+  const kind = f.get('kind');
+  if (kind !== undefined && !(CHECKPOINT_KINDS as readonly string[]).includes(kind)) throw new Error(`checkpoint: unknown --kind "${kind}"; use ${CHECKPOINT_KINDS.join(', ')}`);
+  if (role === 'worker' && handoffOpen(lastHandoff(rec))) throw new Error(`checkpoint refused: slice ${s.id} has a ${lastHandoff(rec)!.phase} handoff; the worker stops and the lead takes the checkpoint. Nothing was written`);
+  return { s, rec, hc, open, role, kind: kind as CheckpointKind | undefined };
+}
+
+function takeCheckpoint(c: Ctx, check?: CheckpointCheck): Result {
+  const { s, rec, hc, open, role, kind } = checkpointGate(c), f = c.args.flags, at = c.now.toISOString();
+  const changed = changedFiles(c.root) ?? [], engineFiles = engineOwned(c.root, c.planPath, c.jfile);
+  const cp: Checkpoint = {
+    at, by: f.get('by') ?? role, gitHead: git(c.root, 'rev-parse', 'HEAD') ?? 'none', branch: git(c.root, 'symbolic-ref', '--short', '-q', 'HEAD') ?? 'detached or none',
+    fingerprint: fingerprint(c.root, s.files, engineFiles),
+    changed: changed.filter(p => s.files.some(x => within(p, x))),
+    unowned: changed.filter(p => !engineFiles.has(p) && !/^BLOCKED[^/]*\.md$/.test(p) && !c.plan.slices.some(o => o.files.some(x => within(p, x)))),
+    lastCheck: lastCheck(rec), ...(f.get('done') ? { done: f.get('done') } : {}), ...(f.get('next') ? { next: f.get('next') } : {}), ...(f.get('note') ? { note: f.get('note') } : {}),
+    ...(open ? { attempt: open.n } : {}), role, ...(kind ? { kind } : {}), ...(check ? { check } : {}),
+  };
+  runHook('checkpointTaken', hc, cp, open);
+  rec.checkpoints = [...(rec.checkpoints ?? []), cp].slice(-MAX_CHECKPOINTS);
+  const h = lastHandoff(rec);
+  if (role === 'lead' && h && handoffOpen(h)) {
+    h.history.push({ at, phase: 'CHECKPOINTED', note: h.phase === 'CHECKPOINTED' ? 'checkpoint refreshed' : 'checkpoint after prepare' });
+    h.phase = 'CHECKPOINTED'; h.checkpointAt = at;
+  }
+  return { slice: s.id, state: rec.state, checkpoint: cp, ...(h ? { handoff: { phase: h.phase, to: h.to } } : {}), next: handoffOpen(h) ? 'stop the old worker, then ae transfer (claims ownership), ae handoff, delegate, ae transfer --task-id' : 'continue' };
+}
+
+// ---- two-phase run (Design, "Locks, identity, and the lease"; review-1 F5) ----
+// Phase 1, under the lock: check the state and take a snapshot (attempt, definition digest, fingerprint, handoff phase).
+// Phase 2, no lock: run the guarded command, so `status`, `decide`, and a worker's checkpoint work meanwhile.
+// Phase 3, under the lock again: reload and compare. A change means `unstable: true`: nothing is recorded and the
+// fix budget does not move. For --run-check a fingerprint change is recorded instead as `check.stable: false`.
+type Snap = { state: State; attempts: number; open: number | null; digest: string; fp: string; handoff: string };
+class Prepared {
+  readonly command: string; readonly secs: number; readonly snap: Snap; readonly controls: ReturnType<typeof controlsFor>;
+  constructor(command: string, secs: number, snap: Snap, controls: ReturnType<typeof controlsFor>) { this.command = command; this.secs = secs; this.snap = snap; this.controls = controls; }
+}
+type Ran = { prepared: Prepared; run: RunResult; tail: string };
+const snapOf = (c: Ctx, s: Slice, rec: SliceRecord): Snap => ({
+  state: rec.state, attempts: rec.attempts.length, open: openAttempt(rec)?.n ?? null, digest: rec.definitionDigest,
+  fp: fingerprint(c.root, s.files, engineOwned(c.root, c.planPath, c.jfile)), handoff: `${rec.handoffs?.length ?? 0}:${lastHandoff(rec)?.phase ?? 'none'}`,
+});
+const SNAP_NAMES: Record<keyof Snap, string> = { state: 'slice state', attempts: 'attempts', open: 'open attempt', digest: 'slice definition', fp: 'slice files (fingerprint)', handoff: 'handoff phase' };
+const drift = (a: Snap, b: Snap, withFiles: boolean) => (Object.keys(SNAP_NAMES) as (keyof Snap)[]).filter(k => (withFiles || k !== 'fp') && a[k] !== b[k]).map(k => SNAP_NAMES[k]);
+
+function prepareRun(c: Ctx, s: Slice, rec: SliceRecord, command: string, what: string): Prepared {
+  const controls = controlsFor(c.root);
+  // The guard runs first. A command that is not `allow` is never run and nothing is recorded.
+  const v = classifyCommand(command, { allow: c.journal.authority.allow, controls: controls.rules });
+  if (v.decision !== 'allow') throw new Error(`${what} refused for slice ${s.id}: decision ${v.decision}, level ${v.level}, rule ${v.rule}, reason: ${v.reason}. Command: ${redact(command)}. Nothing was run or recorded; ask the user.`);
+  const secs = c.args.flags.has('timeout') ? Number(c.args.flags.get('timeout')) : DEFAULT_TIMEOUT_S;
+  if (!(secs > 0)) throw new Error(`--timeout must be a positive number of seconds`);
+  return new Prepared(command, secs, snapOf(c, s, rec), controls);
+}
+
+const unstable = (c: Ctx, s: Slice, rec: SliceRecord, changed: string[], r: Ran, extra: Result): Result => {
+  c.discard = true;
+  return { slice: s.id, from: r.prepared.snap.state, to: rec.state, state: rec.state, ...extra, unstable: true, changed, exitCode: r.run.exitCode, timedOut: r.run.timedOut, outputTail: r.tail, failures: failures(rec).length,
+    next: `${changed.join(', ')} changed while the command ran. Nothing was recorded and the fix budget did not move. Run it again when the slice is quiet` };
+};
+
+type Phased = { prepare(c: Ctx): Prepared | Result; record(c: Ctx, r: Ran): Result };
+const PHASED: Record<string, Phased> = {
+  verify: {
+    prepare(c) {
+      const { s, rec } = c.slice(c.args.slice), from = rec.state, f = c.args.flags;
+      if (rec.state === 'AGENT_FINISHED' && s.review !== 'CI') throw new Error(`slice ${s.id} is AGENT_FINISHED and not CI-reviewed; run review first`);
+      expect(rec, s.id, 'REVIEWED', 'AGENT_FINISHED');
+      const command = verifyCommand(s), manual = f.has('manual');
+      if (command) {
+        if (manual) throw new Error(`slice ${s.id} has a Verify command; --manual is refused`);
+        return prepareRun(c, s, rec, command, 'verify');
+      }
+      if (!manual) throw new Error(`slice ${s.id} has a manual Verify step; run verify --manual --by NAME --note TEXT`);
+      // A person's sign-off is ACCEPTED, never VERIFIED: the engine observed nothing. One phase; nothing runs.
+      const evidence: Evidence = { kind: 'manual', by: need(c.args, 'by'), note: need(c.args, 'note'), at: c.now.toISOString(), gitHead: git(c.root, 'rev-parse', 'HEAD') ?? 'none', fingerprint: fingerprint(c.root, s.files, engineOwned(c.root, c.planPath, c.jfile)) };
+      rec.evidence.push(evidence);
+      move(rec, 'ACCEPTED', `accepted on a person's note: manual check by ${evidence.by}`, evidence.at);
+      return { ...fromTo(rec, s.id, from), verified: false, evidence, next: 'run ae next: dependents may be READY' };
+    },
+    record(c, r) {
+      const { s, rec } = c.slice(c.args.slice), from = rec.state, now = snapOf(c, s, rec), { run, tail, prepared: p } = r;
+      const changed = drift(p.snap, now, true);
+      if (changed.length) return unstable(c, s, rec, changed, r, { verified: false, ...p.controls.report });
+      if (run.exitCode !== 0) {
+        const attempt: Attempt = { n: rec.attempts.length + 1, kind: 'verify', at: c.now.toISOString(), exitCode: run.exitCode, outputTail: tail, signature: failureSignature(tail) };
+        const out = recordFailure(rec, attempt, c.now.toISOString(), `verify failed (${run.timedOut ? 'timeout' : `exit ${run.exitCode}`}): ${redact(p.command)}`);
+        return { ...fromTo(rec, s.id, from), verified: false, exitCode: run.exitCode, timedOut: run.timedOut, failures: failures(rec).length, why: out.why, outputTail: tail, ...p.controls.report };
+      }
+      const evidence: Evidence = { kind: 'command', command: redact(p.command), exitCode: 0, durationMs: run.durationMs, outputTail: tail, by: 'engine', at: c.now.toISOString(), gitHead: git(c.root, 'rev-parse', 'HEAD') ?? 'none', fingerprint: now.fp };
+      rec.evidence.push(evidence);
+      // VERIFIED only from a command the engine ran.
+      move(rec, 'VERIFIED', 'verify command exit 0', evidence.at);
+      return { ...fromTo(rec, s.id, from), verified: true, evidence, next: 'run ae next: dependents may be READY', ...p.controls.report };
+    },
+  },
+  // checkpoint --run-check: the slice's Verify command, run by the engine. The result goes to `checkpoint.check`,
+  // never to `evidence` (ACC reads evidence exit codes) and never to the fix budget.
+  checkpoint: {
+    prepare(c) {
+      const { s, rec } = checkpointGate(c), command = verifyCommand(s);
+      if (!command) throw new Error(`checkpoint --run-check: slice ${s.id} has a manual Verify step, so there is no command to run. Nothing was written`);
+      return prepareRun(c, s, rec, command, 'checkpoint --run-check');
+    },
+    record(c, r) {
+      const { s, rec } = c.slice(c.args.slice), now = snapOf(c, s, rec), { run, tail, prepared: p } = r;
+      const changed = drift(p.snap, now, false);
+      if (changed.length) return unstable(c, s, rec, changed, r, {});
+      const check: CheckpointCheck = { command: redact(p.command), ...(run.exitCode !== null ? { exitCode: run.exitCode } : {}), ...(run.timedOut ? { timedOut: true } : {}),
+        tail, at: c.now.toISOString(), fpBefore: p.snap.fp, fpAfter: now.fp, stable: p.snap.fp === now.fp };
+      return { ...takeCheckpoint(c, check), ...p.controls.report };
+    },
+  },
+};
+const phasedFor = (a: Args) => a.command === 'verify' ? PHASED.verify : a.command === 'checkpoint' && a.flags.has('run-check') ? PHASED.checkpoint : undefined;
 
 // --heavy-rss-mb: the RSS estimate of one heavy job, in MB, for the adaptive profile only.
 function heavyRss(a: Args, profile: string): number | undefined {
@@ -640,11 +743,12 @@ const NEEDS_CHECK = 'check task_status, then ae fail or ae finish';
 
 // Report drift between journal, plan, Git, and files. Without --apply it writes nothing and takes no lock.
 // With --apply it demotes stale VERIFIED and ACCEPTED slices to AGENT_FINISHED, then reconciles the plan lines.
-async function recover(b: Base, text: string): Promise<Result> {
+async function recover(b: Base, text: string, waitMs: number): Promise<Result> {
   const { args, plan, now, root, planPath, jfile } = b, apply = args.flags.has('apply'), at = now.toISOString();
   const lockBefore = inspectLock(jfile);
   const body = (): Result => {
     const l = loadJournal(jfile), journal = l.journal, before = JSON.stringify(journal);
+    if (apply) runHook('guardWrite', runCtx({ ...b, journal }), undefined);
     const known = new Map(Object.entries(journal.slices).map(([id, r]) => [id, r.definitionDigest]));
     syncJournal(journal, plan, now);
     closeStaleHandoffs(journal, at);
@@ -749,12 +853,12 @@ async function recover(b: Base, text: string): Promise<Result> {
       filesProblems: problems.map(p => p.text),
       next: { batch: nb.batch.map(s => s.id), running: nb.running, waiting: nb.waiting, deferred: nb.deferred, ...(capacity ? { capacity } : {}) },
       done: plan.slices.every(s => settled(journal.slices[s.id].state)),
-      ...sections('recoverSection', journal),
+      ...sections('recoverSection', journal, sectionEnv(b)),
       ...(apply ? { applied } : { hint: 'read-only: nothing was written. recover --apply demotes stale VERIFIED and ACCEPTED slices and reconciles the plan lines' }),
       ...(planChanged ? { rebuild: `~/.agents/bin/md-view.sh ${args.plan}` } : {}),
     };
   };
-  return apply ? withLock(jfile, body) : body();
+  return apply ? withLock(jfile, body, waitMs) : body();
 }
 
 // ---- main ----
@@ -767,6 +871,66 @@ function assertPlanFolderReal(planPath: string, realRoot: string) {
   for (let p = dir; ; p = dirname(p)) { if (realpathSync(p) === realRoot) top = p; if (dirname(p) === p) break; }
   const lexical = top === null ? null : join(realRoot, relative(top, dir));
   if (realDir !== lexical) throw new Error(`the plan folder ${dir} resolves to ${realDir}, not ${lexical ?? `a folder under ${realRoot}`}: a folder between the repo root and the plan is a symlink. Refusing to read or write the engine files; name the plan by its real path. Nothing was written`);
+}
+
+// --wait-lock S: wait up to S seconds (60 or less) for a lock that a live process holds. Fail-fast is the default.
+function lockWait(a: Args): number {
+  if (!a.flags.has('wait-lock')) return 0;
+  const n = Number(a.flags.get('wait-lock'));
+  if (!(n >= 0 && n <= MAX_WAIT_LOCK_S)) throw new Error(`${a.command}: --wait-lock must be a number of seconds from 0 to ${MAX_WAIT_LOCK_S}`);
+  return Math.round(n * 1000);
+}
+
+const makeCtx = (b: Base, journal: Journal): Ctx => ({
+  ...b, journal,
+  slice: (id: string | undefined) => {
+    if (!id || !/^\d+$/.test(id)) throw new Error(`${b.args.command}: SLICE number is required`);
+    const s = b.plan.slices.find(x => x.id === id);
+    if (!s) throw new Error(`unknown slice ${id}`);
+    return { s, rec: journal.slices[id] };
+  },
+});
+
+const stateKey = (j: Journal) => JSON.stringify(Object.entries(j.slices).map(([id, r]) => [id, r.state]));
+// REQ-23: above 1.5 MiB a write that grows the journal is refused, unless it moves a slice state. State moves keep
+// working, so a run can still finish, verify, or block while the user archives the journal.
+function assertSize(c: Ctx, beforeBytes: number, beforeStates: string) {
+  const bytes = journalBytes(c.journal);
+  if (bytes <= JOURNAL_CAP_BYTES || bytes <= beforeBytes || stateKey(c.journal) !== beforeStates) return;
+  throw new Error(`${c.args.command} refused: the journal would grow to ${bytes} bytes, above the 1.5 MiB cap (${JOURNAL_CAP_BYTES}), and this write moves no slice state. ACC drops a journal above 2 MiB. Nothing was written. State moves still pass; ask the user to archive the journal`);
+}
+
+// One locked command: load, sync, guardWrite, the handler, the module result fields, the size guard, then save.
+// `fn` returning undefined is phase 1 of a two-phase run: housekeeping is saved, and the output comes from phase 3.
+function locked(b: Base, text: string, waitMs: number, fn: (c: Ctx) => Promise<Result | undefined> | Result | undefined): Promise<Result> {
+  const { args, plan, now, planPath, jfile } = b;
+  return withLock(jfile, async () => {
+    let journal: Journal, recovered = false, scrubbed = false, before = '', beforeBytes = 0, beforeStates = '';
+    if (args.command === 'init') journal = initJournal(b, jfile);
+    else {
+      const l = loadJournal(jfile); journal = l.journal; recovered = l.recoveredFromBackup; scrubbed = l.scrubbed; before = JSON.stringify(journal);
+      beforeBytes = journalBytes(journal); beforeStates = stateKey(journal);
+      syncJournal(journal, plan, now); closeStaleHandoffs(journal, now.toISOString());
+      assertFiles(plan, b.root, journal.authority.allow);
+    }
+    const c = makeCtx(b, journal);
+    // Before the handler of every journal-writing command except init (lead lease, authorization, reviewer family).
+    if (args.command !== 'init') runHook('guardWrite', runCtx(c), namedSlice(c));
+    const warnings = args.command === 'init' ? plan.slices.map(s => floorWarning(journal, s, packetEnv(b, s.model))).filter((w): w is string => !!w) : [];
+    const out = args.command === 'init'
+      ? { profile: journal.profile, allow: journal.authority.allow, slices: plan.slices.map(s => ({ id: s.id, from: s.state, state: journal.slices[s.id].state })), journal: jfile, ...(warnings.length ? { warnings } : {}) }
+      : await fn(c);
+    const result: Result = out === undefined ? {} : SLICE_COMMANDS.includes(args.command) ? (() => { const { s, rec } = c.slice(args.slice); return { ...out, ...resultFields(hookCtx(c, s, rec), out) }; })() : out;
+    if (c.discard) return { ...result, ...(recovered ? { recoveredFromBackup: true } : {}) };
+    closeStaleHandoffs(journal, now.toISOString());
+    // Save the journal first. A crash before the plan write is repaired by the next command's reconcile.
+    const planText = reconcile(text, plan, journal);
+    const write = args.command === 'init' || recovered || scrubbed || JSON.stringify(journal) !== before;
+    if (write && args.command !== 'init') assertSize(c, beforeBytes, beforeStates);
+    if (write) saveJournal(jfile, journal, now);
+    if (planText !== text) writeAtomic(planPath, planText, jfile);
+    return { ...result, ...(recovered ? { recoveredFromBackup: true } : {}), ...(planText !== text ? { rebuild: `~/.agents/bin/md-view.sh ${args.plan}` } : {}) };
+  }, waitMs);
 }
 
 export async function main(argv: string[], deps: Deps): Promise<Result> {
@@ -784,42 +948,36 @@ export async function main(argv: string[], deps: Deps): Promise<Result> {
   if (!realPlan.startsWith(realRoot + sep)) throw new Error(`the plan ${planPath} resolves to ${realPlan}, outside the repo ${realRoot}; refusing to write there. Run the engine from the plan's repo`);
   assertPlanFolderReal(planPath, realRoot);
   const base: Base = { args, plan, now, root, planPath, cwd: deps.cwd, jfile, probe: deps.probe ?? (() => probeMachine()) };
-  const ctx = (journal: Journal): Ctx => ({
-    ...base, journal,
-    slice: (id: string | undefined) => {
-      if (!id || !/^\d+$/.test(id)) throw new Error(`${args.command}: SLICE number is required`);
-      const s = plan.slices.find(x => x.id === id);
-      if (!s) throw new Error(`unknown slice ${id}`);
-      return { s, rec: journal.slices[id] };
-    },
-  });
-  if (args.command === 'recover') return recover(base, text);
+  const waitMs = lockWait(args);
+  if (args.command === 'recover') return recover(base, text, waitMs);
   if (isReadOnly(args)) {
     const l = loadJournal(jfile);
-    if (args.command === 'report') return { ...buildReport({ journal: l.journal, journalFile: jfile, root, planText: text, now }), ...(l.recoveredFromBackup ? { recoveredFromBackup: true } : {}) };
+    // report.ts merges the report sections without the env; the env-aware ones replace them here.
+    if (args.command === 'report') return { ...buildReport({ journal: l.journal, journalFile: jfile, root, planText: text, now }), ...sections('reportSection', l.journal, sectionEnv(base)), ...(l.recoveredFromBackup ? { recoveredFromBackup: true } : {}) };
     syncJournal(l.journal, plan, now); // in memory only
     closeStaleHandoffs(l.journal, now.toISOString());
     assertFiles(plan, root, l.journal.authority.allow);
-    return { ...(await handlers[args.command](ctx(l.journal))), ...(l.recoveredFromBackup ? { recoveredFromBackup: true } : {}) };
+    return { ...(await handlers[args.command](makeCtx(base, l.journal))), ...(l.recoveredFromBackup ? { recoveredFromBackup: true } : {}) };
   }
-  return withLock(jfile, async () => {
-    let journal: Journal, recovered = false, scrubbed = false, before = '';
-    if (args.command === 'init') journal = initJournal(base, jfile);
-    else {
-      const l = loadJournal(jfile); journal = l.journal; recovered = l.recoveredFromBackup; scrubbed = l.scrubbed; before = JSON.stringify(journal); syncJournal(journal, plan, now); closeStaleHandoffs(journal, now.toISOString());
-      assertFiles(plan, root, journal.authority.allow);
-    }
-    const warnings = args.command === 'init' ? plan.slices.map(s => floorWarning(journal, s, packetEnv(base, s.model))).filter((w): w is string => !!w) : [];
-    const result = args.command === 'init'
-      ? { profile: journal.profile, allow: journal.authority.allow, slices: plan.slices.map(s => ({ id: s.id, from: s.state, state: journal.slices[s.id].state })), journal: jfile, ...(warnings.length ? { warnings } : {}) }
-      : await handlers[args.command](ctx(journal));
-    closeStaleHandoffs(journal, now.toISOString());
-    // Save the journal first. A crash before the plan write is repaired by the next command's reconcile.
-    const planText = reconcile(text, plan, journal);
-    if (args.command === 'init' || recovered || scrubbed || JSON.stringify(journal) !== before) saveJournal(jfile, journal, now);
-    if (planText !== text) writeAtomic(planPath, planText, jfile);
-    return { ...result, ...(recovered ? { recoveredFromBackup: true } : {}), ...(planText !== text ? { rebuild: `~/.agents/bin/md-view.sh ${args.plan}` } : {}) };
+  const phased = phasedFor(args);
+  if (!phased) return locked(base, text, waitMs, c => handlers[args.command](c));
+  // Two-phase run: the lock is held to check (phase 1) and to record (phase 3), never while the command runs.
+  let prepared: Prepared | undefined;
+  const first = await locked(base, text, waitMs, c => { const p = phased.prepare(c); if (p instanceof Prepared) { prepared = p; return undefined; } return p; });
+  if (!prepared) return first;
+  const run = await runCommand(prepared.command, root, Math.round(prepared.secs * 1000));
+  const raw = run.timedOut ? `${run.output}\n[timed out after ${prepared.secs}s]` : run.output;
+  const ran: Ran = { prepared, run, tail: outputTail(redact(raw)) }; // redact first, so a cut-off key block cannot escape
+  // The plan may have changed during the run (another command, or a hand edit): read it again, so phase 3 compares
+  // against the current definition and never writes back old plan text.
+  refuseSymlinks(planPath, jfile, jfile + '.bak', jfile + '.lock');
+  const text3 = readFileSync(planPath, 'utf8');
+  const relock = Math.max(waitMs, RELOCK_WAIT_MS);
+  const final = await locked({ ...base, plan: parsePlan(text3, args.plan) }, text3, relock, c => phased.record(c, ran)).catch((e: unknown) => {
+    if (!(e instanceof LockBusy)) throw e;
+    throw new Error(`${args.command}: lost the journal lock while the command ran (exit ${run.exitCode ?? 'none'}): ${e.message}, still held after ${relock / 1000} s. Nothing was recorded and the fix budget did not move; run it again`);
   });
+  return { ...first, ...final };
 }
 
 if (process.argv[1] && realpathSync(process.argv[1]) === fileURLToPath(import.meta.url)) {

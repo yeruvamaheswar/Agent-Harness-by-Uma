@@ -22,8 +22,9 @@ const FROZEN = {
   'hooks.ts': 'ca74c483e264a67efd62505a631fc044eeca240ab05e4e87652f21175f5524b1',
   'packet section list': 'fcbab8b12e3a2d302540efda9d5f4a78d2c3361db6d6f45a96e4bf49706b6395',
   'COMMANDS line': 'ed8fd3f95ae19fb0522ab455dac64fc0b666148be0130a979b3b30721e21ea99',
-  'FLAGS lines': '14953410d80b2c8b36aee7de1ea25db40ccee2b95e677dc154be956285d6a20c',
-  'BOOLEAN line': '2c87023201d0adf90e63381b85020a9eed630d9a33e54e446604b7ecde11de94',
+  // Re-pinned by slice 3 (review-1 F2, CH-2): the 17 flag names of slices 3, 4, 7, 8, and 9 were added.
+  'FLAGS lines': '1c6b3cf9d64781d0d610d2ae22dad96f74c9bd962e683eb39bd227e277f973c4',
+  'BOOLEAN line': 'cdb90ba787f8f97340e767d66bd286fe81d1c9d65427566b619ebe28fa04c2fc',
 };
 
 const now = (): Record<keyof typeof FROZEN, string> => ({
@@ -50,4 +51,14 @@ test('frozen: the new command names are single lowercase words in the COMMANDS l
   const names = [...line(/^const COMMANDS = \[[^\]]*\];$/m, 'COMMANDS line').matchAll(/'([^']+)'/g)].map(m => m[1]);
   for (const c of ['decide', 'decisions', 'interrupt', 'attach', 'lead']) assert.ok(names.includes(c), c);
   for (const c of names.slice(names.indexOf('decide'))) assert.match(c, /^[a-z]+$/, c);
+});
+
+test('frozen: the FLAGS line has the review-1 F2 names; claim, takeover, release, and run-check take no value', () => {
+  const names = (re: RegExp, what: string) => [...line(re, what).matchAll(/'([^']+)'/g)].map(m => m[1]);
+  const flags = names(/^const FLAGS = \[[^\]]*\];$/m, 'FLAGS lines'), booleans = names(/^const BOOLEAN = \[[^\]]*\];$/m, 'BOOLEAN line');
+  const added = ['decision', 'watch', 'supersedes', 'evidence', 'run-check', 'workspace', 'lead-id', 'label', 'claim', 'takeover', 'observed', 'release', 'disarmed', 'thread-id', 'mode', 'exception', 'wait-lock'];
+  for (const f of added) assert.ok(flags.includes(f), f);
+  for (const b of ['claim', 'takeover', 'release', 'run-check']) assert.ok(booleans.includes(b), b);
+  for (const v of added.filter(f => !['claim', 'takeover', 'release', 'run-check'].includes(f))) assert.ok(!booleans.includes(v), `${v} takes a value`);
+  assert.equal(new Set(flags).size, flags.length, 'no flag name twice');
 });

@@ -1,6 +1,6 @@
 import { execFileSync } from 'node:child_process';
 import { createHash, randomBytes } from 'node:crypto';
-import { closeSync, existsSync, lstatSync, openSync, readdirSync, readFileSync, readlinkSync, renameSync, statSync, unlinkSync, writeFileSync } from 'node:fs';
+import { closeSync, existsSync, fsyncSync, lstatSync, openSync, readdirSync, readFileSync, readlinkSync, renameSync, statSync, unlinkSync, writeFileSync } from 'node:fs';
 import { basename, dirname, join, posix } from 'node:path';
 import { protectedRel, redact } from './guard.ts';
 import { definitionDigest } from './plan.ts';
@@ -144,13 +144,30 @@ export function refuseSymlinks(...paths: string[]) {
 // Writes a fresh temp file, created exclusively under a unique name (it never follows a planted link),
 // then renames it over `file`. Rename replaces a link at `file` itself, never the link's target.
 // With `lockedBy` (a journal path), it writes only while this process holds that journal's lock.
+// Crash safety: the temp file is fsynced before the rename, and its folder after it, so a crash at any step leaves
+// either the old whole file or the new whole file, never a part (plus at most one orphan temp file, which recover reports).
 export function writeAtomic(file: string, data: string | Buffer, lockedBy?: string) {
   if (lockedBy) assertLockHeld(lockedBy);
   const tmp = `${file}.${process.pid}.${randomBytes(6).toString('hex')}.tmp`;
   const fd = openSync(tmp, 'wx', 0o644);
-  try { writeFileSync(fd, data); } finally { closeSync(fd); }
+  try { writeFileSync(fd, data); fsyncSync(fd); } finally { closeSync(fd); }
   try { renameSync(tmp, file); } catch (e) { try { unlinkSync(tmp); } catch { /* already gone */ } throw e; }
+  fsyncDir(dirname(file));
 }
+// The rename lives in the folder entry; fsync the folder so the rename survives a power loss.
+// Windows cannot open a folder as a file, and NTFS journals the rename itself.
+function fsyncDir(dir: string) {
+  if (process.platform === 'win32') return;
+  const fd = openSync(dir, 'r');
+  try { fsyncSync(fd); } finally { closeSync(fd); }
+}
+
+// Journal size (REQ-23). ACC drops a journal above 2 MiB. Above 1 MiB `status` warns; above 1.5 MiB the engine
+// refuses a write that grows the journal unless it moves a slice state (ae.ts).
+export const JOURNAL_WARN_BYTES = 1024 * 1024;
+export const JOURNAL_CAP_BYTES = 1.5 * 1024 * 1024;
+export const journalText = (j: Journal) => JSON.stringify(j, null, 2) + '\n';
+export const journalBytes = (j: Journal) => Buffer.byteLength(journalText(j), 'utf8');
 
 // The save goes ahead only while this process holds the lock. Another process that took the lock over wins.
 function assertLockHeld(file: string) {
@@ -165,7 +182,7 @@ export function saveJournal(file: string, journal: Journal, now: Date = new Date
   assertLockHeld(file);
   refuseSymlinks(file, file + '.bak');
   journal.updatedAt = now.toISOString();
-  const text = (j: Journal) => JSON.stringify(j, null, 2) + '\n';
+  const text = journalText;
   const old = existsSync(file) ? readJson(file) : null, bak = old ? null : existsSync(file + '.bak') ? readJson(file + '.bak') : null;
   if (old) writeAtomic(file + '.bak', text(scrub(old)));
   else if (bak && JSON.stringify(scrub(bak)) !== JSON.stringify(bak)) writeAtomic(file + '.bak', text(scrub(bak)));
@@ -207,17 +224,26 @@ export function inspectLock(file: string): LockInfo | null {
 
 const readLockText = (lock: string) => { try { return readFileSync(lock, 'utf8'); } catch { return null; } };
 
-export async function withLock<T>(file: string, fn: () => Promise<T> | T): Promise<T> {
-  const lock = file + '.lock';
+// Fail-fast by default: a lock held by a live process is an error at once. With `waitMs` (the CLI's --wait-lock,
+// 60 s or less) the call polls until the holder releases it, then takes it; it fails when the wait runs out.
+export const MAX_WAIT_LOCK_S = 60;
+const LOCK_POLL_MS = 50;
+// A live process holds the lock. Callers that must say more (a two-phase record step) can tell it from other errors.
+export class LockBusy extends Error {}
+export async function withLock<T>(file: string, fn: () => Promise<T> | T, waitMs = 0): Promise<T> {
+  const lock = file + '.lock', deadline = Date.now() + waitMs;
   refuseSymlinks(lock);
-  for (let tries = 0; ; tries++) {
+  for (let stale = 0; ;) {
     try { const fd = openSync(lock, 'wx'); writeFileSync(fd, String(process.pid)); closeSync(fd); break; }
     catch (e) {
       if ((e as NodeJS.ErrnoException).code !== 'EEXIST') throw e;
       refuseSymlinks(lock);
       const seen = readLockText(lock), info = inspectLock(file);
-      if (info?.alive) throw new Error(`journal is locked by ${info.pid ? `live pid ${info.pid}` : 'a process that is creating the lock'} (${lock})`);
-      if (tries >= 3) throw new Error(`cannot take over stale lock ${lock}`);
+      if (info?.alive) {
+        if (Date.now() < deadline) { await new Promise(r => setTimeout(r, LOCK_POLL_MS)); continue; }
+        throw new LockBusy(`journal is locked by ${info.pid ? `live pid ${info.pid}` : 'a process that is creating the lock'} (${lock})${waitMs > 0 ? `; waited ${waitMs / 1000} s` : ''}`);
+      }
+      if (stale++ >= 3) throw new Error(`cannot take over stale lock ${lock}`);
       // Remove the stale lock only when it still holds what was inspected. A lock that another process
       // replaced in the meantime stays; the next try sees its live owner. The save check catches the rest.
       if (seen !== null && readLockText(lock) === seen) { try { unlinkSync(lock); } catch { /* another process took it over first; retry */ } }
