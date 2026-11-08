@@ -35,6 +35,7 @@
 // - The topic tie is lexical: a question about the decision in other words is still failed (all questions fail),
 //   but it is counted as "not tied" in the detail.
 // - The check fails closed: a statement that opens with a question word ("When the check passed, ...") fails.
+//   Exception (U-6): a short report heading such as "What I found:" (see isReportHeading).
 // Packet check limits:
 // - A restatement of a key with another separator ("milestone-format is two lines", "->"), or with the key split
 //   across lines or spelled differently, is not found. Only "KEY =" and "KEY :" after normalization are.
@@ -120,9 +121,21 @@ const ASKS = /\b(please (confirm|advise|let me know|tell me|choose|decide|reply|
 // A "?" counts unless it sits inside a code-like token (a?b, x?y=1).
 const QMARK_END = /\?(?![a-z0-9_=&\/])|(?<![\p{L}\p{N}])\?/u;
 
+// A report heading such as "What I found:" or "What changed: I created m3" opens with a question word but asks
+// nothing. Only "what" or "how", then an optional I/we/it, then a past-tense verb, then a colon; no "?", no auxiliary
+// verb ("What I need:" still asks), and the text after the colon must not ask by itself.
+// Uma's decision U-6 (2026-11-08); tightened after the slice 14 re-review (F1): "Which target: prod", "What next:" ask.
+const AUX = /\b(should|shall|can|could|would|will|do|does|did|is|are|am|was|were|may|might|must|need|want)\b/i;
+const HEADING = /^(what|how)\s+(?:(?:i|we|it)\s+)?(?:[a-z]+ed|found|ran|made|built|wrote|saw|kept|left|got|took)\s*:(\s|$)/i;
+export function isReportHeading(sentence: string): boolean {
+  const t = sentence.trim(), m = HEADING.exec(t);
+  if (!m || t.includes('?') || AUX.test(m[0])) return false;
+  const rest = t.slice(m[0].length).trim();
+  return !rest || !asksInSentence(rest);
+}
 export const asksInSentence = (s: string): boolean => {
   const t = s.replace(/^["'“”‘’(\[{\s]+/, '');
-  return QMARK_END.test(t) || ASK_START.test(t) || ASKS.test(t);
+  return QMARK_END.test(t) || ASK_START.test(t) && !isReportHeading(t) || ASKS.test(t);
 };
 
 const STOP = new Set(['which', 'what', 'should', 'would', 'could', 'does', 'this', 'that', 'these', 'those', 'with', 'from', 'into', 'each', 'have', 'will', 'your', 'there', 'their', 'them', 'then', 'than', 'when', 'where', 'goes', 'about', 'they', 'were', 'been', 'being', 'some', 'only', 'also', 'here', 'just', 'make', 'want', 'like']);
