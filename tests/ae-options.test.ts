@@ -487,3 +487,51 @@ test('S15 R6: api recovery does not recommend the CLI of a current worker that i
   assert.ok(!out.recovery.options.some((o: any) => o.n === 3), JSON.stringify(out.recovery.options.map((o: any) => o.n)));
   assert.match(out.recovery.excluded.find((x: any) => x.n === 3).reason, /not an authorized label/);
 });
+
+// Slice 15 fix review 4 (Claude) B1, B2, N1, S1.
+const LADDER_MODEL = 'Claude (opus/high)', LADDER_FALLBACK = 'Codex (gpt-6.1-sol/medium)';
+const CLAUDE_FLAGS = ['--provider', 'claudeAgent', '--model', 'claude-opus-5-5', '--effort', 'high'];
+test('S15 B1: after a refusal, the fix ladder picks the Fallback on another provider; a bare start is a provider switch', async () => {
+  const r = repo(planText(LADDER_MODEL, LADDER_FALLBACK));
+  await started(r, ...CLAUDE_FLAGS);
+  await interrupt(r, 'refusal', '--code', 'permission_error', '--source', 't3');
+  await r.run('unblock', r.plan, '1', '--reason', 'reworded');
+  for (const [n, why] of ['alpha broke', 'beta crashed', 'gamma timed out'].entries()) { await r.run('fail', r.plan, '1', '--reason', why); if (n < 2) await r.run('start', r.plan, '1', ...CLAUDE_FLAGS); }
+  const before = r.raw();
+  await assert.rejects(r.run('start', r.plan, '1'), /start refused: .*the fix ladder's pick.* provider switch.*provider-change/);
+  await assert.rejects(r.run('start', r.plan, '1', '--provider', 'codex', '--model', 'gpt-6.1-sol'), /provider switch/);
+  assert.equal(r.raw(), before, 'nothing was written');
+  // after the user approves the switch, the bare start works
+  await approveProviderChange(r);
+  assert.equal((await r.run('start', r.plan, '1')).attempt > 0, true);
+});
+test('S15 B2: a refusal by an attempt that recorded nothing binds the Model and the Fallback', async () => {
+  const r = repo(planText(LADDER_MODEL, LADDER_FALLBACK));
+  await started(r, ...CLAUDE_FLAGS);
+  for (const [n, why] of ['alpha broke', 'beta crashed', 'gamma timed out'].entries()) { await r.run('fail', r.plan, '1', '--reason', why); await r.run('start', r.plan, '1', ...(n < 2 ? CLAUDE_FLAGS : [])); }
+  await interrupt(r, 'refusal', '--code', 'permission_error', '--source', 't3');
+  await r.run('unblock', r.plan, '1', '--reason', 'reworded');
+  await r.run('checkpoint', r.plan, '1', '--kind', 'post-mortem');
+  // the unrecorded attempt ran the Fallback (Codex): moving to Claude needs the approval, as does Codex's own agent set
+  await assert.rejects(r.run('prepare', r.plan, '1', '--to', 'Claude (opus/xhigh)', '--lead', LEAD, '--reason', 'switch'), /provider-change/);
+});
+test('S15 N1: the second transfer call (attach the task) also checks the launch flags against the handoff target', async () => {
+  const r = repo(planText(LADDER_MODEL, LADDER_FALLBACK));
+  await started(r, ...CLAUDE_FLAGS);
+  await interrupt(r, 'quota', '--source', 't3');
+  await r.run('checkpoint', r.plan, '1', '--kind', 'post-mortem');
+  await r.run('prepare', r.plan, '1', '--to', 'Claude (opus/xhigh)', '--lead', LEAD, '--reason', 'quota');
+  await r.run('transfer', r.plan, '1', '--lead', LEAD);
+  await assert.rejects(r.run('transfer', r.plan, '1', '--lead', LEAD, '--task-id', 'T2', '--provider', 'codex', '--model', 'gpt-6.1-sol'), /launch flags name Codex, but the handoff target is Claude/);
+});
+test('S15 S1: a Gemini provider or model is the Antigravity agent', async () => {
+  const r = repo(planText(LADDER_MODEL, 'Antigravity (gemini-3.8-pro/high)'));
+  await started(r, ...CLAUDE_FLAGS);
+  await interrupt(r, 'refusal', '--code', 'permission_error', '--source', 't3');
+  await r.run('unblock', r.plan, '1', '--reason', 'reworded');
+  await r.run('checkpoint', r.plan, '1', '--kind', 'post-mortem');
+  await approveProviderChange(r);
+  await r.run('prepare', r.plan, '1', '--to', 'Antigravity (gemini-3.8-pro/high)', '--lead', LEAD, '--reason', 'approved switch');
+  await r.run('checkpoint', r.plan, '1', '--kind', 'pre-handoff');
+  await r.run('transfer', r.plan, '1', '--lead', LEAD, '--provider', 'gemini', '--model', 'gemini-3.8-pro', '--effort', 'high');
+});

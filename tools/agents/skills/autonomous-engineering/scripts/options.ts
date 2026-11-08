@@ -23,7 +23,7 @@ import type { Family, ModelRef } from './dispatch.ts';
 import { cliWorker, leaseActive, openInterruptions } from './failover.ts';
 import { register } from './hooks.ts';
 import type { HookCtx, Hooks, RunCtx } from './hooks.ts';
-import { handoffOpen } from './journal.ts';
+import { failures, handoffOpen } from './journal.ts';
 import type { Attempt, Journal, SliceRecord } from './journal.ts';
 import type { Slice } from './plan.ts';
 import { DEFAULT_POLICY, parsePolicy, rankCandidates } from './usage.ts';
@@ -111,12 +111,12 @@ function recordedAgent(a: { provider?: string; model?: string }): string | undef
     const m = a.model?.trim();
     if (!m) return undefined;
     const f = familyOfText(m);
-    return f === 'Claude' ? 'Claude' : f === 'OpenAI' ? 'Codex' : m.toLowerCase();
+    return f === 'Claude' ? 'Claude' : f === 'OpenAI' ? 'Codex' : f === 'Gemini' ? 'Antigravity' : m.toLowerCase();
   }
   if (['claude', 'claudeagent', 'anthropic'].includes(t)) return 'Claude';
   if (['codex', 'openai'].includes(t)) return 'Codex';
   if (t === 'cursor') return 'Cursor';
-  if (t === 'antigravity') return 'Antigravity';
+  if (['antigravity', 'gemini', 'google'].includes(t)) return 'Antigravity';
   if (['grok', 'xai'].includes(t)) return 'Grok';
   return t;
 }
@@ -124,11 +124,13 @@ function recordedAgent(a: { provider?: string; model?: string }): string | undef
 const attemptLabel = (s: Slice, rec: SliceRecord, a: Attempt) => recordedLabel(a)
   ?? (recordedAgent(a) ? `${recordedAgent(a)}${a.model ? ` (${a.model})` : ''}` : undefined)
   ?? (a.handoff === undefined ? undefined : rec.handoffs?.[a.handoff]?.to) ?? s.model;
-// Every agent the journal names for one attempt: what it recorded, the handoff target, and the planned Model only when
+// Every agent the journal names for one attempt: what it recorded, the handoff target, and the planned Model and Fallback only when
 // neither exists. A refusal binds all of them: a switch away from any of them needs the provider-change decision (DEC-22).
 const attemptAgents = (s: Slice, rec: SliceRecord, a: Attempt): string[] => {
   const out = [recordedAgent(a), a.handoff === undefined ? undefined : agentOf(rec.handoffs?.[a.handoff]?.to ?? '')].filter((x): x is string => !!x);
-  return out.length ? [...new Set(out)] : [agentOf(s.model) ?? s.model];
+  if (out.length) return [...new Set(out)];
+  // nothing recorded: the fix ladder may have launched the Model or the Fallback, so a refusal binds both (fail closed)
+  return [...new Set([agentOf(s.model) ?? s.model, ...(s.fallback ? [agentOf(s.fallback) ?? s.fallback] : [])])];
 };
 const tryRef = (text: string | undefined): ModelRef | undefined => { try { return text?.trim() ? parseModelRef(text) : undefined; } catch { return undefined; } };
 
@@ -374,19 +376,21 @@ export const optionHooks: Hooks = {
     if ((c.command === 'block' || c.command === 'fail') && (c.flags.get('class') === 'refusal' || (c.flags.get('code') !== undefined && classForCode(c.flags.get('code')!) === 'refusal'))) {
       throw new Error(`${c.command} refused: a refusal is recorded with ae interrupt --class refusal, which blocks the slice and arms the provider-change rule (DEC-22). Nothing was written`);
     }
-    // The launch flags name the worker. After a refusal a launch with another provider is a provider switch (R4); a transfer must launch the handoff target.
-    if ((c.command === 'start' || c.command === 'transfer') && (c.flags.has('provider') || c.flags.has('model'))) {
-      const launch = recordedAgent({ provider: c.flags.get('provider'), model: c.flags.get('model') });
-      if (launch) {
-        if (c.command === 'start') {
-          const r = lastRefusal(s, rec);
-          if (r && !r.agents.every(a => a.toLowerCase() === launch.toLowerCase()) && !providerChangeApproval(c.journal, s.id, r.at, c.root)) {
-            throw new Error(`start refused: ${r.label} refused slice ${s.id} at ${r.at}. A launch as ${launch} is a provider switch and needs an approved RED decision ${PROVIDER_CHANGE} for slice:${s.id}, approved after the refusal (DEC-22). Nothing was written`);
-          }
-        } else {
-          const h = rec.handoffs?.at(-1), to = h && handoffOpen(h) ? agentOf(h.to) : undefined;
-          if (to && to.toLowerCase() !== launch.toLowerCase()) throw new Error(`transfer refused: the launch flags name ${launch}, but the handoff target is ${h!.to}. Launch the target, or prepare a new handoff. Nothing was written`);
+    // The launch names the worker. After a refusal a launch as another provider is a provider switch (R4). With no launch flags the worker is
+    // the one the fix ladder picks (failures 0 to 2: the Model, 3: the Fallback), so a bare `start` is checked too (slice 15 B1).
+    // A transfer must launch the handoff target, also on the second call that attaches the task (N1).
+    if (c.command === 'start' || c.command === 'transfer') {
+      const flagged = c.flags.has('provider') || c.flags.has('model');
+      if (c.command === 'start') {
+        const launch = flagged ? recordedAgent({ provider: c.flags.get('provider'), model: c.flags.get('model') }) : agentOf(failures(rec).length >= 3 && s.fallback ? s.fallback : s.model);
+        const r = launch ? lastRefusal(s, rec) : undefined;
+        if (launch && r && !r.agents.every(a => a.toLowerCase() === launch.toLowerCase()) && !providerChangeApproval(c.journal, s.id, r.at, c.root)) {
+          throw new Error(`start refused: ${r.label} refused slice ${s.id} at ${r.at}. A launch as ${launch}${flagged ? '' : ' (the fix ladder\'s pick; pass --provider and --model to name the worker)'} is a provider switch and needs an approved RED decision ${PROVIDER_CHANGE} for slice:${s.id}, approved after the refusal (DEC-22). Nothing was written`);
         }
+      } else if (flagged) {
+        const launch = recordedAgent({ provider: c.flags.get('provider'), model: c.flags.get('model') });
+        const h = rec.handoffs?.at(-1), to = h && (handoffOpen(h) || h.phase === 'TRANSFERRED') ? agentOf(h.to) : undefined;
+        if (launch && to && to.toLowerCase() !== launch.toLowerCase()) throw new Error(`transfer refused: the launch flags name ${launch}, but the handoff target is ${h!.to}. Launch the target, or prepare a new handoff. Nothing was written`);
       }
     }
     if (c.command === 'review') guardReviewer(c, s, rec);
