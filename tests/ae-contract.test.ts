@@ -17,6 +17,7 @@ import { main } from '../tools/agents/skills/autonomous-engineering/scripts/ae.t
 import { MAX_DECISION_EVIDENCE, MAX_DECISION_HISTORY, MAX_DECISION_TEXT, MAX_DECISIONS, MAX_WATCH } from '../tools/agents/skills/autonomous-engineering/scripts/contract.ts';
 import { interruptedHook, moduleCommand, register, resultFields, sections } from '../tools/agents/skills/autonomous-engineering/scripts/hooks.ts';
 import type { HookCtx } from '../tools/agents/skills/autonomous-engineering/scripts/hooks.ts';
+import { identityHooks } from '../tools/agents/skills/autonomous-engineering/scripts/failover.ts';
 
 const FIXTURE = join(dirname(fileURLToPath(import.meta.url)), 'fixtures', 'ae-journal-66c3cd6.json');
 const LEAD = 'Claude (opus/high)';
@@ -205,8 +206,10 @@ test('Review 1: 100 decisions at every contract cap stay under 1 MiB and pass th
 // Review 1 (F1): the hook surface later tracks plug into. Each helper is inert with no module and refuses ambiguity.
 test('Review 1: hook helpers merge module output and refuse collisions', () => {
   const c = { command: 'block' } as unknown as HookCtx;
+  assert.ok(moduleCommand('attach') && moduleCommand('lead'), 'failover.ts provides attach and lead (slice 8)');
+  register('failover', { ...identityHooks, commands: undefined });
   try {
-    assert.equal(moduleCommand('attach'), undefined, 'no module provides attach yet');
+    assert.equal(moduleCommand('attach'), undefined, 'no module provides attach');
     assert.deepEqual(resultFields(c, { state: 'BLOCKED' }), {});
     register('t-a', { result: () => ({ loop: 'same-blocker' }), commands: { attach: () => ({ ok: true }) }, interrupted: () => undefined });
     register('t-b', { interrupted: () => ({ block: { reason: 'refusal', cause: 'refusal' } }), statusSection: (_j, env) => ({ env: env?.root ?? 'none' }) });
@@ -217,5 +220,5 @@ test('Review 1: hook helpers merge module output and refuse collisions', () => {
     assert.deepEqual(sections('statusSection', {} as never, { root: '/r' } as never).env, '/r');
     register('t-c', { commands: { attach: () => ({}) } });
     assert.throws(() => moduleCommand('attach'), /both provide attach/);
-  } finally { for (const n of ['t-a', 't-b', 't-c']) register(n, {}); }
+  } finally { for (const n of ['t-a', 't-b', 't-c']) register(n, {}); register('failover', identityHooks); }
 });

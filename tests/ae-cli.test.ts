@@ -823,7 +823,7 @@ test('T7: command and manual verify JSON carry the next hint; recover offers cro
 });
 
 // Slice 1 (plans/unified-agent-harness-master.md): the new commands through the real command line.
-test('decide and decisions: a lookup takes no lock, a write needs the lock and a Claude lead; attach and lead are not built yet and write nothing', async () => {
+test('decide and decisions: a lookup takes no lock, a write needs the lock and a Claude lead; attach and lead refuse a wrong call and write nothing', async () => {
   const r = repo([{ n: 1 }]);
   await r.init();
   const LEAD = 'Claude (opus/high)';
@@ -845,12 +845,12 @@ test('decide and decisions: a lookup takes no lock, a write needs the lock and a
     assert.match(write.stderr, /journal is locked by live pid/);
   } finally { other.kill(); unlinkSync(r.jfile + '.lock'); }
   const before = snap(r.dir);
-  for (const cmd of ['attach', 'lead']) {
+  for (const [cmd, re] of [['attach', /attach: slice 1 is READY/], ['lead', /lead: takes no SLICE/]] as const) {
     const out = r.cli(cmd, r.plan, '1');
     assert.equal(out.status, 1);
-    assert.match(out.stderr, new RegExp(`${cmd}: not built yet \\(slice 8`));
+    assert.match(out.stderr, re);
   }
-  assert.deepEqual(snap(r.dir), before, 'the stubs write nothing');
+  assert.deepEqual(snap(r.dir), before, 'refused attach and lead write nothing');
   const bad = r.cli('decide', r.plan, '--key', 'Bad Key');
   assert.equal(bad.status, 1);
   assert.match(bad.stderr, /--key "Bad Key" must be/);

@@ -15,6 +15,7 @@ import { JOURNAL_CAP_BYTES, JOURNAL_WARN_BYTES, journalPath, loadJournal, saveJo
 import type { Journal } from '../tools/agents/skills/autonomous-engineering/scripts/journal.ts';
 import { register } from '../tools/agents/skills/autonomous-engineering/scripts/hooks.ts';
 import type { Hooks } from '../tools/agents/skills/autonomous-engineering/scripts/hooks.ts';
+import { identityHooks } from '../tools/agents/skills/autonomous-engineering/scripts/failover.ts';
 
 const AE = join(dirname(fileURLToPath(import.meta.url)), '..', 'tools/agents/skills/autonomous-engineering/scripts/ae.ts');
 const LEAD = 'Claude (opus/high)';
@@ -333,10 +334,14 @@ test('Accept 5: above 1.5 MiB a write that grows the journal is refused, while s
 
 // ---- Accept 6: review-1 F1 and F2 wiring ----
 test('Accept 6: attach and lead keep their refusal when no module provides them', async () => {
-  const r = repo([{ n: 1 }]);
-  await r.run('init', r.plan);
-  await assert.rejects(r.run('attach', r.plan, '1', '--thread-id', 'T1'), /attach: not built yet/);
-  await assert.rejects(r.run('lead', r.plan, '--claim', '--lead-id', 'L1', '--label', LEAD), /lead: not built yet/);
+  // slice 8 (failover.ts) provides both; without its commands the stubs refuse as before
+  register('failover', { ...identityHooks, commands: undefined });
+  try {
+    const r = repo([{ n: 1 }]);
+    await r.run('init', r.plan);
+    await assert.rejects(r.run('attach', r.plan, '1', '--thread-id', 'T1'), /attach: not built yet/);
+    await assert.rejects(r.run('lead', r.plan, '--claim', '--lead-id', 'L1', '--label', LEAD), /lead: not built yet/);
+  } finally { register('failover', identityHooks); }
 });
 
 test('Accept 6: every hook in hooks.ts is called from ae.ts, and the F2 flags parse', async () => {
@@ -357,6 +362,8 @@ test('Accept 6: every hook in hooks.ts is called from ae.ts, and the F2 flags pa
     recoverSection(j, e) { env.recover = e?.root; return undefined; },
   };
   register('kernel-test', hooks);
+  // this test's module provides attach and lead, so failover.ts lends it the two commands
+  register('failover', { ...identityHooks, commands: undefined });
   try {
     const r = repo([{ n: 1 }, { n: 2 }]);
     await r.run('init', r.plan);
@@ -407,7 +414,7 @@ test('Accept 6: every hook in hooks.ts is called from ae.ts, and the F2 flags pa
 
     // guardWrite may refuse: nothing is written
     const before = r.raw();
-    await assert.rejects(r.run('integrate', r.plan, '2', '--ref', 'x', '--exception', 'why'), /kernel test: refused/);
+    await assert.rejects(r.run('integrate', r.plan, '2', '--ref', 'x', '--exception', 'why', '--lead-id', 'L1'), /kernel test: refused/);
     assert.equal(r.raw(), before);
 
     // sections get the env
@@ -416,9 +423,9 @@ test('Accept 6: every hook in hooks.ts is called from ae.ts, and the F2 flags pa
     await r.run('recover', r.plan);
     assert.equal(env.recover, r.dir);
     assert.equal((await r.run('report', r.plan, '--json')).kernelReportRoot, r.dir);
-    await r.run('recover', r.plan, '--apply');
+    await r.run('recover', r.plan, '--apply', '--lead-id', 'L1');
     assert.ok(calls.includes('guardWrite:recover:-'), 'recover --apply runs guardWrite');
-  } finally { register('kernel-test', {}); }
+  } finally { register('kernel-test', {}); register('failover', identityHooks); }
 });
 
 test('Accept 6: the other F2 flags parse (values and booleans) without a module', async () => {
