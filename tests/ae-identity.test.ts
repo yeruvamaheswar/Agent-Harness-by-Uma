@@ -162,12 +162,12 @@ test('Accept 3 (scenario 10): a stale lease is taken over only with --takeover -
   r.advance(LEASE_TTL_S * 1000 + 60_000);
   assert.equal((await r.run('lead', r.plan)).lease.stale, true);
   await assert.rejects(r.run('lead', r.plan, '--claim', '--lead-id', 'L2', '--label', TO), /lead --claim refused: .*stale.*ae lead --takeover/);
-  const tk = await r.run('lead', r.plan, '--takeover', '--lead-id', 'L2', '--reason', 'predecessor context ran out', '--observed', 'thread L1 idle at 10:00Z');
+  const tk = await r.run('lead', r.plan, '--takeover', '--lead-id', 'L2', '--reason', 'predecessor context ran out', '--observed', 'interrupted@2026-11-08T10:00:00Z');
   assert.equal(tk.takeover, true);
   assert.deepEqual(tk.from, { id: 'L1', label: LEAD, renewedAt: tk.from.renewedAt, stale: true });
   const l = r.journal().lead!;
   assert.deepEqual(l.history.map(h => `${h.event}:${h.id}`), ['claim:L1', 'takeover:L2']);
-  assert.match(l.history[1].reason!, /predecessor context ran out; observed: thread L1 idle at 10:00Z; from L1 \(stale\)/);
+  assert.match(l.history[1].reason!, /predecessor context ran out; observed: interrupted@2026-11-08T10:00:00Z; from L1 \(stale\)/);
   // an auto-resumed old lead: its transfer and its stale finish are refused, and nothing is written
   const before = r.raw();
   await assert.rejects(r.run('transfer', r.plan, '1', '--lead-id', 'L1', '--lead', LEAD, '--disarmed', 'interrupted,cancel'), /transfer refused: the lead lease is held by L2.*--lead-id L1 is not the holder/);
@@ -175,22 +175,23 @@ test('Accept 3 (scenario 10): a stale lease is taken over only with --takeover -
   await assert.rejects(r.run('lead', r.plan, '--release', '--lead-id', 'L1'), /held by L2, not L1/);
   assert.equal(r.raw(), before);
   // the successor continues
-  const tr = await r.run('transfer', r.plan, '1', '--lead-id', 'L2', '--lead', LEAD, '--disarmed', 'interrupted,cancel');
+  const tr = await r.run('transfer', r.plan, '1', '--lead-id', 'L2', '--lead', LEAD, '--disarmed', 'interrupted,cancel,2026-11-08T10:00:00Z');
   assert.equal(tr.handoff.phase, 'TRANSFERRED');
 });
 
-test('Accept 3: a fresh lease is taken over with --takeover --reason --observed; release frees the journal', async () => {
+test('Accept 3: a fresh lease is taken over with --takeover --reason --observed; release requires a new claim before lead writes', async () => {
   const r = repo();
   await r.run('init', r.plan);
   await r.run('lead', r.plan, '--claim', '--lead-id', 'L1', '--label', LEAD);
-  const tk = await r.run('lead', r.plan, '--takeover', '--lead-id', 'L2', '--reason', 'successor', '--observed', 'L1 not running at 09:00Z', '--label', TO);
+  const tk = await r.run('lead', r.plan, '--takeover', '--lead-id', 'L2', '--reason', 'successor', '--observed', 'completed@2026-11-08T09:00:00Z', '--label', TO);
   assert.equal(tk.from.stale, false);
   assert.equal(r.journal().lead!.label, TO);
   const rel = await r.run('lead', r.plan, '--release', '--lead-id', 'L2');
   assert.equal(rel.released, true);
-  assert.equal((await r.run('next', r.plan)).profile, 'balanced', 'a released lease asks for no --lead-id');
+  await assert.rejects(r.run('next', r.plan), /lease was released/, 'release keeps lease enforcement enabled');
   assert.equal((await r.run('lead', r.plan, '--claim', '--lead-id', 'L3', '--label', LEAD)).claimed, true, 'anyone may claim a released lease');
   assert.deepEqual(r.journal().lead!.history.map(h => h.event), ['claim', 'takeover', 'release', 'claim']);
+  assert.equal((await r.run('next', r.plan, '--lead-id', 'L3')).profile, 'balanced', 'a new active claim permits writes');
 });
 
 // ---- Accept 4 and F15: the zombie gate ----
@@ -240,7 +241,7 @@ test('Accept 4: under a lease, every transfer away needs --disarmed, even with n
   await r.run('prepare', r.plan, '1', '--lead-id', 'L1', '--to', TO, '--lead', LEAD, '--reason', 'quota');
   await r.run('checkpoint', r.plan, '1', '--lead-id', 'L1');
   await assert.rejects(r.run('transfer', r.plan, '1', '--lead-id', 'L1', '--lead', LEAD), /--disarmed STATUS,METHOD/);
-  assert.equal((await r.run('transfer', r.plan, '1', '--lead-id', 'L1', '--lead', LEAD, '--disarmed', 'failed,cancel')).handoff.phase, 'TRANSFERRED');
+  assert.equal((await r.run('transfer', r.plan, '1', '--lead-id', 'L1', '--lead', LEAD, '--disarmed', 'failed,cancel,2026-11-08T08:30:00Z')).handoff.phase, 'TRANSFERRED');
 });
 
 test('Accept 4: attach re-checks the fingerprint against the transfer checkpoint', async () => {
@@ -277,7 +278,7 @@ test('Accept 4: a CLI worker is checked with pidAlive; a live one blocks the tra
     await r.run('checkpoint', r.plan, id);
   }
   await assert.rejects(r.run('transfer', r.plan, '1', '--lead', LEAD, '--disarmed', 'interrupted,exited'), /the CLI worker of attempt 1 .* is alive \(pidAlive\)/);
-  assert.equal((await r.run('transfer', r.plan, '2', '--lead', LEAD, '--disarmed', 'interrupted,exited')).handoff.phase, 'TRANSFERRED');
+  assert.equal((await r.run('transfer', r.plan, '2', '--lead', LEAD, '--disarmed', 'interrupted,exited,2026-11-08T08:30:00Z')).handoff.phase, 'TRANSFERRED');
   await assert.rejects(r.run('attach', r.plan, '1', '--launch-key', 'ae:p#1/a1', '--thread-id', 'cli:5@h'), /bound to thread cli:/);
   await assert.rejects(r.run('attach', r.plan, '1', '--launch-key', 'ae:p#1/a1', '--thread-id', 'cli:0@h'), /with a pid above 0/);
 });

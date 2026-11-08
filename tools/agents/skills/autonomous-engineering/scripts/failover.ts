@@ -74,8 +74,9 @@ function leadId(c: RunCtx, what: string): string {
 // (--launch-key) is the one write a non-holder makes; guardEvent checks its key.
 function guardLease(c: RunCtx) {
   const l = c.journal.lead;
-  if (!leaseActive(l) || LEASE_FREE.has(c.command)) return;
+  if (!l || LEASE_FREE.has(c.command)) return;
   if (c.command === 'checkpoint' && c.flags.has('launch-key')) return;
+  if (!leaseActive(l)) throw new Error(`${c.command} refused: the lead lease was released; run ae lead --claim before any lead write. Nothing was written`);
   const id = c.flags.get('lead-id')?.trim();
   const who = `the lead lease is held by ${l.id} (${l.label}, renewed ${l.renewedAt}${leaseStale(l, c.at) ? ', stale' : ''})`;
   if (!id) throw new Error(`${c.command} refused: ${who}; every write needs --lead-id ${l.id}. A worker runs only ae checkpoint --launch-key K. Nothing was written`);
@@ -94,7 +95,7 @@ function leadCommand(c: RunCtx) {
     if (!leaseActive(l)) throw new Error('lead --release: no lead holds the lease. Nothing was written');
     if (l.id !== id) throw new Error(`lead --release refused: the lease is held by ${l.id}, not ${id}. Nothing was written`);
     pushHistory(l, { at: c.at, id, event: 'release' });
-    return { lease: leaseView(l, c.at), released: true, next: 'writes need no --lead-id until a lead claims the lease again' };
+    return { lease: leaseView(l, c.at), released: true, next: 'run ae lead --claim before any lead write' };
   }
   if (acts[0] === 'claim') {
     if (leaseActive(l) && l.id !== id) {
@@ -109,6 +110,9 @@ function leadCommand(c: RunCtx) {
   // takeover: with a reason and the observed predecessor status, fresh or stale (Accept 3, Continuity charter step 4)
   const reason = f.get('reason')?.trim(), observed = f.get('observed')?.trim();
   if (!reason || !observed) throw new Error('lead --takeover: --reason R and --observed "<predecessor status and time>" are both required. Nothing was written');
+  if (!/^(completed|failed|interrupted|cancelled|exited)@/.test(observed) || !isIsoTime(observed.slice(observed.indexOf('@') + 1))) {
+    throw new Error('lead --takeover: --observed must be STATUS@ISO-TIME, with stopped status completed, failed, interrupted, cancelled, or exited and a parseable ISO time. Nothing was written');
+  }
   if (leaseActive(l) && l.id === id) { l.renewedAt = c.at; return { lease: leaseView(l, c.at), renewed: true, note: 'you already hold the lease' }; }
   const prev = leaseActive(l) ? { id: l.id, label: l.label, renewedAt: l.renewedAt, stale: leaseStale(l, c.at) } : null;
   const lease: LeadLease = {
@@ -213,7 +217,8 @@ function guardIdentity(c: HookCtx, event: string, open: Attempt | undefined) {
 }
 
 // ---- zombie gate on transfer (review-1 F15; probe P5 is pending, so every old thread may resume) ----
-const TERMINAL = ['completed', 'failed', 'interrupted', 'cancelled', 'canceled'];
+const TERMINAL = ['completed', 'failed', 'interrupted', 'cancelled', 'canceled', 'exited'];
+const isIsoTime = (v: string) => /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d+)?(?:Z|[+-]\d{2}:\d{2})$/.test(v) && Number.isFinite(Date.parse(v));
 export const DISARM_METHODS = ['cancel', 'configure-away', 'exited'] as const;
 const MODES: readonly HandoffMode[] = ['resume-cross', 'cli', 'new'];
 const parseMode = (v: string | undefined): HandoffMode | undefined => {
@@ -221,15 +226,16 @@ const parseMode = (v: string | undefined): HandoffMode | undefined => {
   if (!(MODES as readonly string[]).includes(v)) throw new Error(`transfer: unknown --mode "${v}"; use ${MODES.join(', ')}. Nothing was written`);
   return v as HandoffMode;
 };
-// --disarmed STATUS,METHOD[,READ_AT]: the old task's observed terminal task_status, how it was disarmed, and when it was read.
-export function parseDisarmed(v: string | undefined, at: string): { status: string; method: string; readAt: string } {
-  if (!v?.trim()) throw new Error(`transfer refused: the old worker may resume (every T3 thread may, until probe P5 says otherwise). Pass --disarmed STATUS,METHOD[,READ_AT]: the observed terminal task_status (${TERMINAL.join(', ')}) and the method (${DISARM_METHODS.join(', ')}). Nothing was written`);
-  const [status = '', method = '', readAt] = v.split(',').map(x => x.trim());
+// --disarmed STATUS,METHOD,READ_AT: the old task's observed terminal task_status, how it was disarmed, and when it was read.
+export function parseDisarmed(v: string | undefined): { status: string; method: string; readAt: string } {
+  if (!v?.trim()) throw new Error(`transfer refused: the old worker may resume (every T3 thread may, until probe P5 says otherwise). Pass --disarmed STATUS,METHOD,READ_AT: the observed terminal task_status (${TERMINAL.join(', ')}) and the method (${DISARM_METHODS.join(', ')}). Nothing was written`);
+  const parts = v.split(',').map(x => x.trim());
+  const [status = '', method = '', readAt] = parts;
   if (status === 'working') throw new Error('transfer refused: task_status working means T3 is in a restart continuation, so the old worker may still write. Wait for a terminal status, disarm it, then transfer. Nothing was written');
   if (!TERMINAL.includes(status)) throw new Error(`transfer refused: --disarmed status "${status}" is not terminal; use ${TERMINAL.join(', ')}. Nothing was written`);
   if (!(DISARM_METHODS as readonly string[]).includes(method)) throw new Error(`transfer refused: --disarmed method "${method}" is not one of ${DISARM_METHODS.join(', ')}. Nothing was written`);
-  if (readAt !== undefined && Number.isNaN(Date.parse(readAt))) throw new Error(`transfer refused: --disarmed read time "${readAt}" is not an ISO time. Nothing was written`);
-  return { status, method, readAt: readAt ? new Date(Date.parse(readAt)).toISOString() : at };
+  if (parts.length !== 3 || !readAt || !isIsoTime(readAt)) throw new Error(`transfer refused: --disarmed read time "${readAt}" is not an ISO time. Nothing was written`);
+  return { status, method, readAt: new Date(Date.parse(readAt)).toISOString() };
 }
 
 // Runs before ae.ts moves ownership. Only the claim step (a CHECKPOINTED handoff) is gated; the --task-id step is not.
@@ -240,10 +246,10 @@ function guardTransfer(c: HookCtx, open: Attempt | undefined) {
   if (alive) throw new Error(`transfer refused: the CLI worker of attempt ${open!.n} (${open!.threadId}) is alive (pidAlive). Stop it first; --disarmed does not override a live process. Nothing was written`);
   if (mode === 'resume-cross') {
     if (!open?.threadId || cliWorker(open.threadId)) throw new Error(`transfer: --mode resume-cross keeps the T3 thread of attempt ${open?.n ?? 'none'}, which has ${open?.threadId ? 'a CLI worker' : 'no bound thread (ae attach first)'}. Nothing was written`);
-    if (f.has('disarmed')) parseDisarmed(f.get('disarmed'), c.at);
+    if (f.has('disarmed')) parseDisarmed(f.get('disarmed'));
     return;
   }
-  if (leaseActive(c.journal.lead) || open?.threadId || f.has('disarmed')) parseDisarmed(f.get('disarmed'), c.at);
+  if (leaseActive(c.journal.lead) || open?.threadId || f.has('disarmed')) parseDisarmed(f.get('disarmed'));
 }
 
 // ---- recover and status ----
@@ -290,7 +296,7 @@ export const identityHooks: Hooks = {
     if (to.launchKey) h.launchKey = to.launchKey;
     const mode = parseMode(c.flags.get('mode'));
     if (mode) h.mode = mode;
-    if (c.flags.has('disarmed')) h.disarmed = parseDisarmed(c.flags.get('disarmed'), c.at);
+    if (c.flags.has('disarmed')) h.disarmed = parseDisarmed(c.flags.get('disarmed'));
     // the same thread runs on another provider: the new attempt owns it
     if (mode === 'resume-cross' && from?.threadId) { to.threadId = from.threadId; h.threadId = from.threadId; }
   },

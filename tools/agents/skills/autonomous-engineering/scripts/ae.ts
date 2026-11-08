@@ -176,7 +176,7 @@ function check(args: Args, deps: Deps): Result {
 }
 
 // ---- verify run ----
-type RunResult = { exitCode: number | null; output: string; timedOut: boolean; durationMs: number };
+type RunResult = { exitCode?: number; timeout?: string; signal?: string; output: string; timedOut: boolean; durationMs: number };
 function runCommand(command: string, cwd: string, timeoutMs: number): Promise<RunResult> {
   return new Promise((resolveRun, reject) => {
     const started = performance.now();
@@ -188,7 +188,7 @@ function runCommand(command: string, cwd: string, timeoutMs: number): Promise<Ru
     child.stderr.on('data', take);
     const timer = setTimeout(() => { timedOut = true; try { process.kill(-child.pid!, 'SIGKILL'); } catch { child.kill('SIGKILL'); } }, timeoutMs);
     child.on('error', e => { clearTimeout(timer); reject(e); });
-    child.on('close', code => { clearTimeout(timer); resolveRun({ exitCode: timedOut ? null : code, output, timedOut, durationMs: Math.round(performance.now() - started) }); });
+    child.on('close', (code, signal) => { clearTimeout(timer); resolveRun({ ...(code !== null && !timedOut ? { exitCode: code } : {}), ...(timedOut ? { timeout: `${timeoutMs}ms` } : {}), ...(signal ? { signal } : {}), output, timedOut, durationMs: Math.round(performance.now() - started) }); });
   });
 }
 
@@ -620,7 +620,7 @@ function takeCheckpoint(c: Ctx, check?: CheckpointCheck): Result {
   faultPoint('checkpoint:taken');
   rec.checkpoints = [...(rec.checkpoints ?? []), cp].slice(-MAX_CHECKPOINTS);
   const h = lastHandoff(rec);
-  if (role === 'lead' && h && handoffOpen(h)) {
+  if (role === 'lead' && h && handoffOpen(h) && check?.stable !== false) {
     h.history.push({ at, phase: 'CHECKPOINTED', note: h.phase === 'CHECKPOINTED' ? 'checkpoint refreshed' : 'checkpoint after prepare' });
     h.phase = 'CHECKPOINTED'; h.checkpointAt = at;
   }
@@ -685,8 +685,8 @@ const PHASED: Record<string, Phased> = {
       const changed = drift(p.snap, now, true);
       if (changed.length) return unstable(c, s, rec, changed, r, { verified: false, ...p.controls.report });
       if (run.exitCode !== 0) {
-        const attempt: Attempt = { n: rec.attempts.length + 1, kind: 'verify', at: c.now.toISOString(), exitCode: run.exitCode, outputTail: tail, signature: failureSignature(tail) };
-        const out = recordFailure(rec, attempt, c.now.toISOString(), `verify failed (${run.timedOut ? 'timeout' : `exit ${run.exitCode}`}): ${redact(p.command)}`);
+        const attempt: Attempt = { n: rec.attempts.length + 1, kind: 'verify', at: c.now.toISOString(), ...(run.exitCode !== undefined ? { exitCode: run.exitCode } : {}), ...(run.timeout ? { timeout: run.timeout } : {}), ...(run.signal ? { signal: run.signal } : {}), outputTail: tail, signature: failureSignature(tail) };
+        const out = recordFailure(rec, attempt, c.now.toISOString(), `verify failed (${run.timedOut ? 'timeout' : run.signal ? `signal ${run.signal}` : `exit ${run.exitCode ?? 'unknown'}`}): ${redact(p.command)}`);
         return { ...fromTo(rec, s.id, from), verified: false, exitCode: run.exitCode, timedOut: run.timedOut, failures: failures(rec).length, why: out.why, outputTail: tail, ...p.controls.report };
       }
       const evidence: Evidence = { kind: 'command', command: redact(p.command), exitCode: 0, durationMs: run.durationMs, outputTail: tail, by: 'engine', at: c.now.toISOString(), gitHead: git(c.root, 'rev-parse', 'HEAD') ?? 'none', fingerprint: now.fp };
@@ -708,7 +708,7 @@ const PHASED: Record<string, Phased> = {
       const { s, rec } = c.slice(c.args.slice), now = snapOf(c, s, rec), { run, tail, prepared: p } = r;
       const changed = drift(p.snap, now, false);
       if (changed.length) return unstable(c, s, rec, changed, r, {});
-      const check: CheckpointCheck = { command: redact(p.command), ...(run.exitCode !== null ? { exitCode: run.exitCode } : {}), ...(run.timedOut ? { timedOut: true } : {}),
+      const check: CheckpointCheck & { timeout?: string; signal?: string } = { command: redact(p.command), ...(run.exitCode !== undefined ? { exitCode: run.exitCode } : {}), ...(run.timedOut ? { timedOut: true } : {}), ...(run.timeout ? { timeout: run.timeout } : {}), ...(run.signal ? { signal: run.signal } : {}),
         tail, at: c.now.toISOString(), fpBefore: p.snap.fp, fpAfter: now.fp, stable: p.snap.fp === now.fp };
       return { ...takeCheckpoint(c, check), ...p.controls.report };
     },
@@ -745,9 +745,11 @@ const NEEDS_CHECK = 'check task_status, then ae fail or ae finish';
 // Report drift between journal, plan, Git, and files. Without --apply it writes nothing and takes no lock.
 // With --apply it demotes stale VERIFIED and ACCEPTED slices to AGENT_FINISHED, then reconciles the plan lines.
 async function recover(b: Base, text: string, waitMs: number): Promise<Result> {
-  const { args, plan, now, root, planPath, jfile } = b, apply = args.flags.has('apply'), at = now.toISOString();
+  const { args, now, root, planPath, jfile } = b, apply = args.flags.has('apply'), at = now.toISOString();
   const lockBefore = inspectLock(jfile);
   const body = (): Result => {
+    if (apply) { refuseSymlinks(planPath, jfile, jfile + '.bak'); text = readFileSync(planPath, 'utf8'); b = { ...b, plan: parsePlan(text, args.plan) }; }
+    const { plan } = b;
     const l = loadJournal(jfile), journal = l.journal, before = JSON.stringify(journal);
     if (apply) runHook('guardWrite', runCtx({ ...b, journal }), undefined);
     const known = new Map(Object.entries(journal.slices).map(([id, r]) => [id, r.definitionDigest]));
@@ -819,13 +821,23 @@ async function recover(b: Base, text: string, waitMs: number): Promise<Result> {
     const engineFiles = engineOwned(root, planPath, jfile);
     const ownedBy = (p: string) => plan.slices.some(s => s.files.some(f => within(p, f)));
     const tempFiles = orphanTempFiles(planPath, jfile, jfile + '.bak').map(p => relative(root, p));
-    // Removed slices can still name snapshots. Retained refs with pruned checkpoint rows are unreferenced too.
-    // Report only this plan's refs; keep all refs intact.
+    // Removed slices still name snapshots. Older unreferenced refs may come from the five-checkpoint window.
+    // Only refs above the highest named number for their slice are crash orphans. Keep all refs intact.
     const namedSnapshots = new Set([...Object.values(journal.slices), ...Object.values(journal.removed ?? {})]
       .flatMap(rec => (rec.checkpoints ?? []).flatMap(cp => cp.snapshot ? [cp.snapshot] : [])));
     const prefix = snapshotPrefix(basename(planPath, '.md'), 'x').replace(/\/x$/, '/');
-    const orphanSnapshotRefs = (git(root, 'for-each-ref', '--format=%(refname)', prefix) ?? '').split('\n')
+    const highestNamed = new Map<string, number>();
+    for (const ref of namedSnapshots) {
+      const end = ref.lastIndexOf('/'), slicePrefix = ref.slice(0, end);
+      highestNamed.set(slicePrefix, Math.max(highestNamed.get(slicePrefix) ?? 0, Number(ref.slice(end + 1))));
+    }
+    const unreferenced = (git(root, 'for-each-ref', '--format=%(refname)', prefix) ?? '').split('\n')
       .filter(ref => ref.startsWith(prefix) && /\/\d+\/\d+$/.test(ref) && !namedSnapshots.has(ref)).sort();
+    const isCrashOrphan = (ref: string) => {
+      const end = ref.lastIndexOf('/');
+      return Number(ref.slice(end + 1)) > (highestNamed.get(ref.slice(0, end)) ?? 0);
+    };
+    const orphanSnapshotRefs = unreferenced.filter(isCrashOrphan), prunedSnapshotRefs = unreferenced.filter(ref => !isCrashOrphan(ref));
     const unowned = changed.filter(p => !engineFiles.has(p) && !/^BLOCKED[^/]*\.md$/.test(p) && !ownedBy(p));
 
     let applied: Result[] = [];
@@ -856,7 +868,7 @@ async function recover(b: Base, text: string, waitMs: number): Promise<Result> {
       plan: journal.plan, readOnly: !apply, ...(l.recoveredFromBackup ? { recoveredFromBackup: true } : {}),
       lock: lockBefore && { pid: lockBefore.pid, alive: lockBefore.alive, stale: lockBefore.stale, note: lockBefore.stale ? (apply ? 'stale lock (dead pid) taken over' : 'stale lock (dead pid); a writing command takes it over') : 'held by a live process; this report may be out of date' },
       ...(apply && lockBefore?.stale ? { staleLockTakenOver: true } : {}),
-      synced, planDrift, staleEvidence, inProgress, handoffs, tempFiles, orphanSnapshotRefs, orphanSnapshotCount: orphanSnapshotRefs.length, ...awaiting(journal, plan), blockedFiles,
+      synced, planDrift, staleEvidence, inProgress, handoffs, tempFiles, orphanSnapshotRefs, orphanSnapshotCount: orphanSnapshotRefs.length, prunedSnapshotRefs, prunedSnapshotCount: prunedSnapshotRefs.length, ...awaiting(journal, plan), blockedFiles,
       git: { branch: git(root, 'symbolic-ref', '--short', '-q', 'HEAD') ?? 'detached or none', head: git(root, 'rev-parse', 'HEAD') ?? 'none', changedFiles: found, unowned },
       filesProblems: problems.map(p => p.text),
       next: { batch: nb.batch.map(s => s.id), running: nb.running, waiting: nb.waiting, deferred: nb.deferred, ...(capacity ? { capacity } : {}) },
@@ -911,8 +923,12 @@ function assertSize(c: Ctx, beforeBytes: number, beforeStates: string) {
 // One locked command: load, sync, guardWrite, the handler, the module result fields, the size guard, then save.
 // `fn` returning undefined is phase 1 of a two-phase run: housekeeping is saved, and the output comes from phase 3.
 function locked(b: Base, text: string, waitMs: number, fn: (c: Ctx) => Promise<Result | undefined> | Result | undefined): Promise<Result> {
-  const { args, plan, now, planPath, jfile } = b;
+  const { args, now, planPath, jfile } = b;
   return withLock(jfile, async () => {
+    refuseSymlinks(planPath, jfile, jfile + '.bak');
+    text = readFileSync(planPath, 'utf8');
+    const plan = parsePlan(text, args.plan);
+    b = { ...b, plan };
     let journal: Journal, recovered = false, scrubbed = false, before = '', beforeBytes = 0, beforeStates = '';
     if (args.command === 'init') journal = initJournal(b, jfile);
     else {
@@ -978,10 +994,8 @@ export async function main(argv: string[], deps: Deps): Promise<Result> {
   const ran: Ran = { prepared, run, tail: outputTail(redact(raw)) }; // redact first, so a cut-off key block cannot escape
   // The plan may have changed during the run (another command, or a hand edit): read it again, so phase 3 compares
   // against the current definition and never writes back old plan text.
-  refuseSymlinks(planPath, jfile, jfile + '.bak', jfile + '.lock');
-  const text3 = readFileSync(planPath, 'utf8');
   const relock = Math.max(waitMs, RELOCK_WAIT_MS);
-  const final = await locked({ ...base, plan: parsePlan(text3, args.plan) }, text3, relock, c => phased.record(c, ran)).catch((e: unknown) => {
+  const final = await locked(base, text, relock, c => phased.record(c, ran)).catch((e: unknown) => {
     if (!(e instanceof LockBusy)) throw e;
     throw new Error(`${args.command}: lost the journal lock while the command ran (exit ${run.exitCode ?? 'none'}): ${e.message}, still held after ${relock / 1000} s. Nothing was recorded and the fix budget did not move; run it again`);
   });

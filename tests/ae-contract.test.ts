@@ -185,22 +185,36 @@ test('Accept 4: every journal written in a run that uses every new field passes 
   assertContract(readFileSync(r.jfile + '.bak', 'utf8'), '.bak');
 });
 
-// Review 1 (F9): the contract caps keep a worst-case ledger well under 1 MiB, so ACC (2 MiB) never drops it for size.
-test('Review 1: 100 decisions at every contract cap stay under 1 MiB and pass the ACC decoder', () => {
-  const j = JSON.parse(readFileSync(FIXTURE, 'utf8'));
-  const t = (c: string, n: number) => c.repeat(n);
+// R2: character limits cannot bound UTF-8 plus JSON escaping. The save boundary refuses the first over-budget ledger.
+test('Accept 2 (R2): multibyte and JSON-escaped text at every free-text cap is byte-budgeted below 1 MiB', async () => {
+  const j = JSON.parse(readFileSync(FIXTURE, 'utf8')) as Journal;
+  const t = (n: number) => '界"\\\n\u0001'.repeat(n).slice(0, n);
   const at = '2026-11-08T06:00:00.000Z';
   j.decisions = Array.from({ length: MAX_DECISIONS }, (_, i) => ({
-    id: `D${i + 1}`, key: `k.${'x'.repeat(70)}${i}`.slice(0, 80), scope: 'slice:1', risk: 'amber', status: 'assumed',
-    question: t('q', MAX_DECISION_TEXT), answer: t('a', MAX_DECISION_TEXT), recommended: t('r', MAX_DECISION_TEXT), rollback: t('b', MAX_DECISION_TEXT),
-    source: t('s', MAX_DECISION_TEXT), provenance: 'attested', by: LEAD, sliceDigest: 'd'.repeat(12),
-    evidence: Array.from({ length: MAX_DECISION_EVIDENCE }, () => t('e', 100)),
-    watch: Array.from({ length: MAX_WATCH }, (_, w) => ({ path: `src/some/deep/folder/file-${w}.ts`, fp: 'f'.repeat(12), fpv: 2 })),
+    id: `D${i + 1}`, key: `k.${'x'.repeat(75)}${String(i).padStart(3, '0')}`, scope: 'slice:1', risk: 'amber', status: 'assumed',
+    question: t(MAX_DECISION_TEXT), answer: t(MAX_DECISION_TEXT), recommended: t(MAX_DECISION_TEXT), rollback: t(MAX_DECISION_TEXT),
+    source: 'file:' + '界"\\'.repeat(MAX_DECISION_TEXT).slice(0, MAX_DECISION_TEXT - 7) + ':1', provenance: 'attested', by: LEAD, sliceDigest: 'd'.repeat(12),
+    evidence: Array.from({ length: MAX_DECISION_EVIDENCE }, () => t(100)),
+    watch: Array.from({ length: MAX_WATCH }, (_, w) => ({ path: `src/${t(30)}-${w}.ts`, fp: 'f'.repeat(12), fpv: 2 })),
     at, updatedAt: at, history: Array.from({ length: MAX_DECISION_HISTORY }, () => ({ at, status: 'assumed', by: LEAD })),
   }));
-  const text = JSON.stringify(j, null, 2), bytes = Buffer.byteLength(text);
-  assert.ok(bytes < 1024 * 1024, `worst-case ledger is ${bytes} bytes`);
-  assertContract(text, 'worst-case ledger');
+  const text = JSON.stringify(j, null, 2), bytes = Buffer.byteLength(text, 'utf8');
+  assert.ok(bytes > 1024 * 1024, `frozen character caps alone allow ${bytes} serialized bytes`);
+  const r = repo(FIXTURE_PLAN); copyFileSync(FIXTURE, r.jfile);
+  const before = readFileSync(r.jfile, 'utf8');
+  await assert.rejects(withLock(r.jfile, () => saveJournal(r.jfile, j)), /decision write refused: .*serialized UTF-8 bytes.*1 MiB/);
+  assert.equal(readFileSync(r.jfile, 'utf8'), before, 'refusal preserves the previous journal');
+  // Find the largest prefix of full-cap decisions that fits the serialized budget. No field is cut silently.
+  const all = j.decisions;
+  let kept = all.length;
+  while (Buffer.byteLength(JSON.stringify(j, null, 2) + '\n', 'utf8') >= 1024 * 1024) j.decisions = all.slice(0, --kept);
+  await withLock(r.jfile, () => saveJournal(r.jfile, j));
+  const saved = readFileSync(r.jfile, 'utf8');
+  assert.ok(Buffer.byteLength(saved, 'utf8') < 1024 * 1024);
+  assertContract(saved, 'largest admitted full-cap ledger');
+  j.decisions = all.slice(0, kept + 1);
+  await assert.rejects(withLock(r.jfile, () => saveJournal(r.jfile, j)), /decision write refused/);
+  assert.equal(readFileSync(r.jfile, 'utf8'), saved);
 });
 
 // Review 1 (F1): the hook surface later tracks plug into. Each helper is inert with no module and refuses ambiguity.
