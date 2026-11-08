@@ -491,14 +491,14 @@ test('S15 R6: api recovery does not recommend the CLI of a current worker that i
 // Slice 15 fix review 4 (Claude) B1, B2, N1, S1.
 const LADDER_MODEL = 'Claude (opus/high)', LADDER_FALLBACK = 'Codex (gpt-6.1-sol/medium)';
 const CLAUDE_FLAGS = ['--provider', 'claudeAgent', '--model', 'claude-opus-5-5', '--effort', 'high'];
-test('S15 B1: after a refusal, the fix ladder picks the Fallback on another provider; a bare start is a provider switch', async () => {
+test('S15 B1: after a refusal, a bare start may be the Fallback on another provider; it is a provider switch', async () => {
   const r = repo(planText(LADDER_MODEL, LADDER_FALLBACK));
   await started(r, ...CLAUDE_FLAGS);
   await interrupt(r, 'refusal', '--code', 'permission_error', '--source', 't3');
   await r.run('unblock', r.plan, '1', '--reason', 'reworded');
   for (const [n, why] of ['alpha broke', 'beta crashed', 'gamma timed out'].entries()) { await r.run('fail', r.plan, '1', '--reason', why); if (n < 2) await r.run('start', r.plan, '1', ...CLAUDE_FLAGS); }
   const before = r.raw();
-  await assert.rejects(r.run('start', r.plan, '1'), /start refused: .*the fix ladder's pick.* provider switch.*provider-change/);
+  await assert.rejects(r.run('start', r.plan, '1'), /start refused: .*fix ladder may pick the Model or the Fallback.* provider switch.*provider-change/);
   await assert.rejects(r.run('start', r.plan, '1', '--provider', 'codex', '--model', 'gpt-6.1-sol'), /provider switch/);
   assert.equal(r.raw(), before, 'nothing was written');
   // after the user approves the switch, the bare start works
@@ -534,4 +534,33 @@ test('S15 S1: a Gemini provider or model is the Antigravity agent', async () => 
   await r.run('prepare', r.plan, '1', '--to', 'Antigravity (gemini-3.8-pro/high)', '--lead', LEAD, '--reason', 'approved switch');
   await r.run('checkpoint', r.plan, '1', '--kind', 'pre-handoff');
   await r.run('transfer', r.plan, '1', '--lead', LEAD, '--provider', 'gemini', '--model', 'gemini-3.8-pro', '--effort', 'high');
+});
+
+// Slice 15 fix review 5 (Claude) R1 and R2: the ladder reaches the Fallback before failure 3.
+test('S15 R1/R2: a bare start after a refusal is a provider switch when the ladder can reach another provider early', async () => {
+  // an escalation is spent (xhigh): failure 2 already picks the Fallback
+  const r = repo(planText('Codex (gpt-6.1-sol/xhigh)', 'Claude (opus/high)'));
+  const CODEX = ['--provider', 'codex', '--model', 'gpt-6.1-sol', '--effort', 'xhigh'];
+  await started(r, ...CODEX);
+  await interrupt(r, 'refusal', '--code', 'permission_error', '--source', 't3');
+  await r.run('unblock', r.plan, '1', '--reason', 'reworded');
+  await r.run('fail', r.plan, '1', '--reason', 'alpha broke');
+  await assert.rejects(r.run('start', r.plan, '1'), /provider switch/);
+  // a host that runs the Fallback natively: failure 1
+  const r2 = repo(planText('Codex (gpt-6.1-sol/medium)', 'Claude (opus/high)'));
+  await started(r2, '--provider', 'codex', '--model', 'gpt-6.1-sol', '--effort', 'medium');
+  await interrupt(r2, 'refusal', '--code', 'permission_error', '--source', 't3');
+  await r2.run('unblock', r2.plan, '1', '--reason', 'reworded');
+  await r2.run('fail', r2.plan, '1', '--reason', 'alpha broke');
+  await assert.rejects(r2.run('start', r2.plan, '1'), /provider switch/);
+  // naming the refusing agent is allowed: a deliberate choice of the Model
+  assert.ok((await r2.run('start', r2.plan, '1', '--provider', 'codex', '--model', 'gpt-6.1-sol', '--effort', 'medium')).attempt > 0);
+});
+test('S15 R3: a Model and Fallback of the same agent need no approval for a bare start after an unrecorded refusal', async () => {
+  const r = repo(planText('Codex (gpt-6.1-sol/medium)', 'Codex (gpt-6-astra/medium)'));
+  await started(r);
+  await interrupt(r, 'refusal', '--code', 'permission_error', '--source', 't3');
+  await r.run('unblock', r.plan, '1', '--reason', 'reworded');
+  await r.run('fail', r.plan, '1', '--reason', 'alpha broke');
+  assert.ok((await r.run('start', r.plan, '1')).attempt > 0);
 });
