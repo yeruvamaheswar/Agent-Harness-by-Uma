@@ -244,7 +244,7 @@ Source: `plans/usage-continuity.md`. Code: `scripts/usage.ts`. The engine never 
   | code | kind |
   |---|---|
   | `usage_limit_reached`, `insufficient_quota` | quota |
-  | `rate_limit_exceeded`, `rate_limited` | rate |
+  | `rate_limit_exceeded`, `rate_limited`, `rate_limit_error` | rate |
   | `context_length_exceeded`, `context_window_exceeded` | context |
   Any other code is listed in `ignored`, redacted, and changes nothing. Free text is never read: a `limitReached` or `error` field is refused with an error, so no phrase can exhaust an agent. Any other field the engine does not read, at agent or limit level, is refused too, and `reached` must be `true` or `false`.
 - Quota and rate limits belong to the account; the context window belongs to the session. They are judged apart. An account limit wins a tie. With no account number, a context reading decides only from `assess` up; a low one leaves the level `unknown`.
@@ -291,11 +291,11 @@ The plan `State:` stays IN_PROGRESS. The journal holds the phase.
 | TRANSFERRED | `transfer` | `handoff`, delegate, `transfer --task-id`. The replacement works; `finish`, `review`, `verify` as usual. `prepare` again starts a new handoff |
 | CLOSED | the engine: an open handoff when the slice leaves IN_PROGRESS (the old worker finished or failed, or the definition changed); a transferred one when the replacement no longer owns the slice: its attempt ended other than by a block, the definition changed, or a newer handoff took over | nothing; its checkpoint is never reused. `prepare` starts a new handoff |
 
-- A handoff is not a failed attempt. The fix budget, review, and evidence carry over. A replacement that crashes is an ordinary `fail`.
+- A handoff is not a failed attempt. The fix budget, review, and evidence carry over. A replacement that stops is an `ae interrupt` handled by FAILOVER mode: the attempt stays open and takes no fix-budget step. Use `ae fail` only for a reported work failure.
 - No two workers own the slice: `start` needs READY, and `transfer` refuses a second task.
 - `transfer` runs before the replacement starts and compares the slice fingerprint with the checkpoint. A change means the old worker may still write: stop it, checkpoint again.
 - After a block and `unblock`, the replacement stays the worker.
-- Crash between steps: each step is safe to repeat. `recover` lists the handoff and its next step. At TRANSFERRED with no task id, check `task_status` for a task already started: attach it with `transfer --task-id`, else delegate again.
+- Crash between steps: each step is safe to repeat. `recover` lists the handoff and its next step. At TRANSFERRED with no task id, search T3 threads by the attempt's launch key for an already launched task. If found, attach it with `ae attach PLAN N --launch-key K --thread-id T --task-id X` before continuing. Only consider another launch after the search confirms no task was launched. Never relaunch blindly.
 
 ### Journal records
 - `checkpoints` (last 5): `{at, by, gitHead, branch, fingerprint, changed, unowned, lastCheck, done?, next?, note?}`. `changed` is the slice's changed files from `git status`; `unowned` is changed files that no slice owns.

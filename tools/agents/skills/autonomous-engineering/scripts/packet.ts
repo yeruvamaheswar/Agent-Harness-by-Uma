@@ -63,7 +63,7 @@ function compose(journal: Journal, s: Slice, mode: PacketMode, env: PacketEnv) {
   const rec = journal.slices[s.id], allow = journal.authority.allow, jname = basename(env.journalFile), cap = PACKET_CAPS[mode];
   const cont = mode === 'continuation' ? continuationOf(journal, s) : undefined;
   const open = cont?.open ?? openWork(rec);
-  const decisionsCmd = `ae decisions ${env.planPath} --active`;
+  const decisionsCmd = `ae decisions ${env.planPath} ${s.id} --active`;
 
   // ---- items (the JSON is complete; the text shows them by tier level) ----
   const contract = {
@@ -88,7 +88,7 @@ function compose(journal: Journal, s: Slice, mode: PacketMode, env: PacketEnv) {
     ? `Waiting on the user (RED): ${waiting.slice(0, WAITING_MAX).map(d => `${d.key} (${d.id})`).join(', ')}${waiting.length > WAITING_MAX ? `, +${waiting.length - WAITING_MAX} more` : ''}. Do not do it; finish other work.`
     : null;
 
-  const settled = settledFor(journal, s.id, rec.definitionDigest, s.dependsOn).map(x => ({ ...x, stale: x.stale || (env.root !== undefined && decisionStale(journal, x.d, env.root)) }));
+  const settled = settledFor(journal, s.id, s.dependsOn).map(x => ({ ...x, stale: x.stale || (env.root !== undefined && decisionStale(journal, x.d, env.root)) }));
   const settledText = (x: (typeof settled)[number], n: number) =>
     `${x.d.id} ${x.d.key} = ${clip(x.d.answer, n)} (${x.d.risk}, ${x.d.status}${x.d.rollback ? `; rollback: ${clip(x.d.rollback, n)}` : ''})${x.stale ? ' [re-check, do not rely]' : ''}`;
 

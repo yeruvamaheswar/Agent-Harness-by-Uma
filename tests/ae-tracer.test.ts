@@ -224,7 +224,7 @@ test('Accept 2: with 50 decisions and 40 changed files the text still fits and k
   for (const rule of ['When done: report the changed files', 'When truly blocked: write BLOCKED.md', 'First inspect the existing work']) assert.ok(h.text.includes(rule), rule);
   // both floors
   assert.match(h.text, /^Changed so far: 40 files done \(hash-checked\); the list is in the packet JSON\.$/m);
-  assert.ok(h.text.split('\n').includes(`Settled, do not re-ask: 40 settled: \`ae decisions ${r.plan} --active\`.`));
+  assert.ok(h.text.split('\n').includes(`Settled, do not re-ask: 40 settled: \`ae decisions ${r.plan} 1 --active\`.`));
   // the JSON stays complete
   const sec = (k: string) => h.packet.sections.find((x: any) => x.key === k).items;
   assert.equal(sec('waiting').length, 10);

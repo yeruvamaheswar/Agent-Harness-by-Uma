@@ -259,10 +259,10 @@ export function listDecisions(journal: Journal, opts: { active?: boolean; key?: 
 }
 
 // For the packet: settled decisions (approved first, then assumed) and RED items waiting on the user.
-export function settledFor(journal: Journal, slice: string, digest?: string, dependsOn?: readonly string[]) {
+export function settledFor(journal: Journal, slice: string, dependsOn?: readonly string[]) {
   const rank = (d: Decision) => (d.status === 'approved' ? 0 : 1);
   return listDecisions(journal, { active: true, slice, dependsOn }).filter(isSettled).sort((a, b) => rank(a) - rank(b))
-    .map(d => ({ d, stale: !!d.sliceDigest && digest !== undefined && d.sliceDigest !== digest }));
+    .map(d => ({ d, stale: digestStale(journal, d) }));
 }
 export const waitingFor = (journal: Journal, slice: string, dependsOn?: readonly string[]) => listDecisions(journal, { active: true, slice, dependsOn }).filter(d => d.risk === 'red' && isOpen(d));
 
