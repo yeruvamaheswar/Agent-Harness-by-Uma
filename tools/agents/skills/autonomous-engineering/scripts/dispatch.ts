@@ -160,6 +160,50 @@ export function chooseTarget(slice: { model: string; fallback?: string }, failur
   return { target, used: 'handoff' as const, chain };
 }
 
+// One key per model choice: agent, then tier and effort, model id and effort, or auto/default. Extras such as
+// "fresh session" or "unverified" do not change which model it is.
+export function modelKey(ref: ModelRef): string {
+  if (ref.mode === 'tier') return `${ref.agent}:${ref.tier}/${ref.effort ?? ''}`;
+  if (ref.mode === 'model') return `${ref.agent}:${(ref.modelId ?? '').toLowerCase()}/${ref.effort ?? ''}`;
+  return `${ref.agent}:${ref.mode}`;
+}
+
+// Model families for review independence (REQ-17). Codex is the OpenAI family; Antigravity and Cursor host models of
+// several families, so only a model id tells; Cursor (auto) has no known family. `human` is a person, not a model.
+export const FAMILIES = ['Claude', 'OpenAI', 'Gemini', 'Grok'] as const;
+export type Family = typeof FAMILIES[number];
+// Exact id prefixes only. Anything else is no known family, never a guess.
+export function familyOfModelId(id: string | undefined): Family | undefined {
+  const t = (id ?? '').trim().toLowerCase();
+  if (/^(claude|opus|sonnet|haiku)\b/.test(t)) return 'Claude';
+  if (/^(gpt|codex)\b|^o\d/.test(t)) return 'OpenAI';
+  if (/^gemini\b/.test(t)) return 'Gemini';
+  if (/^grok\b/.test(t)) return 'Grok';
+  return undefined;
+}
+// A recorded provider name (attempt.provider, --provider) or T3 driverKind.
+export function familyOfProvider(p: string | undefined): Family | undefined {
+  const t = (p ?? '').trim().toLowerCase();
+  if (['claude', 'claudeagent', 'anthropic'].includes(t)) return 'Claude';
+  if (['codex', 'openai'].includes(t)) return 'OpenAI';
+  if (['gemini', 'google'].includes(t)) return 'Gemini';
+  if (['grok', 'xai'].includes(t)) return 'Grok';
+  return undefined;
+}
+export function familyOf(ref: ModelRef): Family | 'human' | undefined {
+  if (ref.agent === 'user') return 'human';
+  if (ref.agent === 'CI') return undefined;
+  if (ref.agent === 'Claude') return 'Claude';
+  if (ref.agent === 'Codex') return 'OpenAI';
+  if (ref.agent === 'Grok') return 'Grok';
+  return ref.mode === 'model' ? familyOfModelId(ref.modelId) : undefined;
+}
+// Model text ("Codex (gpt-6.1-sol/medium)") or a bare model id ("opus", "gemini-3.8-flash"), or undefined.
+export function familyOfText(text: string | undefined): Family | 'human' | undefined {
+  if (!text?.trim()) return undefined;
+  try { return familyOf(parseModelRef(text)); } catch { return familyOfModelId(text); }
+}
+
 export function intensity(ref: ModelRef): { value: number; label: string } {
   const base = ref.mode === 'tier' ? TIER_WEIGHT[ref.tier ?? ''] ?? 3 : ref.agent === 'user' || ref.agent === 'CI' ? 0 : 3;
   const mult = ref.mode === 'tier' ? EFFORT_WEIGHT[ref.effort ?? 'medium'] ?? 1 : 1;

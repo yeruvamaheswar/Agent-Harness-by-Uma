@@ -1,6 +1,6 @@
 ---
 name: continue-work
-description: Resume a task in a new session from the prior trail and the real repo state, then stop at the resume point. Use only when the user asks to continue work or names this skill.
+description: Resume a task in a new session from the prior trail and the real repo state, then continue from the resume point. Use only when the user asks to continue work or names this skill.
 disable-model-invocation: true
 ---
 
@@ -9,7 +9,7 @@ disable-model-invocation: true
 You own the resume point. Read the prior trail; don't redo it.
 
 ## Hard limits
-- Change nothing before the user confirms the next step.
+- When the trail is complete and the next step is in scope, continue without a confirmation. Ask only for an open RED item or a missing goal. Without a complete trail, change nothing before the user confirms the next step.
 - Prior decisions and finished work are authoritative. Do not re-derive them or repeat a finished repro.
 - A "done", "passing", or "works" claim is checked once against the real artifact. A self-report is not proof.
 - Chat memory and auto-memory are hints. Files and command output win.
@@ -17,13 +17,14 @@ You own the resume point. Read the prior trail; don't redo it.
 - No plan and no handoff: say so and ask for the goal. Do not guess.
 
 ## Steps
+0. If `plans/*.run.json` exists, run `ae status`, `ae recover`, and `ae decisions --active` first, before any question. They give the run state, the recovery point, and the settled decisions. Do not re-ask a settled decision.
 1. Read the project instructions (`AGENTS.md`, `CLAUDE.md`, or equivalent) and the README.
 2. Find the trail: the plan, the latest handoff or progress notes, recent ADRs, and this project's last session transcript if the platform exposes one. Name the files. Summarize a long transcript in a subagent when one is available.
 3. Reconstruct state: branch and worktree, `git status`, uncommitted changes, `git log --oneline -10`, `git diff` against the base branch, open todos, decisions made.
 4. Run the project's checks (tests, lint, build; find them in the README, manifests, Makefile, or CI). A check you could not run is `unknown`, never `pass`.
 5. Compare done with planned. Name the resume point.
 6. Pick one verdict: continue the work · ship a finished result · confirm or override a prior conclusion · postmortem a failed run.
-7. Stop and wait for the user.
+7. If the trail is complete and the next step is in scope, do that step and verify it. Otherwise stop and ask once: only for an open RED item or a missing goal.
 
 ## Reply
 - Where the prior session stopped, with commit hashes and file paths.

@@ -1,0 +1,7 @@
+{"uuid":"u3_1","sessionId":"session-3","type":"user","timestamp":"2026-11-03T10:00:00.000Z","message":{"role":"user","content":[{"type":"text","text":"Please build feature C."}]}}
+{"uuid":"u3_2","sessionId":"session-3","type":"assistant","timestamp":"2026-11-03T10:00:15.000Z","message":{"id":"msg_3_1","role":"assistant","content":[{"type":"tool_use","id":"tool_4","name":"AskUserQuestion","input":{"questions":["Can I create a local git commit for this change?"]}}]}}
+{"uuid":"u3_3","sessionId":"session-3","type":"user","timestamp":"2026-11-03T10:00:35.000Z","message":{"role":"user","content":[{"type":"tool_result","tool_use_id":"tool_4","content":"Yes you can."}]}}
+{"uuid":"u3_4","sessionId":"session-3","type":"system","subtype":"compact_boundary","timestamp":"2026-11-03T10:05:00.000Z"}
+{"uuid":"u3_5","sessionId":"session-3","type":"user","isCompactSummary":true,"timestamp":"2026-11-03T10:05:01.000Z","message":{"role":"user","content":[{"type":"text","text":"Prior conversation compacted."}]}}
+{"uuid":"u3_6","sessionId":"session-3","type":"assistant","timestamp":"2026-11-03T10:05:10.000Z","message":{"id":"msg_3_2","role":"assistant","content":[{"type":"tool_use","id":"tool_5","name":"AskUserQuestion","input":{"questions":["Can I create a local git commit for this change?"]}}]}}
+{"uuid":"u3_7","sessionId":"session-3","type":"user","timestamp":"2026-11-03T10:05:40.000Z","message":{"role":"user","content":[{"type":"tool_result","tool_use_id":"tool_5","content":"I already said yes."}]}}

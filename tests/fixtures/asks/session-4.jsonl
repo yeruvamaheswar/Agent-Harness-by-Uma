@@ -1,0 +1,4 @@
+{"uuid":"u4_1","sessionId":"session-4","type":"user","timestamp":"2026-11-04T10:00:00.000Z","message":{"role":"user","content":[{"type":"text","text":"Run dangerous cleanup."}]}}
+{"uuid":"u4_2","sessionId":"session-4","type":"assistant","timestamp":"2026-11-04T10:00:10.000Z","message":{"id":"msg_4_1","role":"assistant","content":[{"type":"tool_use","id":"tool_b1","name":"Bash","input":{"command":"rm -rf /tmp/data"}}]}}
+{"uuid":"u4_3","sessionId":"session-4","type":"user","timestamp":"2026-11-04T10:00:25.000Z","message":{"role":"user","content":[{"type":"tool_result","tool_use_id":"tool_b1","content":"The user doesn't want to proceed with this tool use. The tool use was rejected by the user.","is_error":true}]}}
+{"uuid":"u4_4","sessionId":"session-4","type":"assistant","timestamp":"2026-11-04T10:00:30.000Z","message":{"id":"msg_4_2","role":"assistant","content":[{"type":"text","text":"Understood, I will stop."}]}}

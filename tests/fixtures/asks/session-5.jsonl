@@ -1,0 +1,6 @@
+{"uuid":"u5_1","sessionId":"session-5","type":"user","timestamp":"2026-11-05T10:00:00.000Z","message":{"role":"user","content":[{"type":"text","text":"Create a plan for slice D."}]}}
+{"uuid":"u5_2","sessionId":"session-5","type":"assistant","timestamp":"2026-11-05T10:00:20.000Z","message":{"id":"msg_5_1","role":"assistant","content":[{"type":"tool_use","id":"tool_p1","name":"ExitPlanMode","input":{"plan":"Plan 1"}}]}}
+{"uuid":"u5_3","sessionId":"session-5","type":"assistant","timestamp":"2026-11-05T10:00:30.000Z","message":{"id":"msg_5_2","role":"assistant","content":[{"type":"tool_use","id":"tool_p2","name":"ExitPlanMode","input":{"plan":"Plan 2"}}]}}
+{"uuid":"u5_4","sessionId":"session-5","type":"assistant","timestamp":"2026-11-05T10:00:40.000Z","message":{"id":"msg_5_3","role":"assistant","content":[{"type":"tool_use","id":"tool_e1","name":"Edit","input":{"path":"src/asks.ts"}}]}}
+{"uuid":"u5_5","sessionId":"session-5","type":"assistant","timestamp":"2026-11-05T10:00:50.000Z","message":{"id":"msg_5_4","role":"assistant","content":[{"type":"tool_use","id":"tool_p3","name":"ExitPlanMode","input":{"plan":"Plan 3"}}]}}
+{"uuid":"u5_6","sessionId":"session-5","type":"user","timestamp":"2026-11-05T10:01:00.000Z","message":{"role":"user","content":[{"type":"text","text":"Approved."}]}}

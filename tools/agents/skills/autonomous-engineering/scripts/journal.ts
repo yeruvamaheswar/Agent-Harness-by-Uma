@@ -1,12 +1,13 @@
 import { execFileSync } from 'node:child_process';
 import { createHash, randomBytes } from 'node:crypto';
-import { closeSync, existsSync, lstatSync, openSync, readdirSync, readFileSync, readlinkSync, renameSync, statSync, unlinkSync, writeFileSync } from 'node:fs';
+import { closeSync, existsSync, fsyncSync, lstatSync, linkSync, openSync, readdirSync, readFileSync, readlinkSync, renameSync, statSync, unlinkSync, writeFileSync } from 'node:fs';
 import { basename, dirname, join, posix } from 'node:path';
 import { protectedRel, redact } from './guard.ts';
 import { definitionDigest } from './plan.ts';
 import type { Plan, Slice, State } from './plan.ts';
 import type { RunCharter } from './run.ts';
 import type { CapacityDecision, CapacityState } from './capacity.ts';
+import type { AttemptAdditions, BlockerAdditions, CheckpointAdditions, EvidenceAdditions, HandoffAdditions, JournalAdditions } from './contract.ts';
 
 // Run journal: plans/<slug>.run.json. The journal is canonical for the engine (DEC-4).
 
@@ -30,16 +31,16 @@ export const profileForMode = (mode: string | null): FixedProfile => mode === 'q
 export type Attempt = {
   n: number; kind: 'work' | 'verify' | 'review'; at: string; endedAt?: string; outcome?: 'finished' | 'failed' | 'blocked' | 'handed-off';
   provider?: string; model?: string; effort?: string; taskId?: string; handoff?: number; // index into SliceRecord.handoffs
-  summary?: string; reason?: string; exitCode?: number | null; signature?: string; outputTail?: string;
-};
+  summary?: string; reason?: string; exitCode?: number; timeout?: string; signal?: string; signature?: string; outputTail?: string;
+} & AttemptAdditions;
 export type Evidence = {
   kind: 'command' | 'manual'; command?: string; exitCode?: number; durationMs?: number; outputTail?: string; note?: string;
   by: string; at: string; gitHead: string; fingerprint: string; stale?: boolean;
-};
+} & EvidenceAdditions;
 export type Move = { at: string; from: State; to: State; reason: string; claim?: { state: string; evidence: string } };
 export type SliceRecord = {
   state: State; definitionDigest: string; attempts: Attempt[]; evidence: Evidence[];
-  review?: { by: string; note: string; at: string }; blocker?: { reason: string; at: string };
+  review?: { by: string; note: string; at: string }; blocker?: { reason: string; at: string } & BlockerAdditions;
   budgetFrom?: number; integratedRef?: string; history: Move[];
   checkpoints?: Checkpoint[]; handoffs?: Handoff[];
 };
@@ -47,7 +48,7 @@ export type SliceRecord = {
 export type Checkpoint = {
   at: string; by: string; gitHead: string; branch: string; fingerprint: string; changed: string[]; unowned: string[];
   lastCheck: string; done?: string; next?: string; note?: string;
-};
+} & CheckpointAdditions;
 // A usage handoff. The slice stays IN_PROGRESS in the plan; the phase lives here (plans/usage-continuity.md DEC-3).
 // It is not a failed attempt: the old attempt ends `handed-off`, and the fix budget carries over.
 export const MAX_CHECKPOINTS = 5;
@@ -81,7 +82,7 @@ export function closeStaleHandoffs(journal: Journal, at: string) {
 export type Handoff = {
   phase: HandoffPhase; at: string; lead: string; reason: string; from: { label: string; attempt?: number; taskId?: string };
   to: string; checkpointAt?: string; taskId?: string; history: { at: string; phase: HandoffPhase; note: string }[];
-};
+} & HandoffAdditions;
 // One row per `ae set-profile` that changed something. `heavyRssMB` is the new estimate, when it changed.
 export type ProfileChange = { at: string; from: ProfileName; to: ProfileName; reason?: string; heavyRssMB?: number };
 export type Journal = {
@@ -90,7 +91,7 @@ export type Journal = {
   createdAt: string; updatedAt: string; run?: RunCharter;
   slices: Record<string, SliceRecord>; removed?: Record<string, SliceRecord>;
   capacity?: CapacityState; profileChanges?: ProfileChange[];
-};
+} & JournalAdditions;
 
 export const journalPath = (planPath: string) => planPath.replace(/\.md$/, '') + '.run.json';
 const hex12 = (text: string) => createHash('sha256').update(text).digest('hex').slice(0, 12);
@@ -140,23 +141,55 @@ export function refuseSymlinks(...paths: string[]) {
   for (const p of paths) if (isLink(p)) throw new Error(`refusing to use ${p}: it is a symlink; remove it and run the command again`);
 }
 
+// Test-only process death: no finally block releases the lock or cleans up a temp file.
+// Call only from save paths and multi-step flows. Unset (the normal case) is inert.
+export function faultPoint(point: string) {
+  if (process.env.AE_FAULT_POINT === point) process.kill(process.pid, 'SIGKILL');
+}
+
 // Writes a fresh temp file, created exclusively under a unique name (it never follows a planted link),
 // then renames it over `file`. Rename replaces a link at `file` itself, never the link's target.
 // With `lockedBy` (a journal path), it writes only while this process holds that journal's lock.
-export function writeAtomic(file: string, data: string | Buffer, lockedBy?: string) {
+// Crash safety: the temp file is fsynced before the rename, and its folder after it, so a crash at any step leaves
+// either the old whole file or the new whole file, never a part (plus at most one orphan temp file, which recover reports).
+export function writeAtomic(file: string, data: string | Buffer, lockedBy?: string, faultScope?: 'backup' | 'journal') {
   if (lockedBy) assertLockHeld(lockedBy);
   const tmp = `${file}.${process.pid}.${randomBytes(6).toString('hex')}.tmp`;
   const fd = openSync(tmp, 'wx', 0o644);
-  try { writeFileSync(fd, data); } finally { closeSync(fd); }
-  try { renameSync(tmp, file); } catch (e) { try { unlinkSync(tmp); } catch { /* already gone */ } throw e; }
+  try {
+    writeFileSync(fd, data);
+    if (faultScope) faultPoint(`${faultScope}:temp-written`);
+    fsyncSync(fd);
+    if (faultScope) faultPoint(`${faultScope}:temp-synced`);
+  } finally { closeSync(fd); }
+  try { if (lockedBy) assertLockHeld(lockedBy); renameSync(tmp, file); } catch (e) { try { unlinkSync(tmp); } catch { /* already gone */ } throw e; }
+  if (faultScope) faultPoint(`${faultScope}:renamed`);
+  fsyncDir(dirname(file));
+  if (faultScope) faultPoint(`${faultScope}:dir-synced`);
+}
+// The rename lives in the folder entry; fsync the folder so the rename survives a power loss.
+// Windows cannot open a folder as a file, and NTFS journals the rename itself.
+function fsyncDir(dir: string) {
+  if (process.platform === 'win32') return;
+  const fd = openSync(dir, 'r');
+  try { fsyncSync(fd); } finally { closeSync(fd); }
 }
 
+// Journal size (REQ-23). ACC drops a journal above 2 MiB. Above 1 MiB `status` warns; above 1.5 MiB the engine
+// refuses a write that grows the journal unless it moves a slice state (ae.ts). Every save also has a hard ceiling.
+export const JOURNAL_WARN_BYTES = 1024 * 1024;
+export const JOURNAL_CAP_BYTES = 1.5 * 1024 * 1024;
+export const JOURNAL_HARD_BYTES = 1.75 * 1024 * 1024;
+export const journalText = (j: Journal) => JSON.stringify(j, null, 2) + '\n';
+export const journalBytes = (j: Journal) => Buffer.byteLength(journalText(j), 'utf8');
+
 // The save goes ahead only while this process holds the lock. Another process that took the lock over wins.
+const heldLocks = new Map<string, string>();
 function assertLockHeld(file: string) {
   const lock = file + '.lock';
   let owner: string | null = null;
   try { if (!isLink(lock)) owner = readFileSync(lock, 'utf8').trim(); } catch { /* no lock */ }
-  if (owner !== String(process.pid)) throw new Error(`lost the journal lock ${lock} (${owner ? `now held by ${owner}` : 'missing'}); nothing was written`);
+  if (owner !== (heldLocks.get(file) ?? String(process.pid))) throw new Error(`lost the journal lock ${lock} (${owner ? `now held by ${owner}` : 'missing'}); nothing was written`);
 }
 
 // Keep the old good file as .bak (scrubbed), then replace the journal. A corrupt old file never replaces a good .bak.
@@ -164,11 +197,18 @@ export function saveJournal(file: string, journal: Journal, now: Date = new Date
   assertLockHeld(file);
   refuseSymlinks(file, file + '.bak');
   journal.updatedAt = now.toISOString();
-  const text = (j: Journal) => JSON.stringify(j, null, 2) + '\n';
+  const text = journalText, serialized = text(journal), bytes = Buffer.byteLength(serialized, 'utf8');
+  if (bytes > JOURNAL_HARD_BYTES) throw new Error(`journal write refused: ${bytes} serialized UTF-8 bytes exceeds the hard ceiling of ${JOURNAL_HARD_BYTES} bytes (1.75 MiB). Nothing was written`);
   const old = existsSync(file) ? readJson(file) : null, bak = old ? null : existsSync(file + '.bak') ? readJson(file + '.bak') : null;
-  if (old) writeAtomic(file + '.bak', text(scrub(old)));
-  else if (bak && JSON.stringify(scrub(bak)) !== JSON.stringify(bak)) writeAtomic(file + '.bak', text(scrub(bak)));
-  writeAtomic(file, text(journal), file);
+  // Frozen character caps alone cannot bound UTF-8 and JSON escaping. New ledger writes must fit 1 MiB.
+  if (journal.decisions?.length && JSON.stringify(journal.decisions) !== JSON.stringify(old?.decisions ?? bak?.decisions) && bytes >= JOURNAL_WARN_BYTES) {
+    throw new Error(`decision write refused: ${bytes} serialized UTF-8 bytes exceeds the ledger budget of ${JOURNAL_WARN_BYTES} bytes (1 MiB). Nothing was written`);
+  }
+  const backup = old ? text(scrub(old)) : bak && JSON.stringify(scrub(bak)) !== JSON.stringify(bak) ? text(scrub(bak)) : undefined;
+  if (backup && Buffer.byteLength(backup, 'utf8') > JOURNAL_HARD_BYTES) throw new Error(`journal backup write refused: serialized UTF-8 bytes exceed the hard ceiling of ${JOURNAL_HARD_BYTES} bytes (1.75 MiB). Nothing was written`);
+  faultPoint('save:before');
+  if (backup) writeAtomic(file + '.bak', backup, file, 'backup');
+  writeAtomic(file, serialized, file, 'journal');
 }
 
 export function pidAlive(pid: number): boolean {
@@ -190,6 +230,7 @@ export function orphanTempFiles(...files: string[]): string[] {
   }).sort();
 }
 
+const lockPid = (text: string): number => /^\d+(?::[a-f0-9]+)?$/.test(text) ? Number(text.split(':')[0]) : NaN;
 const YOUNG_MS = 10_000;
 export type LockInfo = { pid: number | null; alive: boolean; stale: boolean; empty: boolean; ageMs: number };
 
@@ -197,7 +238,7 @@ export type LockInfo = { pid: number | null; alive: boolean; stale: boolean; emp
 export function inspectLock(file: string): LockInfo | null {
   const lock = file + '.lock';
   try {
-    const text = readFileSync(lock, 'utf8').trim(), ageMs = Date.now() - statSync(lock).mtimeMs, pid = Number(text);
+    const text = readFileSync(lock, 'utf8').trim(), ageMs = Date.now() - statSync(lock).mtimeMs, pid = lockPid(text);
     const empty = text === '', valid = Number.isInteger(pid) && pid > 0;
     const alive = valid ? pidAlive(pid) : empty && ageMs < YOUNG_MS;
     return { pid: valid ? pid : null, alive, stale: !alive, empty, ageMs: Math.round(ageMs) };
@@ -206,24 +247,76 @@ export function inspectLock(file: string): LockInfo | null {
 
 const readLockText = (lock: string) => { try { return readFileSync(lock, 'utf8'); } catch { return null; } };
 
-export async function withLock<T>(file: string, fn: () => Promise<T> | T): Promise<T> {
-  const lock = file + '.lock';
-  refuseSymlinks(lock);
-  for (let tries = 0; ; tries++) {
-    try { const fd = openSync(lock, 'wx'); writeFileSync(fd, String(process.pid)); closeSync(fd); break; }
+// Fail-fast by default: a lock held by a live process is an error at once. With `waitMs` (the CLI's --wait-lock,
+// 60 s or less) the call polls until the holder releases it, then takes it; it fails when the wait runs out.
+export const MAX_WAIT_LOCK_S = 60;
+const LOCK_POLL_MS = 50;
+// A live process holds the lock. Callers that must say more (a two-phase record step) can tell it from other errors.
+export class LockBusy extends Error {}
+// Elect exactly one reaper for each stale token. link() publishes an already complete unique owner atomically.
+// A crashed reaper can itself be replaced through the next election in the chain. Only the elected live reaper
+// may unlink the observed stale lock. Election links are removed only after that token is no longer canonical.
+function takeStaleLock(lock: string, seen: string, candidate: string): boolean {
+  const elections: string[] = [];
+  let predecessor = seen;
+  for (let n = 0; n < 100; n++) {
+    const election = `${lock}.takeover.${createHash('sha256').update(predecessor).digest('hex')}`;
+    refuseSymlinks(election);
+    try { linkSync(candidate, election); elections.push(election); }
     catch (e) {
       if ((e as NodeJS.ErrnoException).code !== 'EEXIST') throw e;
+      const elected = readLockText(election);
+      if (elected === null) continue;
+      const pid = lockPid(elected.trim());
+      if (!Number.isSafeInteger(pid) || pid <= 0 || pidAlive(pid)) throw new LockBusy(`journal stale-lock takeover is held by live pid ${pid} (${lock})`);
+      elections.push(election); predecessor = elected;
+      continue;
+    }
+    try {
+      if (readLockText(lock) !== seen) return false;
       refuseSymlinks(lock);
-      const seen = readLockText(lock), info = inspectLock(file);
-      if (info?.alive) throw new Error(`journal is locked by ${info.pid ? `live pid ${info.pid}` : 'a process that is creating the lock'} (${lock})`);
-      if (tries >= 3) throw new Error(`cannot take over stale lock ${lock}`);
-      // Remove the stale lock only when it still holds what was inspected. A lock that another process
-      // replaced in the meantime stays; the next try sees its live owner. The save check catches the rest.
-      if (seen !== null && readLockText(lock) === seen) { try { unlinkSync(lock); } catch { /* another process took it over first; retry */ } }
+      unlinkSync(lock);
+      try { linkSync(candidate, lock); return true; }
+      catch (e) { if ((e as NodeJS.ErrnoException).code !== 'EEXIST') throw e; return false; }
+    } finally {
+      // No delayed contender for `seen` can now displace a new owner: it must first compare the old token.
+      for (const p of elections) { try { unlinkSync(p); } catch { /* another delayed contender cleaned it */ } }
     }
   }
+  throw new Error(`too many crashed stale-lock takeovers for ${lock}; nothing was written`);
+}
+
+export async function withLock<T>(file: string, fn: () => Promise<T> | T, waitMs = 0): Promise<T> {
+  const lock = file + '.lock', deadline = Date.now() + waitMs;
+  const token = `${process.pid}:${randomBytes(16).toString('hex')}`, candidate = `${lock}.${token.replace(':', '.')}.tmp`;
+  refuseSymlinks(lock);
+  writeFileSync(candidate, token, { flag: 'wx' });
+  try {
+    for (;;) {
+      try {
+        try { linkSync(candidate, lock); }
+        catch (e) {
+          if ((e as NodeJS.ErrnoException).code !== 'EEXIST') throw e;
+          refuseSymlinks(lock);
+          const seen = readLockText(lock), info = inspectLock(file);
+          if (seen === null || !info) continue;
+          if (info.alive) throw new LockBusy(`journal is locked by ${info.pid ? `live pid ${info.pid}` : 'a process that is creating the lock'} (${lock})`);
+          if (!takeStaleLock(lock, seen, candidate)) continue;
+        }
+        if (readLockText(lock)?.trim() !== token) throw new Error(`lost the journal lock ${lock}; nothing was written`);
+        heldLocks.set(file, token);
+        break;
+      } catch (e) {
+        if (!(e instanceof LockBusy)) throw e;
+        if (Date.now() < deadline) { await new Promise(r => setTimeout(r, LOCK_POLL_MS)); continue; }
+        throw new LockBusy(`${e.message}${waitMs > 0 ? `; waited ${waitMs / 1000} s` : ''}`);
+      }
+    }
+  } finally { unlinkSync(candidate); }
   try { return await fn(); }
-  finally { try { if (!isLink(lock) && readFileSync(lock, 'utf8').trim() === String(process.pid)) unlinkSync(lock); } catch { /* already gone */ } }
+  finally {
+    try { if (!isLink(lock) && readLockText(lock)?.trim() === token) unlinkSync(lock); } finally { heldLocks.delete(file); }
+  }
 }
 
 // ---- sync ----

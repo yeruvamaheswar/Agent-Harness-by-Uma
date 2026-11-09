@@ -98,8 +98,25 @@ Rules:
 - Take one step per failed check. This is "rerun one level higher" in the core policy.
 - Keep the good work at each step.
 - A blocker is not a failed check. It does not start the fallback. The coordinator sets `BLOCKED` and asks the user.
-- Provider error in the host (expired login, outage). The worker does not write `BLOCKED.md` for it; the coordinator handles it. First reach the same agent through its own CLI on the machine, such as `codex exec`, `cursor-agent`, `claude -p`, or `grok`. Probe it with a one-line read-only prompt. When it answers, run the slice's handoff through it in the slice's workspace, with no model override. Keep the slice with its planned agent.
-- When the CLI also fails and the `Fallback:` agent is available, mark the builder's Worker tracking row `BLOCKED` with the error, keep the slice `IN_PROGRESS` under the `Fallback:` owner with any partial work, and tell the user what to fix. Do not count it as an attempt.
+- A provider error or a usage limit is not a failed check either. See "Provider error".
+
+### Provider error
+A worker stopped because of the host or the provider: an expired login, an outage, a rate or usage limit, a full context window, or a refusal. The worker does not write `BLOCKED.md` for it. Only the Claude lead handles it, in the `autonomous-engineering` FAILOVER mode. It records an interruption, not an attempt, and the attempt budget does not move.
+
+The lead takes the first option that applies. The numbers are the recovery options in `autonomous-engineering/references/engine.md`: 1 wait for the reset, 2 resume the same thread, 3 the same agent's CLI, 4 the same thread on another provider, 5 a new child (a fresh session of the same agent first where that helps, then `Fallback:`, then the approved pool).
+
+| Class | Options in order | Rule |
+|---|---|---|
+| api, auth | 2, 3, 5 | Resume the same thread first. Then reach the same agent through its own CLI on the machine, such as `codex exec`, `cursor-agent`, or `claude -p`, before another provider |
+| quota | 1, 4, 5 | Wait when the observed reset is 60 minutes or less away. The same agent's CLI shares the account limit |
+| rate | 2, 4, 5 | The same agent's CLI shares the account limit |
+| context | 5 | A fresh session of the same agent first |
+| process, tool, unknown | 2, 5 | Resume the same thread first. Then a fresh session of the same agent (process, tool), or another agent only (unknown, which may be an account limit) |
+| refusal | none | `BLOCKED`. Another provider only after the user approves a `provider-change` decision for the slice |
+
+- Option 3: probe the CLI with a one-line read-only prompt. When it answers, run the slice's continuation packet through it in the slice's workspace, with no model override. The slice stays with its planned agent.
+- When the CLI also fails, option 5 moves the slice to the `Fallback:` owner with the partial work. The slice stays `IN_PROGRESS`; mark the builder's Worker tracking row `BLOCKED` with the error, and tell the user what to fix.
+- Nothing switches back by itself. A later return to the planned agent is a new handoff by the Claude lead.
 
 ## Delegation per host
 | Host | Delegation |

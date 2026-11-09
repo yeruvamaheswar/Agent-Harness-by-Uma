@@ -2,3 +2,10 @@
 # "abcdefghijklmnopqrst" and "synthetic-secret" are not real secrets.
 2529cc143cfadbc62aae28716beb9df19346b0b5:tests/ae-guard.test.ts:curl-auth-header:283
 2529cc143cfadbc62aae28716beb9df19346b0b5:tests/ae-guard.test.ts:curl-auth-header:290
+
+# Synthetic fixture in the decision ledger's redaction test (commit c69e9f9, tests/ae-decisions.test.ts).
+# The key=value string in that test line is an invented value that the test expects the engine to redact.
+c69e9f948c64646eef082503f504a4b9e28359e4:tests/ae-decisions.test.ts:generic-api-key:332
+
+# The first version of the comment above (commit 17cb4ed) quoted the invented value; the comment no longer does.
+17cb4ed644aa3918ad231ac8b63235ccc43e7351:.gitleaksignore:generic-api-key:7
