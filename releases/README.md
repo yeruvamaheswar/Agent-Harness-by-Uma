@@ -10,6 +10,7 @@ Do not edit anything in this folder by hand. To change the policy, publish a new
 
 | Version | Created (UTC) | Source | Digest (SHA-256, first 12) |
 | --- | --- | --- | --- |
+| [1.6.0](1.6.0/) | 2026-11-09 | Local files (`--bootstrap`) | `b5ba4fe5b88b` |
 | [1.5.9](1.5.9/) | 2026-11-07 | Local files (`--bootstrap`) | `4e30bf0804c1` |
 | [1.5.8](1.5.8/) | 2026-11-07 | Local files (`--bootstrap`) | `14de141faa64` |
 | [1.5.6](1.5.6/) | 2026-11-06 | Local files (`--bootstrap`) | `ecf3ff7753fc` |
@@ -35,6 +36,13 @@ The full digest and provenance of each release are in its `release.json` and its
 
 ### What changed
 
+- **1.6.0**
+  - New section "Decisions and questions". GREEN decisions are made and recorded. AMBER decisions pick what evidence supports and record the assumption and a rollback. RED items (destructive acts, money, deploys, production data, security or auth, missing credentials, conflicting requirements, commit, push, merge, work repos) are asked once, in the preflight batch, and block only their dependent work.
+  - Look before you ask: the request, the repo, the plan, the ledger, and memory. User instructions and project rules beat ledger entries; the newer user source wins; a denied permission is an answer.
+  - "grill-me" no longer stops everything when no one can answer: record the questions with your recommended answers, build what they do not block, and stop only the blocked part.
+  - "multi-agent-planning" plans only when the user asks only for a plan.
+  - Wording shortened in several rules. `knowledge/core.md` stays under 7,000 bytes.
+  - Ships with the `ae` engine failover and decision continuity change (pull request 20): the `ae decide` ledger, interruptions, launch keys, a lead lease, the one handoff packet, and the refusal guard. The skills `autonomous-engineering`, `multi-agent-planning`, `grill-me`, `continue-work`, and `subagent-budget` are installed from this source.
 - **1.5.9**
   - "Context and agents" now says `auto` applies on Cursor only. A Codex slice names its model and effort, for example `gpt-6.1-terra/medium`.
 - **1.5.8**
