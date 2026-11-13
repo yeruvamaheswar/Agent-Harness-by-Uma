@@ -97,6 +97,7 @@ A thread becomes unreliable by symptoms you can see. Act on a signal you observe
 |---|---|---|
 | A slice fails again for the same reason | Failure count and repeated reason in `ae status` (source: the journal) | Follow `ae dispatch`: builder fix, escalation, then the Fallback. Do not retry the same prompt |
 | A worker reports its context is full | The error text in the task result (source: `delegate_task` or `task_status`) | Mark the context limit reached in a usage snapshot. Take the handoff path |
+| A Codex CLI worker gives no result | `ae recover PLAN` lists the worker under `cliWorkers`, and no result came back (source: the journal) | Run `codex --version`. On 0.167.0 or later, run `codex agents --no-daemon` first. It marks unread results and lists pending approvals first. A pending approval: `ae block PLAN N --reason "pending approval: CMD"`. An unread result: read it and continue. On an older Codex, or when the view shows neither, use FAILOVER mode |
 | The lead repeats a finished step or loses a decision | The lead log and `ae status` disagree (source: the run folder log and the journal) | Reread the journal. If one correction fails, move to a fresh thread or session |
 | A turn ends with no journal write | No new entry after a wake-up (source: the `ae status` last-move time) | Read the child with `t3_thread_read` and `task_status`. Run `ae recover` |
 | A prompt waits for the user | A pending request on the thread (source: `t3_pending_request`) | Stop that work. Report it. Warm-ups in section 1 prevent it |

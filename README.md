@@ -117,7 +117,7 @@ These skills live in `tools/agents/skills/`. Install one with `npm run harness -
 
 ## Workflows
 
-[docs/workflows.md](docs/workflows.md) walks through seven workflows. Each one is labeled `runnable` (its commands ran in a clean clone with a temporary home, and exited 0) or `concept` (it needs a live agent session or a provider that could not be run in validation).
+[docs/workflows.md](docs/workflows.md) walks through eight workflows. Each one is labeled `runnable` (its commands ran in a clean clone with a temporary home, and exited 0) or `concept` (it needs a live agent session or a provider that could not be run in validation).
 
 | # | Workflow | Label |
 | --- | --- | --- |
@@ -129,6 +129,7 @@ These skills live in `tools/agents/skills/`. Install one with `npm run harness -
 | 6a | The engine on a throwaway plan | runnable |
 | 6b | The unattended overnight run | concept (none was observed) |
 | 7 | Apply Design OS to a frontend project | concept |
+| 8 | Consolidate agent memory | concept (needs a live agent session) |
 
 
 ## Why this harness
@@ -217,7 +218,7 @@ The active policy release is the newest folder in `releases/`: `1.5.5` at the ti
 | [docs/operations.md](docs/operations.md) | Configuration reference, environment variable names, tests and evals |
 | [docs/README.md](docs/README.md) | Every command, backups, recovery, eval platforms |
 | [docs/skills.md](docs/skills.md) | One reference entry per skill |
-| [docs/workflows.md](docs/workflows.md) | Seven workflows, each labeled runnable or concept |
+| [docs/workflows.md](docs/workflows.md) | Eight workflows, each labeled runnable or concept |
 | [docs/platforms.md](docs/platforms.md) | Codex, Claude Code, Cursor, Grok Bot, repo scope, skill visibility |
 | [docs/multi-agent-planning.md](docs/multi-agent-planning.md) | The slice planner: invocation, routing, states, install |
 | [docs/subagent-budget.md](docs/subagent-budget.md) | How many children to start, which model and effort |
