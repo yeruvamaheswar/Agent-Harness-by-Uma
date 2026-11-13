@@ -501,3 +501,60 @@ test('R1-11 (round 4): a secret-named JSON or YAML composite that never closes i
     assert.equal(redact(redact(input)), redact(input), `stable: ${input}`);
   }
 });
+
+// ---- slice 5 (master plan): redaction gaps F19, (a), (b) ----
+// Each case: [label, input, expected]. LEAKVAL and LEAK1..LEAK3 are harmless fake secrets; none may survive.
+const s5Check = async (t: { test: (name: string, fn: () => void) => Promise<void> }, cases: [string, string, string][]) => {
+  for (const [label, input, want] of cases) await t.test(label, () => {
+    const out = redact(input);
+    assert.ok(!/LEAK/.test(out), `leak: ${out}`);
+    assert.equal(out, want);
+    assert.equal(redact(out), out);
+  });
+};
+
+test('F19: an escaped-quote header value is redacted', async (t) => {
+  await s5Check(t, [
+    ['curl -H double-quoted', 'curl -H "X-Api-Key: \\"LEAKVAL\\"" https://example.test', 'curl -H "X-Api-Key: [REDACTED]" https://example.test'],
+    ['curl -H no space', 'curl -H "X-Api-Key:\\"LEAKVAL\\""', 'curl -H "X-Api-Key:[REDACTED]"'],
+    ['curl -H single-quoted', "curl -H 'X-Api-Key: \\'LEAKVAL\\'' https://example.test", "curl -H 'X-Api-Key: [REDACTED]' https://example.test"],
+    ['escaped single quote in double-quoted arg', 'curl -H "X-Api-Key: \\\'LEAKVAL\\\'" x', 'curl -H "X-Api-Key: [REDACTED]" x'],
+    // An unquoted header value runs to the end of the line, as for X-Api-Key: a b.
+    ['unquoted shell word', 'curl -H X-Api-Key:\\"LEAKVAL\\" x', 'curl -H X-Api-Key:[REDACTED]'],
+    ['bare line', 'X-Api-Key: \\"LEAKVAL\\"\nnext: ordinary', 'X-Api-Key: [REDACTED]\nnext: ordinary'],
+    ['escape inside unquoted value', 'X-Auth-Token: ab\\"LEAKVAL', 'X-Auth-Token: [REDACTED]'],
+  ]);
+});
+
+test('S5 gap (a): a quoted value in a hyphenated secret header is redacted in every shape', async (t) => {
+  await s5Check(t, [
+    ['double quotes', 'X-Api-Key: "LEAKVAL"', 'X-Api-Key: [REDACTED]'],
+    ['single quotes', "X-Api-Key: 'LEAKVAL'", 'X-Api-Key: [REDACTED]'],
+    ['quoted value with spaces, then text', 'X-Api-Key: "LEAK VAL" rest', 'X-Api-Key: [REDACTED] rest'],
+    ['empty quotes, then the value', 'X-Api-Key: ""LEAKVAL next', 'X-Api-Key: [REDACTED] next'],
+    ['quoted part, then an unquoted part', 'curl -H X-Api-Key:"ab"LEAKVAL x', 'curl -H X-Api-Key:[REDACTED] x'],
+    ['quoted value before a comma', 'X-Api-Key: "LEAKVAL", next', 'X-Api-Key: [REDACTED], next'],
+    ['Python headers dict', "headers = {'X-Api-Key': 'LEAKVAL', 'Accept': 'json'}", "headers = {'X-Api-Key': '[REDACTED]', 'Accept': 'json'}"],
+    ['Python secret field', "{'api_token': 'LEAKVAL', 'name': 'ok'}", "{'api_token': '[REDACTED]', 'name': 'ok'}"],
+    ['JSON headers object', '{"headers": {"X-Api-Key": "LEAKVAL"}}', '{"headers": {"X-Api-Key": "[REDACTED]"}}'],
+  ]);
+  for (const plain of ['X-Request-Id: "abc"', "headers = {'Accept': 'json', 'X-Request-Id': 'abc'}", "{'name': 'ok', 'tokens': 5}", 'Content-Type: "text/plain"'])
+    assert.equal(redact(plain), plain, plain);
+});
+
+test('S5 gap (b): every later item of a YAML block under a secret key is redacted', async (t) => {
+  await s5Check(t, [
+    ['plain key', 'api_keys:\n  - LEAK1\n  - LEAK2\n  - LEAK3\nnext: ordinary', 'api_keys:\n  - [REDACTED]\n  - [REDACTED]\n  - [REDACTED]\nnext: ordinary'],
+    ['double-quoted key', '"api_keys":\n  - LEAK1\n  - LEAK2\nnext: ordinary', '"api_keys":\n  - [REDACTED]\n  - [REDACTED]\nnext: ordinary'],
+    ['single-quoted key', "'secrets':\n  - LEAK1\n  - LEAK2", "'secrets':\n  - [REDACTED]\n  - [REDACTED]"],
+    ['key inside a list item', '- api_keys:\n    - LEAK1\n    - LEAK2\n- name: ordinary', '- api_keys:\n    - [REDACTED]\n    - [REDACTED]\n- name: ordinary'],
+    ['key inside a list item, same-indent items', 'items:\n  - tokens:\n    - LEAK1\n    - LEAK2\n  - name: ordinary', 'items:\n  - tokens:\n    - [REDACTED]\n    - [REDACTED]\n  - name: ordinary'],
+    ['anchor', 'token: &anchor\n  - LEAK1\n  - LEAK2\nnext: ordinary', 'token: [REDACTED]\n  - [REDACTED]\n  - [REDACTED]\nnext: ordinary'],
+    ['tag', 'secrets: !!seq\n  - LEAK1\n  - LEAK2', 'secrets: [REDACTED]\n  - [REDACTED]\n  - [REDACTED]'],
+    ['literal block scalar', 'token: |\n  LEAK1\n  LEAK2\nnext: ordinary', 'token: [REDACTED]\n  [REDACTED]\n  [REDACTED]\nnext: ordinary'],
+    ['folded block scalar with comment', 'private_key: >- # note\n  LEAK1\n  LEAK2', 'private_key: [REDACTED]\n  [REDACTED]\n  [REDACTED]'],
+    ['secret-looking tag value alone', 'password: !LEAKVAL\nnext: ordinary', 'password: [REDACTED]\nnext: ordinary'],
+  ]);
+  for (const plain of ['- names:\n    - Alice\n    - Bob\n- other: x', '"names":\n  - Alice', 'notes: |\n  Alice\n  Bob\nnext: ordinary', 'name: &anchor\n  - Alice'])
+    assert.equal(redact(plain), plain, plain);
+});

@@ -466,8 +466,9 @@ const NAMED = /\b((?:export\s+)?)([A-Za-z_][A-Za-z0-9_]*)=("[^"]*"|'[^']*'|[^\s"
 // A field name is secret when one of its words is: API_TOKEN, client_secret, apiKey, X-Api-Key. `keywords` and `tokens` are not.
 const SECRET_WORDS = new Set(['secret', 'token', 'password', 'passwd', 'key', 'apikey', 'authorization', 'credential', 'credentials']);
 const secretName = (name: string) => name.replace(/([a-z0-9])([A-Z])/g, '$1_$2').toLowerCase().split(/[^a-z0-9]+/).some(w => SECRET_WORDS.has(w));
-// "name": value in JSON, for a secret name. The value may be a string, a number, true, false, or null.
-const JSON_FIELD = /("([A-Za-z0-9_.-]+)"\s*:\s*)("(?:[^"\\\n]|\\.)*"|-?\d[\d.eE+-]*|true|false|null)/g;
+// "name": value in JSON, or 'name': value in a Python literal, for a secret name.
+// The value may be a string in either quote, a number, true, false, null, True, False, or None.
+const JSON_FIELD = /((["'])([A-Za-z0-9_.-]+)\2\s*:\s*)("(?:[^"\\\n]|\\.)*"|'(?:[^'\\\n]|\\.)*'|-?\d[\d.eE+-]*|true|false|null|True|False|None)/g;
 // "name": { or 'name': [ : a JSON (or Python literal) field whose value is an object or an array.
 const COMPOSITE = /((["'])([A-Za-z0-9_.-]+)\2\s*:\s*)[[{]/g;
 // The end of the object or array that opens at `from`: just after its matching bracket. Brackets in strings do not count.
@@ -537,8 +538,13 @@ function maskHeaders(text: string): string {
         if (c === quote) break;
         if (c === '\\' && end < text.length && text[end] !== '\r' && text[end] !== '\n') end++;
       }
+      // The shell joins a quoted part with the word after it: "ab"cd and ""cd are one value.
+      const rest = /(?:\\.|[^\s"'\\,;)}\]])*/y;
+      rest.lastIndex = end;
+      if (rest.exec(text)) end = rest.lastIndex;
     } else {
-      const value = /[^\s"'][^\r\n"']*/y;
+      // An escaped quote is part of the value: curl -H "X-Api-Key: \"v\"" masks \"v\", not only the backslash.
+      const value = /(?:\\.|[^\s"'\\])(?:\\.|[^\r\n"'\\])*/y;
       value.lastIndex = start;
       if (!value.exec(text)) continue;
       end = value.lastIndex;
@@ -548,6 +554,9 @@ function maskHeaders(text: string): string {
   }
   return out + text.slice(last);
 }
+// A YAML block head: a key alone on its line, maybe quoted ("api_keys":), maybe a list item (- api_keys:),
+// maybe with an anchor, a tag, or a block scalar indicator (&a, !!seq, |, >-). Groups: dashes, quote, key, colon, indicators, comment.
+const YAML_HEAD = /^((?:-[ \t]+)*)(["']?)([A-Za-z_][A-Za-z0-9_-]*)\2([ \t]*:)((?:[ \t]+(?:[&!]\S*|[|>][-+0-9]*))*)([ \t]+#.*|[ \t]*)$/;
 // Keep YAML list structure; retain the existing key-line handling outside lists and in comments.
 function maskYamlLists(text: string): string {
   const out: string[] = [];
@@ -569,11 +578,14 @@ function maskYamlLists(text: string): string {
       }
       blockIndent = undefined;
     }
-    const head = /^([A-Za-z_][A-Za-z0-9_-]*)[ \t]*:(?:[ \t]+#.*|[ \t]*)$/.exec(body);
-    if (!head || !secretName(head[1].replace(/s$/i, ''))) continue;
-    out.push(maskKeyLines(text.slice(last, m.index)), m[0]);
+    const head = YAML_HEAD.exec(body);
+    if (!head || !secretName(head[3].replace(/s$/i, ''))) continue;
+    // An indicator may be the secret itself (password: !x): it is masked, and its comment goes with it, as in maskKeyLines.
+    const headLine = head[5] ? whitespace + head[1] + head[2] + head[3] + head[2] + head[4] + ' [REDACTED]' + m[2] : m[0];
+    out.push(maskKeyLines(text.slice(last, m.index)), headLine);
     last = m.index + m[0].length;
-    blockIndent = whitespace.length;
+    // The block's items sit at the key's column or deeper; for "- key:" that column is after the dash.
+    blockIndent = whitespace.length + head[1].length;
   }
   out.push(maskKeyLines(text.slice(last)));
   return out.join('');
@@ -590,7 +602,11 @@ export function redact(text: string): string {
     .replace(/\b(Bearer)\s+[A-Za-z0-9._~+/=-]{8,}/gi, '$1 [REDACTED]');
   // A secret-named field is masked whole, also when a part of it is already [REDACTED]. The result is stable.
   const fields = maskComposites(tokens)
-    .replace(JSON_FIELD, (m, head: string, name: string) => secretName(name) ? `${head}"[REDACTED]"` : m);
+    .replace(JSON_FIELD, (m, head: string, q: string, name: string, value: string) => {
+      if (!secretName(name)) return m;
+      const c = value[0] === "'" || (value[0] !== '"' && q === "'") ? "'" : '"';
+      return `${head}${c}[REDACTED]${c}`;
+    });
   return maskYamlLists(fields)
     .replace(NAMED, (m, ex: string, name: string) => /SECRET|TOKEN|PASSWORD|PASSWD|KEY/i.test(name) ? `${ex}${name}=[REDACTED]` : m);
 }

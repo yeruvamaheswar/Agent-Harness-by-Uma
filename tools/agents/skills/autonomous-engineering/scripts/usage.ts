@@ -63,6 +63,8 @@ function agentKey(name: string): string | null {
 export function parseSnapshot(raw: unknown): Snapshot & { ignored: string[] } {
   const agents = (raw as Snapshot)?.agents;
   if (!agents || typeof agents !== 'object' || Array.isArray(agents)) fail('the snapshot needs an "agents" object keyed by agent name');
+  // A field beside "agents", such as an agent or a reached mark one level too high, is refused, never dropped.
+  for (const field of Object.keys(raw as object)) if (field !== 'agents') fail(`unknown top-level field "${field}"; allowed: agents`);
   const out: Snapshot & { ignored: string[] } = { agents: {}, ignored: [] };
   // the raw input may carry fields the engine no longer reads; they are rejected below, not typed
   for (const [name, u] of Object.entries(agents) as [string, AgentUsage & { limitReached?: unknown; error?: unknown; code?: unknown }][]) {
