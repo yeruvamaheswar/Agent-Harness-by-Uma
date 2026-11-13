@@ -6,7 +6,7 @@ import { tmpdir } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { main } from '../tools/agents/skills/autonomous-engineering/scripts/ae.ts';
-import type { buildReport } from '../tools/agents/skills/autonomous-engineering/scripts/report.ts';
+import { renderReport, type buildReport } from '../tools/agents/skills/autonomous-engineering/scripts/report.ts';
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const ae = join(root, 'tools/agents/skills/autonomous-engineering/scripts/ae.ts');
@@ -203,4 +203,24 @@ test('report lists an ACCEPTED then INTEGRATED slice as manual sign-off, not eng
   assert.match(engine, /Slice 2 \(INTEGRATED\): .*echo checked/);
   assert.match(manual, /Slice 1 \(INTEGRATED\): .*by: Owner; note: visual result approved/);
   assert.doesNotMatch(manual, /Slice 2 /);
+});
+
+test('report sections follow the last live evidence entry', () => {
+  const command = { kind: 'command', command: 'echo checked', exitCode: 0 }, manual = { kind: 'manual', by: 'Owner', note: 'signed off' };
+  const text = renderReport({ slices: [
+    // A stale command check, then a manual sign-off, then integrated: manual.
+    { id: '1', state: 'INTEGRATED', evidence: [{ ...command, stale: true }, manual] },
+    // The same history without the stale mark: the later sign-off still decides.
+    { id: '2', state: 'INTEGRATED', evidence: [command, manual] },
+    // An older journal recorded a person's note as VERIFIED: manual, and never dropped from both sections.
+    { id: '3', state: 'VERIFIED', evidence: [manual] },
+    // A stale manual note, then a live command check: engine evidence.
+    { id: '4', state: 'VERIFIED', evidence: [{ ...manual, stale: true }, command] },
+    // Settled with no live evidence: not engine evidence, and still listed.
+    { id: '5', state: 'INTEGRATED', evidence: [{ ...command, stale: true }] },
+  ] });
+  const part = (title: string) => text.split(/^## /m).find(s => s.startsWith(title)) ?? '';
+  const ids = (section: string) => [...section.matchAll(/^- Slice (\S+) /gm)].map(m => m[1]);
+  assert.deepEqual(ids(part('Verified with engine evidence')), ['4']);
+  assert.deepEqual(ids(part('Accepted by manual sign-off')), ['1', '2', '3', '5']);
 });
