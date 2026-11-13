@@ -6,7 +6,7 @@ import { tmpdir } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { main } from '../tools/agents/skills/autonomous-engineering/scripts/ae.ts';
-import type { buildReport } from '../tools/agents/skills/autonomous-engineering/scripts/report.ts';
+import { renderReport, type buildReport } from '../tools/agents/skills/autonomous-engineering/scripts/report.ts';
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const ae = join(root, 'tools/agents/skills/autonomous-engineering/scripts/ae.ts');
@@ -176,4 +176,51 @@ test('report counts ACCEPTED as settled and separates manual sign-off from engin
   assert.match(text, /Settled: 3; done: true/);
   assert.match(text, /## Accepted by manual sign-off\n- Slice 1 \(ACCEPTED\): .*by: Owner; note: visual result approved/);
   assert.deepEqual(readFileSync(r.jfile), before);
+});
+
+test('report lists an ACCEPTED then INTEGRATED slice as manual sign-off, not engine evidence', () => {
+  const r = fixture();
+  writeFileSync(join(r.dir, r.plan), readFileSync(join(r.dir, r.plan), 'utf8').replace('- Verify: `echo checked`', '- Verify: person inspects the result'));
+  r.cli('init', r.plan); r.cli('next', r.plan);
+  // Slice 1: manual sign-off, then integrated. Slice 2 keeps its command Verify and is integrated too.
+  r.cli('start', r.plan, '1', '--provider', 'codex', '--model', 'auto', '--effort', 'auto');
+  r.cli('finish', r.plan, '1', '--summary', 'ready for sign-off');
+  r.cli('review', r.plan, '1', '--by', 'independent-review', '--note', 'diff inspected');
+  r.cli('verify', r.plan, '1', '--manual', '--by', 'Owner', '--note', 'visual result approved');
+  r.cli('integrate', r.plan, '1', '--ref', 'main');
+  r.cli('start', r.plan, '2', '--provider', 'codex', '--model', 'auto', '--effort', 'auto');
+  r.cli('finish', r.plan, '2', '--summary', 'done');
+  r.cli('review', r.plan, '2', '--by', 'independent-review', '--note', 'accepted');
+  r.cli('verify', r.plan, '2');
+  r.cli('integrate', r.plan, '2', '--ref', 'main');
+  const report: ReturnType<typeof buildReport> = JSON.parse(r.cli('report', r.plan, '--json'));
+  assert.equal(report.slices[0].state, 'INTEGRATED');
+  assert.equal(report.slices[1].state, 'INTEGRATED');
+  const text = r.cli('report', r.plan);
+  const part = (title: string) => text.split(/^## /m).find(s => s.startsWith(title)) ?? '';
+  const engine = part('Verified with engine evidence'), manual = part('Accepted by manual sign-off');
+  assert.doesNotMatch(engine, /Slice 1 /);
+  assert.match(engine, /Slice 2 \(INTEGRATED\): .*echo checked/);
+  assert.match(manual, /Slice 1 \(INTEGRATED\): .*by: Owner; note: visual result approved/);
+  assert.doesNotMatch(manual, /Slice 2 /);
+});
+
+test('report sections follow the last live evidence entry', () => {
+  const command = { kind: 'command', command: 'echo checked', exitCode: 0 }, manual = { kind: 'manual', by: 'Owner', note: 'signed off' };
+  const text = renderReport({ slices: [
+    // A stale command check, then a manual sign-off, then integrated: manual.
+    { id: '1', state: 'INTEGRATED', evidence: [{ ...command, stale: true }, manual] },
+    // The same history without the stale mark: the later sign-off still decides.
+    { id: '2', state: 'INTEGRATED', evidence: [command, manual] },
+    // An older journal recorded a person's note as VERIFIED: manual, and never dropped from both sections.
+    { id: '3', state: 'VERIFIED', evidence: [manual] },
+    // A stale manual note, then a live command check: engine evidence.
+    { id: '4', state: 'VERIFIED', evidence: [{ ...manual, stale: true }, command] },
+    // Settled with no live evidence: not engine evidence, and still listed.
+    { id: '5', state: 'INTEGRATED', evidence: [{ ...command, stale: true }] },
+  ] });
+  const part = (title: string) => text.split(/^## /m).find(s => s.startsWith(title)) ?? '';
+  const ids = (section: string) => [...section.matchAll(/^- Slice (\S+) /gm)].map(m => m[1]);
+  assert.deepEqual(ids(part('Verified with engine evidence')), ['4']);
+  assert.deepEqual(ids(part('Accepted by manual sign-off')), ['1', '2', '3', '5']);
 });
