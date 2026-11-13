@@ -560,3 +560,45 @@ test('a named Codex model keeps the Codex rank and its own agent key', () => {
   assert.match(r.excluded.find(e => e.label === 'Antigravity (gemini-3.8-flash-low)')!.reason, /below the slice's need 3/);
   assert.equal(parseSnapshot({ agents: { 'Codex (gpt-6.1-terra/low)': quota(10) } }).agents.Codex.limits!.length, 1);
 });
+
+// ---- slice 5 (master plan): review 9 findings, re-checked. Every secret here is a harmless fake. ----
+// Joined at run time, so the secret scanner sees no key block in this file.
+const FAKE_PEM = ['-----BEGIN', 'RSA PRIVATE KEY-----\nMIIFAKEFAKEFAKEFAKE\n-----END RSA PRIVATE KEY-----'].join(' ');
+test('S5 review 9 M1: a secret in an unknown code is redacted as written, so case-sensitive shapes cannot escape', () => {
+  for (const [code, leak] of [['AKIAIOSFODNN7EXAMPLE', /AKIAIOSFODNN7EXAMPLE/i], [FAKE_PEM, /MIIFAKE|PRIVATE KEY-----/i], [` ${FAKE_PEM} `, /MIIFAKE/i],
+    ['ghp_abcdefghijklmnopqrstuvwxyz0123456789', /ghp_/i]] as [string, RegExp][]) {
+    const s = parseSnapshot({ agents: { Codex: { code } } });
+    assert.doesNotMatch(JSON.stringify(s), leak, code);
+    assert.equal(s.ignored.length, 1, 'the unknown code is listed as ignored');
+    assert.equal(assessAgent('Codex', s.agents.Codex, P).level, 'unknown', 'an unknown code sets no limit');
+  }
+});
+
+test('S5 review 9 M2: a reached mark at a level the engine does not read is refused, never dropped', () => {
+  // top level, beside "agents"
+  for (const raw of [{ agents: {}, Codex: { code: 'usage_limit_reached' } }, { agents: { Codex: {} }, reached: true }])
+    assert.throws(() => parseSnapshot(raw), /unknown top-level field/, JSON.stringify(raw));
+  // agent level and limit level
+  assert.throws(() => parseSnapshot({ agents: { Codex: { reached: true } } }), /unknown field "reached"/);
+  assert.throws(() => parseSnapshot({ agents: { Codex: { limits: [{ kind: 'quota', code: 'usage_limit_reached' }] } } }), /limit 0: unknown field "code"/);
+  assert.throws(() => parseSnapshot({ agents: { Codex: { limits: [{ kind: 'quota', reached: 'yes' }] } } }), /"reached" must be true or false/);
+  // the right levels still work
+  assert.equal(assessAgent('Codex', parseSnapshot({ agents: { Codex: { code: 'usage_limit_reached' } } }).agents.Codex, P).level, 'exhausted');
+  assert.equal(assessAgent('Codex', parseSnapshot({ agents: { Codex: { limits: [{ kind: 'rate', reached: true }] } } }).agents.Codex, P).level, 'exhausted');
+});
+
+test('S5 review 9 L1: every limit code in the engine.md table sets its own kind; other codes set no limit', () => {
+  const table: [string, string][] = [['usage_limit_reached', 'quota'], ['insufficient_quota', 'quota'], ['rate_limit_exceeded', 'rate'], ['rate_limited', 'rate'],
+    ['rate_limit_error', 'rate'], ['context_length_exceeded', 'context'], ['context_window_exceeded', 'context']];
+  for (const [code, kind] of table) {
+    const a = assessAgent('Codex', snap({ Codex: { code } }).agents.Codex, P);
+    assert.equal(a.level, 'exhausted', code);
+    assert.equal(a.limiting!.kind, kind, code);
+    assert.equal(a.freshSession, kind === 'context', code);
+  }
+  for (const code of ['api_error', 'overloaded_error', 'server_error', 'authentication_error', 'invalid_api_key', 'permission_error']) {
+    const s = snap({ Codex: { code } });
+    assert.equal(assessAgent('Codex', s.agents.Codex, P).level, 'unknown', code);
+    assert.deepEqual(s.ignored, [code], code);
+  }
+});
