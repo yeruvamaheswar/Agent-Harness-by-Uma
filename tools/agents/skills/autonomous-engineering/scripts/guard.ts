@@ -463,9 +463,13 @@ export function checkPath(path: string, root: string, opts: { allow?: string[] }
 
 // ---- redaction ----
 const NAMED = /\b((?:export\s+)?)([A-Za-z_][A-Za-z0-9_]*)=("[^"]*"|'[^']*'|[^\s"']+)/g;
-// A field name is secret when one of its words is: API_TOKEN, client_secret, apiKey, X-Api-Key. `keywords` and `tokens` are not.
+// A field name is secret when one of its words is: API_TOKEN, client_secret, apiKey, X-APIToken, X-Api-Key. `keywords` and `tokens` are not.
 const SECRET_WORDS = new Set(['secret', 'token', 'password', 'passwd', 'key', 'apikey', 'authorization', 'credential', 'credentials']);
-const secretName = (name: string) => name.replace(/([a-z0-9])([A-Z])/g, '$1_$2').toLowerCase().split(/[^a-z0-9]+/).some(w => SECRET_WORDS.has(w));
+const secretName = (name: string) => name.replace(/([a-z0-9])([A-Z])/g, '$1_$2').replace(/([A-Z])([A-Z][a-z])/g, '$1_$2')
+  .toLowerCase().split(/[^a-z0-9]+/).some(w => SECRET_WORDS.has(w));
+// A YAML key is secret like a field name, and a plural counts (api_keys). A dotted or spaced key (api.key, api key)
+// is secret by its last part only, so `Key points` and `secret.name` are not.
+const yamlSecret = (key: string) => secretName((/[.\s]/.test(key) ? key.split(/[.\s]+/).pop() ?? '' : key).replace(/s$/i, ''));
 // "name": value in JSON, or 'name': value in a Python literal, for a secret name.
 // The value may be a string in either quote, a number, true, false, null, True, False, or None.
 const JSON_FIELD = /((["'])([A-Za-z0-9_.-]+)\2\s*:\s*)("(?:[^"\\\n]|\\.)*"|'(?:[^'\\\n]|\\.)*'|-?\d[\d.eE+-]*|true|false|null|True|False|None)/g;
@@ -495,7 +499,8 @@ function maskComposites(text: string): string {
   return out + text.slice(last);
 }
 // key: value or key = value, for these exact key names (any case, optionally quoted). `tokens used: 5` is not one.
-const KEY_HEAD = /(^|[\s{,;(])(["']?)(token|secret|password|passwd|api[_-]key|apikey|access_key|private_key|client_secret)\2(\s*[:=]\s*)/gim;
+// A dotted or spaced form counts: api.key, api key, db.password, client.secret.
+const KEY_HEAD = /(^|[\s{,;(.])(["']?)(token|secret|password|passwd|api[_. -]?key|access[_. -]key|private[_. -]key|client[_. -]secret)\2(\s*[:=]\s*)/gim;
 // key=value with no spaces is a shell assignment: its value is one word, and the command after it stays.
 const SHELL_WORD = /"[^"\n]*"|'[^'\n]*'|[^\s,;}"']+/y;
 // A JSON or Python field: a quoted key, one whole quoted string, then , } ] or the end of the line. Its structure stays.
@@ -522,7 +527,8 @@ function maskKeyLines(text: string): string {
   return out + text.slice(last);
 }
 // A header line: Authorization or Proxy-Authorization, or a hyphenated secret name such as X-Api-Key or X-Auth-Token.
-const HEADER = /(^|[\s"'])((?:Proxy-)?Authorization|[A-Za-z0-9]+(?:-[A-Za-z0-9]+)+)(:[ \t]*)/gim;
+// A space before the colon is allowed: Authorization : v.
+const HEADER = /(^|[\s"'])((?:Proxy-)?Authorization|[A-Za-z0-9]+(?:-[A-Za-z0-9]+)+)([ \t]*:[ \t]*)/gim;
 function maskHeaders(text: string): string {
   let out = '', last = 0;
   for (const m of text.matchAll(HEADER)) {
@@ -530,6 +536,12 @@ function maskHeaders(text: string): string {
     const start = m.index + m[0].length, quote = text[start];
     // Text after a previously masked quoted value must survive subsequent passes.
     if (text.startsWith('[REDACTED]', start)) continue;
+    // A YAML comment after the key (api-key:   # note) is masked, and its # stays, so the YAML pass still masks the block under it.
+    if (quote === '#' && /[ \t]$/.test(m[3]) && !/["']/.test(m[1])) {
+      out += text.slice(last, start) + '# [REDACTED]';
+      last = lineEnd(text, start);
+      continue;
+    }
     let end = start;
     if (quote === '"' || quote === "'") {
       end++;
@@ -544,7 +556,11 @@ function maskHeaders(text: string): string {
       if (rest.exec(text)) end = rest.lastIndex;
     } else {
       // An escaped quote is part of the value: curl -H "X-Api-Key: \"v\"" masks \"v\", not only the backslash.
-      const value = /(?:\\.|[^\s"'\\])(?:\\.|[^\r\n"'\\])*/y;
+      // Inside a quoted argument ('Authorization: v' or "X-Api-Key: v"), the value ends at that argument's closing quote;
+      // the other quote is part of the value, as in Digest username="u". Outside one, the value runs to the end of the line.
+      const value = m[1] === '"' ? /(?:\\.|[^\s"\\])(?:\\.|[^\r\n"\\])*/y
+        : m[1] === "'" ? /(?:\\.|[^\s'\\])(?:\\.|[^\r\n'\\])*/y
+        : /(?:\\.|[^\s"'\\])(?:\\.|[^\r\n\\])*/y;
       value.lastIndex = start;
       if (!value.exec(text)) continue;
       end = value.lastIndex;
@@ -556,13 +572,19 @@ function maskHeaders(text: string): string {
 }
 // A YAML block head: a key alone on its line, maybe quoted ("api_keys":), maybe a list item (- api_keys:),
 // maybe with an anchor, a tag, or a block scalar indicator (&a, !!seq, |, >-). Groups: dashes, quote, key, colon, indicators, comment.
-const YAML_HEAD = /^((?:-[ \t]+)*)(["']?)([A-Za-z_][A-Za-z0-9_-]*)\2([ \t]*:)((?:[ \t]+(?:[&!]\S*|[|>][-+0-9]*))*)([ \t]+#.*|[ \t]*)$/;
+// The key may be dotted or spaced: api.key:, api key:.
+const YAML_KEY = '[A-Za-z_][A-Za-z0-9_.-]*(?:[ \\t]+[A-Za-z0-9_.-]+)*';
+const YAML_HEAD = new RegExp(`^((?:-[ \\t]+)*)(["']?)(${YAML_KEY})\\2([ \\t]*:)((?:[ \\t]+(?:[&!]\\S*|[|>][-+0-9]*))*)([ \\t]+#.*|[ \\t]*)$`);
+// A YAML flow value under an unquoted secret key: secrets: [a, b] or tokens: {a: b}. Groups: head up to the bracket, key.
+// A quoted key is left to the JSON rules, so pretty-printed JSON "tokens": [1, 2] stays. A [REDACTED] from an earlier pass is not a flow value.
+const YAML_FLOW = new RegExp(`^((?:-[ \\t]+)*(${YAML_KEY})[ \\t]*:[ \\t]*)(?:\\{|\\[(?!REDACTED\\]))`);
 // Keep YAML list structure; retain the existing key-line handling outside lists and in comments.
 function maskYamlLists(text: string): string {
   const out: string[] = [];
   let last = 0, blockIndent: number | undefined;
   for (const m of text.matchAll(/([^\r\n]*)(\r?\n|$)/g)) {
-    if (!m[0]) continue;
+    // A line inside a flow value masked below is already gone.
+    if (!m[0] || m.index < last) continue;
     const line = m[1], whitespace = /^[ \t]*/.exec(line)?.[0] ?? '';
     const body = line.slice(whitespace.length);
     if (blockIndent !== undefined) {
@@ -578,8 +600,16 @@ function maskYamlLists(text: string): string {
       }
       blockIndent = undefined;
     }
+    const flow = YAML_FLOW.exec(body);
+    if (flow && yamlSecret(flow[2])) {
+      // Masked to the line of the closing bracket, or to the end of the input when it never closes, as in maskKeyLines.
+      const open = m.index + whitespace.length + flow[1].length;
+      out.push(maskKeyLines(text.slice(last, m.index)), text.slice(m.index, open), '[REDACTED]');
+      last = lineEnd(text, compositeEnd(text, open));
+      continue;
+    }
     const head = YAML_HEAD.exec(body);
-    if (!head || !secretName(head[3].replace(/s$/i, ''))) continue;
+    if (!head || !yamlSecret(head[3])) continue;
     // An indicator may be the secret itself (password: !x): it is masked, and its comment goes with it, as in maskKeyLines.
     const headLine = head[5] ? whitespace + head[1] + head[2] + head[3] + head[2] + head[4] + ' [REDACTED]' + m[2] : m[0];
     out.push(maskKeyLines(text.slice(last, m.index)), headLine);
@@ -603,7 +633,8 @@ export function redact(text: string): string {
   // A secret-named field is masked whole, also when a part of it is already [REDACTED]. The result is stable.
   const fields = maskComposites(tokens)
     .replace(JSON_FIELD, (m, head: string, q: string, name: string, value: string) => {
-      if (!secretName(name)) return m;
+      // A Python 'key' alone is most often a key name, as in {'key': 'ArrowLeft'}. It stays, as it did before Python fields were masked.
+      if (!secretName(name) || (q === "'" && name.toLowerCase() === 'key')) return m;
       const c = value[0] === "'" || (value[0] !== '"' && q === "'") ? "'" : '"';
       return `${head}${c}[REDACTED]${c}`;
     });
