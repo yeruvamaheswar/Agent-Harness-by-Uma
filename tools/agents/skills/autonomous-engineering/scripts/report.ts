@@ -83,11 +83,15 @@ export function renderReport(report: Record<string, unknown>): string {
   };
   const section = (title: string, entries: string[]) => `## ${title}\n${entries.length ? entries.map(s => `- ${s}`).join('\n') : '- none'}`;
   const slices = rows(report.slices);
+  // The section follows the last live evidence entry, as `recover` reads it: a later manual sign-off outranks an older or stale command check.
+  // Only a command check counts as engine evidence. A settled slice with a person's note, or with no live evidence, is listed as manual.
+  const engineChecked = (s: Record<string, unknown>) => rows(s.evidence).filter(e => !e.stale).at(-1)?.kind === 'command';
+  const checked = (s: Record<string, unknown>) => s.state === 'VERIFIED' || s.state === 'INTEGRATED';
   return [
     'Morning report',
     `Goal: ${describe(report.goal)}\nPeriod: ${describe(report.period)}\nStates: ${describe(report.counts)}\nSettled: ${describe(report.settled)}; done: ${describe(report.done)}`,
-    section('Verified with engine evidence', slices.filter(s => s.state === 'VERIFIED' || s.state === 'INTEGRATED').map(s => `Slice ${s.id} (${s.state}): ${describe(s.evidence)}`)),
-    section('Accepted by manual sign-off', slices.filter(s => s.state === 'ACCEPTED').map(s => `Slice ${s.id} (${s.state}): ${describe(s.evidence)}`)),
+    section('Verified with engine evidence', slices.filter(s => checked(s) && engineChecked(s)).map(s => `Slice ${s.id} (${s.state}): ${describe(s.evidence)}`)),
+    section('Accepted by manual sign-off', slices.filter(s => s.state === 'ACCEPTED' || (checked(s) && !engineChecked(s))).map(s => `Slice ${s.id} (${s.state}): ${describe(s.evidence)}`)),
     section('Claims', rows(report.claims).map(c => `Slice ${c.slice} (${c.state}): ${describe(c.claims)}`)),
     section('Failures', slices.flatMap(s => rows(s.failures).map(f => `Slice ${s.id}: ${describe(f)}`))),
     section('Blocked', slices.filter(s => s.blocker).map(s => `Slice ${s.id}: ${describe(s.blocker)}`)),

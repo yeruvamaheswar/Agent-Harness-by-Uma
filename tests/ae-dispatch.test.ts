@@ -2,6 +2,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { parseModelRef, resolveTarget, escalate, chooseTarget, intensity } from '../tools/agents/skills/autonomous-engineering/scripts/dispatch.ts';
 import type { Caps, Target, Unavailable } from '../tools/agents/skills/autonomous-engineering/scripts/dispatch.ts';
+import { rankOf, DEFAULT_POLICY } from '../tools/agents/skills/autonomous-engineering/scripts/usage.ts';
 
 // Trimmed from a real T3 orchestrator_capabilities output, 2026-10-25.
 const eff = (values: string[], d: string) => [{ id: 'effort', values, default: d }];
@@ -75,20 +76,48 @@ test('no caps: claude-code runs Claude natively; others hand off', () => {
   assert.equal((resolveTarget(parseModelRef('Claude (opus/high)'), { host: 'other' }) as Target).dispatch, 'handoff');
 });
 
-test('escalation ladder: one level per failure, never max', () => {
+test('escalation ladder: effort up to high, then next tier at medium, never max', () => {
   const lab = (t: string, f: number) => escalate(parseModelRef(t), f)?.label ?? null;
   assert.equal(lab('Claude (sonnet/medium)', 0), 'Claude (sonnet/medium)');
   assert.equal(lab('Claude (sonnet/medium)', 1), 'Claude (sonnet/high)');
-  assert.equal(lab('Claude (sonnet/medium)', 2), 'Claude (sonnet/xhigh)');
+  assert.equal(lab('Claude (sonnet/medium)', 2), 'Claude (opus/medium)');
   assert.equal(lab('Claude (sonnet/medium)', 3), 'Claude (opus/high)');
-  assert.equal(lab('Claude (sonnet/medium)', 4), 'Claude (opus/xhigh)');
-  assert.equal(lab('Claude (sonnet/medium)', 5), null);
-  assert.equal(lab('Claude (haiku/xhigh)', 1), 'Claude (sonnet/high)');
-  assert.equal(lab('Claude (opus/xhigh)', 1), null);
+  assert.equal(lab('Claude (sonnet/medium)', 4), 'Claude (fable/medium)');
+  assert.equal(lab('Claude (sonnet/medium)', 5), 'Claude (fable/high)');
+  assert.equal(lab('Claude (sonnet/medium)', 6), null);
+  assert.equal(lab('Claude (haiku/high)', 1), 'Claude (sonnet/medium)');
+  assert.equal(lab('Claude (sonnet/high)', 1), 'Claude (opus/medium)');
+  assert.equal(lab('Claude (opus/high)', 1), 'Claude (fable/medium)');
+  assert.equal(lab('Claude (fable/high)', 1), null);
+  assert.equal(lab('Claude (opus/xhigh)', 1), 'Claude (fable/medium)');
+  assert.equal(lab('Claude (fable/xhigh)', 1), null);
   assert.equal(lab('Claude (opus/max)', 1), null);
   assert.equal(lab('Codex (auto)', 1), null);
   assert.equal(lab('Grok (default)', 1), null);
   assert.equal(lab('user', 1), null);
+});
+
+test('Claude fable: parses and resolves natively and through caps', () => {
+  assert.equal(parseModelRef('Claude (fable/medium)').tier, 'fable');
+  const n = resolveTarget(parseModelRef('Claude (fable/medium)'), { host: 'claude-code' }) as Target;
+  assert.equal(n.dispatch, 'native-subagent'); assert.equal(n.model, 'fable');
+  const c = caps();
+  c.providers[1].models.push({ id: 'claude-fable-5-2', options: eff(['low', 'medium', 'high', 'xhigh', 'max'], 'medium') });
+  const r = resolveTarget(parseModelRef('Claude (fable/medium)'), { caps: c, host: 't3' }) as Target;
+  assert.equal(r.model, 'claude-fable-5-2');
+  // The newest listed id of the tier wins, whatever the host's list order.
+  const c2 = caps();
+  c2.providers[1].models.push({ id: 'claude-fable-5-1', options: eff(['low', 'medium', 'high'], 'medium') });
+  c2.providers[1].models.push({ id: 'claude-fable-5-2', options: eff(['low', 'medium', 'high'], 'medium') });
+  assert.equal((resolveTarget(parseModelRef('Claude (fable/medium)'), { caps: c2, host: 't3' }) as Target).model, 'claude-fable-5-2');
+  // Fable shares the strong rank with opus (same AA tier), so a Fable slice has a replacement rule.
+  assert.equal(rankOf(parseModelRef('Claude (fable/medium)'), DEFAULT_POLICY), 3);
+  assert.equal(rankOf(parseModelRef('Claude (opus/high)'), DEFAULT_POLICY), 3);
+});
+
+test('Claude escalation keeps the unverified marker and extras', () => {
+  assert.equal(escalate(parseModelRef('Claude (sonnet/high, unverified)'), 1)?.label, 'Claude (opus/medium, unverified)');
+  assert.equal(escalate(parseModelRef('Claude (opus/high, fresh session)'), 1)?.label, 'Claude (fable/medium, fresh session)');
 });
 
 test('chooseTarget: Model, escalated, Fallback, handoff', () => {

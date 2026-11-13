@@ -513,14 +513,14 @@ test('S15 B2: a refusal by an attempt that recorded nothing binds the Model and 
   await r.run('unblock', r.plan, '1', '--reason', 'reworded');
   await r.run('checkpoint', r.plan, '1', '--kind', 'post-mortem');
   // the unrecorded attempt ran the Fallback (Codex): moving to Claude needs the approval, as does Codex's own agent set
-  await assert.rejects(r.run('prepare', r.plan, '1', '--to', 'Claude (opus/xhigh)', '--lead', LEAD, '--reason', 'switch'), /provider-change/);
+  await assert.rejects(r.run('prepare', r.plan, '1', '--to', 'Claude (fable/medium)', '--lead', LEAD, '--reason', 'switch'), /provider-change/);
 });
 test('S15 N1: the second transfer call (attach the task) also checks the launch flags against the handoff target', async () => {
   const r = repo(planText(LADDER_MODEL, LADDER_FALLBACK));
   await started(r, ...CLAUDE_FLAGS);
   await interrupt(r, 'quota', '--source', 't3');
   await r.run('checkpoint', r.plan, '1', '--kind', 'post-mortem');
-  await r.run('prepare', r.plan, '1', '--to', 'Claude (opus/xhigh)', '--lead', LEAD, '--reason', 'quota');
+  await r.run('prepare', r.plan, '1', '--to', 'Claude (fable/medium)', '--lead', LEAD, '--reason', 'quota');
   await r.run('transfer', r.plan, '1', '--lead', LEAD);
   await assert.rejects(r.run('transfer', r.plan, '1', '--lead', LEAD, '--task-id', 'T2', '--provider', 'codex', '--model', 'gpt-6.1-sol'), /launch flags name Codex, but the handoff target is Claude/);
 });

@@ -21,7 +21,7 @@ export const DEFAULT_POLICY: Policy = {
   thresholds: { default: { assess: 70, prepare: 85, transfer: 95 } },
   // Capability rank per agent, or per Claude tier. A replacement needs a rank at least that of the slice's Model.
   // Grok is 0: the planner uses Grok for review only. Antigravity is 1: the agent key cannot tell its models apart, so it gets the lowest build rank.
-  ranks: { 'Claude haiku': 1, 'Claude sonnet': 2, 'Claude opus': 3, Codex: 3, Antigravity: 1, Cursor: 2, Grok: 0 },
+  ranks: { 'Claude haiku': 1, 'Claude sonnet': 2, 'Claude opus': 3, 'Claude fable': 3, Codex: 3, Antigravity: 1, Cursor: 2, Grok: 0 },
   pool: ['Cursor (auto)', 'Codex (auto)', 'Claude (sonnet/high)', 'Claude (opus/high)'],
 };
 
@@ -63,6 +63,8 @@ function agentKey(name: string): string | null {
 export function parseSnapshot(raw: unknown): Snapshot & { ignored: string[] } {
   const agents = (raw as Snapshot)?.agents;
   if (!agents || typeof agents !== 'object' || Array.isArray(agents)) fail('the snapshot needs an "agents" object keyed by agent name');
+  // A field beside "agents", such as an agent or a reached mark one level too high, is refused, never dropped.
+  for (const field of Object.keys(raw as object)) if (field !== 'agents') fail(`unknown top-level field "${field}"; allowed: agents`);
   const out: Snapshot & { ignored: string[] } = { agents: {}, ignored: [] };
   // the raw input may carry fields the engine no longer reads; they are rejected below, not typed
   for (const [name, u] of Object.entries(agents) as [string, AgentUsage & { limitReached?: unknown; error?: unknown; code?: unknown }][]) {
@@ -115,7 +117,7 @@ export const thresholdsFor = (p: Policy, agent: string, kind: LimitKind) =>
 export function rankOf(ref: ModelRef, p: Policy): number | null {
   if (ref.agent === 'user' || ref.agent === 'CI') return null;
   if (ref.agent === 'Claude') {
-    const tier = ref.tier ?? ['haiku', 'sonnet', 'opus'].find(t => ref.modelId?.includes(t));
+    const tier = ref.tier ?? ['haiku', 'sonnet', 'opus', 'fable'].find(t => ref.modelId?.includes(t));
     return p.ranks[`Claude ${tier}`] ?? p.ranks.Claude ?? null;
   }
   return p.ranks[ref.agent] ?? null;

@@ -19,9 +19,9 @@ export type Step = { ref: string; result: 'ok' | 'unavailable' | 'exhausted'; re
 // Agent name -> T3 driverKind. Observed in T3 orchestrator_capabilities on 2026-10-25; not a model id.
 const DRIVER: Record<string, string> = { Claude: 'claudeAgent', Codex: 'codex', Antigravity: 'antigravity', Cursor: 'cursor', Grok: 'grok' };
 const EFFORT_OPTION_IDS = ['effort', 'reasoningEffort', 'reasoning_effort'];
-const TIERS = ['haiku', 'sonnet', 'opus'];
+const TIERS = ['haiku', 'sonnet', 'opus', 'fable'];
 const EFFORTS = ['low', 'medium', 'high', 'xhigh']; // escalation never reaches max
-const TIER_WEIGHT: Record<string, number> = { haiku: 1, sonnet: 3, opus: 8 };
+const TIER_WEIGHT: Record<string, number> = { haiku: 1, sonnet: 3, opus: 8, fable: 12 }; // fable: AA cost per task at medium is about 1.5x opus (2026-11-10)
 const EFFORT_WEIGHT: Record<string, number> = { low: 0.5, medium: 1, high: 1.5, xhigh: 2 };
 
 export function parseModelRef(text: string): ModelRef {
@@ -78,7 +78,8 @@ export function resolveTarget(ref: ModelRef, { caps, host }: Opts): Target | Una
   const base: Partial<Target> = { providerInstanceId: p.providerInstanceId };
   const ok = (more: Partial<Target>, notes: string[] = []) => tgt(ref, 't3-delegate', `T3 provider ${p.providerInstanceId}`, { ...base, ...more, notes });
   if (ref.mode === 'tier') {
-    const model = p.models.find((x) => x.id.includes(`-${ref.tier}-`));
+    // The newest listed id of that tier, for example claude-fable-5-2 over claude-fable-5-1.
+    const model = p.models.filter((x) => x.id.includes(`-${ref.tier}-`)).sort((a, b) => b.id.localeCompare(a.id, 'en', { numeric: true }))[0];
     if (!model) return unavailable(`no ${ref.tier} model is listed for ${ref.agent}`);
     const notes: string[] = [];
     let options: Option[] | undefined;
@@ -108,7 +109,8 @@ export function resolveTarget(ref: ModelRef, { caps, host }: Opts): Target | Una
   return ok({ model: ref.modelId, ...(options ? { options } : {}) }, notes);
 }
 
-// One level per failure: effort low, medium, high, xhigh; then tier haiku, sonnet, opus at high. null = go to Fallback.
+// One level per failure. Claude: effort low, medium, high; past high, the next tier at medium (haiku, sonnet, opus, fable).
+// An xhigh Claude ref counts as past high. Past fable/high, null = go to Fallback. Named non-Claude models step through EFFORTS.
 export function escalate(ref: ModelRef, failures: number): ModelRef | null {
   if (failures <= 0) return ref;
   // A named model with an effort steps through the efforts only. A model change goes through Fallback (DEC-7).
@@ -123,13 +125,14 @@ export function escalate(ref: ModelRef, failures: number): ModelRef | null {
   let tier = ref.tier;
   let effort = ref.effort ?? 'medium';
   if (!EFFORTS.includes(effort)) return null;
+  const CLAUDE_EFFORTS = ['low', 'medium', 'high'];
   for (let i = 0; i < failures; i++) {
-    const e = EFFORTS.indexOf(effort);
-    if (e < EFFORTS.length - 1) effort = EFFORTS[e + 1];
-    else if (tier !== 'opus') { tier = TIERS[TIERS.indexOf(tier) + 1]; effort = 'high'; }
+    const e = CLAUDE_EFFORTS.indexOf(effort);
+    if (e >= 0 && e < CLAUDE_EFFORTS.length - 1) effort = CLAUDE_EFFORTS[e + 1];
+    else if (tier !== TIERS[TIERS.length - 1]) { tier = TIERS[TIERS.indexOf(tier) + 1]; effort = 'medium'; }
     else return null;
   }
-  return { ...ref, tier, effort, label: `Claude (${tier}/${effort}${ref.extras.length ? ', ' + ref.extras.join(', ') : ''})` };
+  return { ...ref, tier, effort, label: `Claude (${[`${tier}/${effort}`, ...ref.extras, ...(ref.unverified ? ['unverified'] : [])].join(', ')})` };
 }
 
 export function chooseTarget(slice: { model: string; fallback?: string }, failures: number, opts: Opts) {
@@ -175,7 +178,7 @@ export type Family = typeof FAMILIES[number];
 // Exact id prefixes only. Anything else is no known family, never a guess.
 export function familyOfModelId(id: string | undefined): Family | undefined {
   const t = (id ?? '').trim().toLowerCase();
-  if (/^(claude|opus|sonnet|haiku)\b/.test(t)) return 'Claude';
+  if (/^(claude|opus|sonnet|haiku|fable)\b/.test(t)) return 'Claude';
   if (/^(gpt|codex)\b|^o\d/.test(t)) return 'OpenAI';
   if (/^gemini\b/.test(t)) return 'Gemini';
   if (/^grok\b/.test(t)) return 'Grok';
