@@ -81,6 +81,10 @@ Example: `ae init plans/app.md --profile balanced --allow worktrees,deps`.
   - An anchor or a tag before a multi-line flow value is not recognized: `token: &a [V_A,`, then ` V_B]` masks the first line only.
   - A quoted YAML scalar that spans lines keeps its later lines: `password: "V_A`, then ` V_B"` masks the first line only.
   - A header value that already begins with `[REDACTED]` is skipped whole: `Authorization: [REDACTED] V_A` keeps `V_A`.
+- Accepted redaction limits, for three shell shapes the guard handles wrongly. Do not trust a command with such a shape to be fully masked. Do not paste raw secrets into command lines.
+  - Command substitution (leak): the scan does not track `$( ... )`. A secret header inside `$( ... )` inside double quotes is not masked in full. `echo "$(curl -H 'Authorization: Digest response="V_A"' x)"` becomes `echo "$(curl -H 'Authorization: [REDACTED]"V_A"' x)"`, and the quoted part `V_A` stays.
+  - ANSI-C quoting (over-masking, no leak): a `$'...'` string with an escaped apostrophe earlier on the line confuses the quote scan. A later single-quoted header argument then loses its closing quote and the text after it. `curl -A $'it\'s app' -H 'Authorization: Basic V_A' https://x` becomes `curl -A $'it\'s app' -H 'Authorization: [REDACTED]`. The secret is masked, but the closing quote and the URL are lost.
+  - Escaped space in an environment value (leak): the value ends at the escaped space. `API_KEY=V_A\ V_B curl https://x` becomes `API_KEY=[REDACTED] V_B curl https://x`, and `V_B` stays. The behavior is the same before slice 5.
 - Accepted redaction limit, for a form the guard masks without need: a prose line that heads a list is masked when its last word is secret-named, as in `Keyboard keys:` before `- ArrowLeft`. The guard has no word list to tell this phrase from `api keys:`. `Key points:` stays, because only the last word counts.
 - Every string of a loaded journal is redacted again, so an older journal does not leak through `status` or a save.
 - Redaction is a safety net, not permission to print secrets.
