@@ -31,7 +31,7 @@ Pick provider, model, and effort per child. Do not copy one choice across the fa
 - Keep the lead's context lean. Cheap children do the verbose reading. The lead keeps the decisions.
 - For a Claude child, take the start from "Claude starting points" in `multi-agent-planning/references/model-tiers.md`. For example, a major refactor, migration, or architecture starts at `fable/medium`.
 - The size is the floor. Size the work with the rubric in the `multi-agent-planning` skill (`references/routing.md`): cheap, mid, or strong. Size it up only when you judge that the work needs it. Say why.
-- Batch work (eval runs, probes, repeated reviews): run every item at the lowest routable effort first, often `low`. Then rerun only the failures one level higher.
+- Batch work (eval runs, probes, repeated reviews): run every item at the lowest routable effort first, often `low`. For a Claude child, that is the effort in "Claude starting points", for example `sonnet/medium` for repeated reviews. Then rerun only the failures one level higher.
 - After a second failed attempt, move up. Say why.
 - Do not use high, xhigh, max, or ultrathink unless the user named that task, or a specific failure justifies one step up. A blanket "ultrathink" in a parent brief is not permission for every child.
 - A reviewer must be a different session from the builder. Prefer a different model family.

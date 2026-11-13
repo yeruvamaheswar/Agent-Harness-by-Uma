@@ -214,7 +214,7 @@ One table for every rule that stops a repeat. A handoff and an interruption are 
 
 ## Dispatch and escalation
 - With a T3 capabilities file, the provider must exist, `canRunChildTask` must be true, and it must have no constraints.
-- Claude tiers resolve to the first listed model id with `-<tier>-`. Effort is passed only when the model lists that value.
+- Claude tiers resolve to the newest listed model id with `-<tier>-` (numeric sort: `claude-fable-5-2` before `claude-fable-5-1`). Effort is passed only when the model lists that value.
 - `Codex (auto)` gets no model. `Cursor (auto)` gets `default`. `Grok (default)` gets no model.
 - A named model (`Codex (model-id/effort)`, `Antigravity (model-id)`) must be in the host list, else it is unavailable and dispatch uses the Fallback. The agent `Antigravity` maps to the T3 driver `antigravity`.
 - `Codex (model-id/effort)` sets the effort option when the model advertises it under `effort`, `reasoningEffort`, or `reasoning_effort`. Otherwise `notes` says so and no option is set.
