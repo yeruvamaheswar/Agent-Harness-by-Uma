@@ -731,3 +731,62 @@ test('S5 round 2: the Python `key` exemption covers scalar values only', () => {
   assert.equal(redact("{'key': ['ArrowLeft']}"), `{'key': "[REDACTED]"}`);
   assert.equal(redact("{'key': 'ArrowLeft'}"), "{'key': 'ArrowLeft'}");
 });
+
+// Round 3: the header rule reads real shell quote state. `bs` and `dq` build the strings at run time.
+test('S5 round 3: header quote state ignores escaped quotes and quotes inside the other quote type', async (t) => {
+  const bs = '\\', dq = '"', sq = "'", A = 'LEAKVAL', B = 'LEAKTWO';
+  const cases: [string, string, string][] = [
+    ['B1: escaped double quote earlier, closing quote before the header',
+      `error ${dq}a${bs}${dq}b${dq} Authorization: Digest response=${dq}${A}${dq}`,
+      `error ${dq}a${bs}${dq}b${dq} Authorization: [REDACTED]`],
+    ['B1 variant: escaped quote outside quotes, then quoted text before the header',
+      `say ${bs}${dq} ${dq}note${dq} X-Api-Key: Digest response=${dq}${A}${dq}`,
+      `say ${bs}${dq} ${dq}note${dq} X-Api-Key: [REDACTED]`],
+    ['B1 variant: a double quote inside single quotes, then single-quoted text before the header',
+      `echo ${sq}a${dq}b${sq} Authorization: Digest response=${sq}${A}${sq}`,
+      `echo ${sq}a${dq}b${sq} Authorization: [REDACTED]`],
+    ['B2: apostrophe in a double-quoted argument, then a single-quoted header argument',
+      `curl -A ${dq}it's app${dq} -H ${sq} Authorization: Basic ${A}${sq} https://example.test`,
+      `curl -A ${dq}it's app${dq} -H ${sq} Authorization: [REDACTED]${sq} https://example.test`],
+    ['B2 variant: no space after the opening quote',
+      `curl -A ${dq}it's app${dq} -H ${sq}Authorization: Basic ${A}${sq} https://example.test`,
+      `curl -A ${dq}it's app${dq} -H ${sq}Authorization: [REDACTED]${sq} https://example.test`],
+    ['B2 variant: a double quote in a single-quoted argument, then a double-quoted header argument',
+      `curl -A ${sq}5${dq} app${sq} -H ${dq} Authorization: Basic ${A}${dq} https://example.test`,
+      `curl -A ${sq}5${dq} app${sq} -H ${dq} Authorization: [REDACTED]${dq} https://example.test`],
+    ['B2 variant: an escaped double quote in a double-quoted argument, then a double-quoted header argument',
+      `curl -A ${dq}5${bs}${dq} app${dq} -H ${dq} Authorization: Basic ${A}${dq} https://example.test`,
+      `curl -A ${dq}5${bs}${dq} app${dq} -H ${dq} Authorization: [REDACTED]${dq} https://example.test`],
+    ['two headers on one line after an apostrophe',
+      `curl -A ${dq}it's app${dq} -H ${sq} Authorization: Basic ${A}${sq} -H ${sq} X-Api-Key: ${B}${sq} https://example.test`,
+      `curl -A ${dq}it's app${dq} -H ${sq} Authorization: [REDACTED]${sq} -H ${sq} X-Api-Key: [REDACTED]${sq} https://example.test`],
+    ['a backslash-escaped space and apostrophe outside quotes',
+      `cd my${bs} dir${bs}'s && curl -H ${sq} Authorization: Basic ${A}${sq} https://example.test`,
+      `cd my${bs} dir${bs}'s && curl -H ${sq} Authorization: [REDACTED]${sq} https://example.test`],
+    ['quote state does not carry over a line end',
+      `it's late\ncurl -H ${sq} Authorization: Basic ${A}${sq} https://example.test`,
+      `it's late\ncurl -H ${sq} Authorization: [REDACTED]${sq} https://example.test`],
+    ['an unclosed quote before the header masks to the end of the line',
+      `it's late ${sq}x${sq} Authorization: Digest response=${sq}${A}${sq}`,
+      `it's late ${sq}x${sq} Authorization: [REDACTED]`],
+  ];
+  for (const [name, input, want] of cases) {
+    await t.test(name, () => {
+      const got = redact(input);
+      assert.equal(got, want);
+      assert.ok(!got.includes(A) && !got.includes(B));
+      assert.equal(redact(got), got);
+    });
+  }
+});
+
+test('S5 round 3: 200 KB of repeated header lines with quotes stays linear', () => {
+  const line = `curl -A "it's \\"app\\"" -H ' Authorization: Basic LEAKVAL' https://example.test\n`;
+  for (const input of ['Authorization: LEAKVAL\n'.repeat(Math.ceil(200_000 / 23)), line.repeat(Math.ceil(200_000 / line.length)), `"it's \\" `.repeat(25_000) + `' Authorization: LEAKVAL'`]) {
+    const start = performance.now();
+    const got = redact(input);
+    const elapsed = performance.now() - start;
+    assert.ok(!got.includes('LEAKVAL'));
+    assert.ok(elapsed < 1000, `took ${elapsed} ms`);
+  }
+});

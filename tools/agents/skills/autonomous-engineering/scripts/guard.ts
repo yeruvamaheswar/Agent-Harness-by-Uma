@@ -535,23 +535,45 @@ function maskKeyLines(text: string): string {
 const HEADER = /(^|["'][ \t]*|\s)((?:Proxy-)?Authorization|[A-Za-z0-9]+(?:-[A-Za-z0-9]+)+)([ \t]*:[ \t]*)/gim;
 function maskHeaders(text: string): string {
   let out = '', last = 0;
-  // A quote with spaces before the name opens an argument only when an even number of the same quote comes before it on its line.
-  // Else it closes other text, as in "note" X-Api-Key: v "w", and the value runs to the end of the line.
-  // The count moves forward only, so all the calls together read the text once.
-  let seen = 0, double = 0, single = 0;
-  const opensArgument = (at: number) => {
+  // The shell quote state at `at`, read left to right from the start of the line: '"', "'", or '' outside quotes.
+  // In double quotes a backslash escapes the next character and a single quote is plain text. In single quotes all text
+  // is plain up to the next single quote. Outside quotes a backslash escapes the next character. A line end resets the state.
+  // The scan moves forward only, so all the calls together read the text once.
+  let seen = 0, state = '', escaped = false;
+  const quoteState = (at: number) => {
     for (; seen < at; seen++) {
       const c = text[seen];
-      if (c === '\n' || c === '\r') double = single = 0;
-      else if (c === '"') double++;
-      else if (c === "'") single++;
+      if (c === '\n' || c === '\r') { state = ''; escaped = false; }
+      else if (escaped) escaped = false;
+      else if (c === '\\' && state !== "'") escaped = true;
+      else if (state) { if (c === state) state = ''; }
+      else if (c === '"' || c === "'") state = c;
     }
-    return (text[at] === '"' ? double : single) % 2 === 0;
+    return state;
+  };
+  // True when the same scan, started outside quotes at `from`, ends its line inside an open quote. Then the argument's
+  // closing quote is unsure. One backward pass per line gives the answer for every start, so the work stays linear.
+  // o, d, s, oe, de: the scan ends open when it stands at i outside, in double, in single, or after a backslash outside or in double.
+  let tailFrom = 0, tailStop = -1, tail = new Uint8Array(0);
+  const endsOpen = (from: number) => {
+    if (from > tailStop) {
+      tailFrom = from; tailStop = lineEnd(text, from);
+      tail = new Uint8Array(tailStop - tailFrom + 1);
+      let o = 0, d = 1, s = 1, oe = 0, de = 1;
+      for (let i = tailStop - 1; i >= tailFrom; i--) {
+        const c = text[i];
+        [o, d, s, oe, de] = c === '\\' ? [oe, de, s, o, d] : c === '"' ? [d, o, s, o, d] : c === "'" ? [s, d, o, o, d] : [o, d, s, o, d];
+        tail[i - tailFrom] = o;
+      }
+    }
+    return tail[from - tailFrom] === 1;
   };
   for (const m of text.matchAll(HEADER)) {
     if (m.index < last || !secretName(m[2])) continue;
     const start = m.index + m[0].length, quote = text[start];
-    const arg = m[1].length > 1 && !opensArgument(m.index) ? undefined : m[1][0];
+    // A quote before the name puts the value in a quoted argument only when the scan ends inside quotes at the name.
+    // Else that quote closes other text, as in "note" X-Api-Key: v "w", and the value runs to the end of the line.
+    const arg = /["']/.test(m[1][0] ?? '') ? quoteState(m.index + m[1].length) || undefined : m[1][0];
     // Text after a previously masked quoted value must survive subsequent passes.
     if (text.startsWith('[REDACTED]', start)) continue;
     // A YAML comment after the key (api-key:   # note) is masked, and its # stays, so the YAML pass still masks the block under it.
@@ -576,14 +598,17 @@ function maskHeaders(text: string): string {
       if (rest.exec(text)) end = rest.lastIndex;
     } else {
       // An escaped quote is part of the value: curl -H "X-Api-Key: \"v\"" masks \"v\", not only the backslash.
-      // Inside a quoted argument ('Authorization: v' or "X-Api-Key: v"), the value ends at that argument's closing quote;
-      // the other quote is part of the value, as in Digest username="u". Outside one, the value runs to the end of the line.
+      // Inside a quoted argument ('Authorization: v' or "X-Api-Key: v"), the value ends at the next unescaped quote of the
+      // type the scan is inside; the other quote is part of the value, as in Digest username="u".
+      // Outside one, the value runs to the end of the line.
       const value = arg === '"' ? /(?:\\.|[^\s"\\])(?:\\.|[^\r\n"\\])*/y
         : arg === "'" ? /(?:\\.|[^\s'\\])(?:\\.|[^\r\n'\\])*/y
         : /(?:\\.|[^\s"'\\])(?:\\.|[^\r\n\\])*/y;
       value.lastIndex = start;
       if (!value.exec(text)) continue;
       end = value.lastIndex;
+      // When the text after the closing quote leaves a quote open, the closing quote is unsure: mask to the end of the line.
+      if ((arg === '"' || arg === "'") && text[end] === arg && endsOpen(end + 1)) end = lineEnd(text, end);
     }
     out += text.slice(last, start) + '[REDACTED]';
     last = end;
