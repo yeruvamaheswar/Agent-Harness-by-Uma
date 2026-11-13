@@ -630,3 +630,104 @@ test('S5 residual: mixed-case header names and a space before the header colon',
   for (const plain of ['X-APIVersion: 2', 'X-Request-ID : abc', 'Content-Type : text/plain', 'Authorization header is missing'])
     assert.equal(redact(plain), plain, plain);
 });
+
+// ---- slice 5 fix round 2: second review findings R1 to R7 ----
+// V_A and V_B are dummy values, built at run time. Neither may survive.
+const VA = ['V', 'A'].join('_'), VB = ['V', 'B'].join('_');
+const r2Check = async (t: { test: (name: string, fn: () => void) => Promise<void> }, cases: [string, string, string][]) => {
+  for (const [label, input, want] of cases) await t.test(label, () => {
+    const out = redact(input);
+    assert.ok(!out.includes(VA) && !out.includes(VB), `leak: ${out}`);
+    assert.equal(out, want);
+    assert.equal(redact(out), out);
+  });
+};
+
+test('S5 R1: a header-shaped key that heads a YAML block or a flow value masks the whole value', async (t) => {
+  await r2Check(t, [
+    ['flow over lines, space before colon', `api-key : [${VA},\n ${VB}]`, 'api-key : [REDACTED]'],
+    ['flow map over lines', `X-Api-Key: {a: ${VA},\n  b: ${VB}}\nnext: ordinary`, 'X-Api-Key: [REDACTED]\nnext: ordinary'],
+    ['flow on one line', `api-key: [${VA}, ${VB}]\nnext: ordinary`, 'api-key: [REDACTED]\nnext: ordinary'],
+    ['literal block scalar', `api-key: |\n  ${VA}\n  ${VB}\nnext: ordinary`, 'api-key: [REDACTED]\n  [REDACTED]\n  [REDACTED]\nnext: ordinary'],
+    ['folded block scalar', `Authorization: >-\n  ${VA}`, 'Authorization: [REDACTED]\n  [REDACTED]'],
+    ['anchor', `api-key: &a\n  - ${VA}\n  - ${VB}`, 'api-key: [REDACTED]\n  - [REDACTED]\n  - [REDACTED]'],
+    ['tag', `x-auth-token: !!seq\n  - ${VA}`, 'x-auth-token: [REDACTED]\n  - [REDACTED]'],
+    ['tab before colon', `api-key\t: |\n  ${VA}`, 'api-key\t: [REDACTED]\n  [REDACTED]'],
+    ['nested indentation', `outer:\n    api-key: |\n      ${VA}\n    name: ordinary`, 'outer:\n    api-key: [REDACTED]\n      [REDACTED]\n    name: ordinary'],
+    ['list item key', `- api-key: [${VA},\n    ${VB}]\n- name: ordinary`, '- api-key: [REDACTED]\n- name: ordinary'],
+    ['CRLF flow', `api-key: [${VA},\r\n  ${VB}]\r\nnext: ordinary`, 'api-key: [REDACTED]\r\nnext: ordinary'],
+    ['CRLF block', `api-key: |\r\n  ${VA}\r\nnext: ordinary`, 'api-key: [REDACTED]\r\n  [REDACTED]\r\nnext: ordinary'],
+    ['mapping items', `api-keys:\n  - id: ${VA}\n    value: ${VB}`, 'api-keys:\n  - [REDACTED]\n    [REDACTED]'],
+    ['flow that never closes', `api-key: [${VA},\n  ${VB}`, 'api-key: [REDACTED]'],
+  ]);
+  // A header-shaped key that is not secret-named keeps its YAML value.
+  for (const plain of ['Content-Type: [a,\n b]', 'X-Request-Id: |\n  abc'])
+    assert.equal(redact(plain), plain, plain);
+});
+
+test('S5 R2: a header name matches in any letter case', async (t) => {
+  await r2Check(t, [
+    ['alternating case', `aUtHoRiZaTiOn: ${VA}`, 'aUtHoRiZaTiOn: [REDACTED]'],
+    ['alternating case, proxy', `pRoXy-AuThOrIzAtIoN: Basic ${VA}`, 'pRoXy-AuThOrIzAtIoN: [REDACTED]'],
+    ['alternating case, hyphenated', `x-aPi-KeY: ${VA}`, 'x-aPi-KeY: [REDACTED]'],
+    ['alternating case, one word', `x-ToKeN: ${VA}`, 'x-ToKeN: [REDACTED]'],
+  ]);
+  for (const plain of ['X-APIVersion: 2', 'cOnTeNt-TyPe: text/plain'])
+    assert.equal(redact(plain), plain, plain);
+});
+
+test('S5 R4: tabs and runs of spaces between the parts of a one-line key', async (t) => {
+  await r2Check(t, [
+    ['tab', `api\tkey: ${VA}`, 'api\tkey: [REDACTED]'],
+    ['spaces', `api   key = ${VA}`, 'api   key = [REDACTED]'],
+    ['tab and space', `access \tkey: ${VA}`, 'access \tkey: [REDACTED]'],
+    ['private key', `private\tkey: ${VA}`, 'private\tkey: [REDACTED]'],
+    ['client secret', `client  secret: ${VA}`, 'client  secret: [REDACTED]'],
+  ]);
+  for (const plain of ['api\tkeyboard: us', 'api\nkey points: none'])
+    assert.equal(redact(plain), plain, plain);
+});
+
+test('S5 R6: a header after spaces inside a quoted argument ends at the closing quote', async (t) => {
+  await r2Check(t, [
+    ['single-quoted, leading space', `curl -H ' Authorization: Basic ${VA}' https://example.test`, "curl -H ' Authorization: [REDACTED]' https://example.test"],
+    ['double-quoted, leading spaces', `curl -H "  X-Api-Key: ${VA}" https://example.test`, 'curl -H "  X-Api-Key: [REDACTED]" https://example.test'],
+    ['leading tab', `curl -H '\tX-Api-Key: ${VA}' -v`, "curl -H '\tX-Api-Key: [REDACTED]' -v"],
+    ['after an equals sign', `curl --header=' Authorization: Basic ${VA}' -v`, "curl --header=' Authorization: [REDACTED]' -v"],
+    // A quote that closes other text is not an argument quote: the value runs to the end of the line.
+    ['closing quote before the name', `error "bad" X-Api-Key: ${VA} "${VB}"`, 'error "bad" X-Api-Key: [REDACTED]'],
+    ['closing quote after a space', `echo " " X-Api-Key: ${VA} "${VB}"`, 'echo " " X-Api-Key: [REDACTED]'],
+    ['closing quote on a later line', `say "hi"\nnote " " Authorization: ${VA} "${VB}"`, 'say "hi"\nnote " " Authorization: [REDACTED]'],
+  ]);
+});
+
+test('S5 R7: redact finishes a 200 KB hostile input in under 2 s', async (t) => {
+  const N = 200 * 1024;
+  const fill = (s: string) => s.repeat(Math.ceil(N / s.length)).slice(0, N);
+  const hostile: [string, string][] = [
+    ['no newline', fill('a')], ['one lone CR at the end', fill('a').slice(1) + '\r'], ['only CR', fill('\r')], ['words split by CR', fill('abc\r')],
+    ['spaces', fill(' ')], ['tabs', fill('\t')], ['spaces and tabs', fill(' \t')], ['spaces, then a word', fill(' ').slice(1) + 'x'],
+    ['key words', fill('token ')], ['hyphenated key words', fill('api-key ')], ['spaced key words', fill('api key ')], ['one long hyphenated word', fill('a-')],
+    ['key, then spaces', 'api-key:' + fill(' ')], ['key part, then spaces', 'api' + fill(' ')], ['open brackets', 'token: ' + fill('[')],
+    ['JWT-like words', fill(['ey', 'Jaaaaaaaa-'].join(''))], ['quotes', fill('"')], ['backslashes', 'X-Api-Key: "' + fill('\\')],
+    ['flow heads', fill('a-key: [\n')], ['quoted headers', fill("' X-Api-Key: v' ")],
+  ];
+  for (const [label, input] of hostile) await t.test(label, () => {
+    const start = performance.now();
+    redact(input);
+    const elapsed = performance.now() - start;
+    assert.ok(elapsed < 2000, `redact took ${elapsed.toFixed(0)} ms`);
+  });
+});
+
+test('S5 R7: a lone CR keeps the rules it had: a YAML block after it is masked, and the result is stable', () => {
+  assert.equal(redact(`note\rsecrets:\n  - ${VA}\n  - ${VB}`), 'note\rsecrets:\n  - [REDACTED]\n  - [REDACTED]');
+  const out = redact(`api-key: |\r  ${VA}\rnext: ordinary`);
+  assert.equal(out, 'api-key: [REDACTED]');
+  assert.equal(redact(out), out);
+});
+
+test('S5 round 2: the Python `key` exemption covers scalar values only', () => {
+  assert.equal(redact("{'key': ['ArrowLeft']}"), `{'key': "[REDACTED]"}`);
+  assert.equal(redact("{'key': 'ArrowLeft'}"), "{'key': 'ArrowLeft'}");
+});

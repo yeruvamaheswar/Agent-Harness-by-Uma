@@ -465,8 +465,10 @@ export function checkPath(path: string, root: string, opts: { allow?: string[] }
 const NAMED = /\b((?:export\s+)?)([A-Za-z_][A-Za-z0-9_]*)=("[^"]*"|'[^']*'|[^\s"']+)/g;
 // A field name is secret when one of its words is: API_TOKEN, client_secret, apiKey, X-APIToken, X-Api-Key. `keywords` and `tokens` are not.
 const SECRET_WORDS = new Set(['secret', 'token', 'password', 'passwd', 'key', 'apikey', 'authorization', 'credential', 'credentials']);
-const secretName = (name: string) => name.replace(/([a-z0-9])([A-Z])/g, '$1_$2').replace(/([A-Z])([A-Z][a-z])/g, '$1_$2')
-  .toLowerCase().split(/[^a-z0-9]+/).some(w => SECRET_WORDS.has(w));
+// The name is also read without the camel-case split, so letter case alone hides nothing: aUtHoRiZaTiOn, x-aPi-KeY.
+const hasSecretWord = (name: string) => name.toLowerCase().split(/[^a-z0-9]+/).some(w => SECRET_WORDS.has(w));
+const secretName = (name: string) => hasSecretWord(name)
+  || hasSecretWord(name.replace(/([a-z0-9])([A-Z])/g, '$1_$2').replace(/([A-Z])([A-Z][a-z])/g, '$1_$2'));
 // A YAML key is secret like a field name, and a plural counts (api_keys). A dotted or spaced key (api.key, api key)
 // is secret by its last part only, so `Key points` and `secret.name` are not.
 const yamlSecret = (key: string) => secretName((/[.\s]/.test(key) ? key.split(/[.\s]+/).pop() ?? '' : key).replace(/s$/i, ''));
@@ -499,8 +501,9 @@ function maskComposites(text: string): string {
   return out + text.slice(last);
 }
 // key: value or key = value, for these exact key names (any case, optionally quoted). `tokens used: 5` is not one.
-// A dotted or spaced form counts: api.key, api key, db.password, client.secret.
-const KEY_HEAD = /(^|[\s{,;(.])(["']?)(token|secret|password|passwd|api[_. -]?key|access[_. -]key|private[_. -]key|client[_. -]secret)\2(\s*[:=]\s*)/gim;
+// A dotted or spaced form counts: api.key, api key, db.password, client.secret. The parts may be split by tabs or a run of spaces.
+const PART_GAP = '(?:[_.-]|[ \\t]+)';
+const KEY_HEAD = new RegExp(`(^|[\\s{,;(.])(["']?)(token|secret|password|passwd|api${PART_GAP}?key|access${PART_GAP}key|private${PART_GAP}key|client${PART_GAP}secret)\\2(\\s*[:=]\\s*)`, 'gim');
 // key=value with no spaces is a shell assignment: its value is one word, and the command after it stays.
 const SHELL_WORD = /"[^"\n]*"|'[^'\n]*'|[^\s,;}"']+/y;
 // A JSON or Python field: a quoted key, one whole quoted string, then , } ] or the end of the line. Its structure stays.
@@ -527,13 +530,28 @@ function maskKeyLines(text: string): string {
   return out + text.slice(last);
 }
 // A header line: Authorization or Proxy-Authorization, or a hyphenated secret name such as X-Api-Key or X-Auth-Token.
-// A space before the colon is allowed: Authorization : v.
-const HEADER = /(^|[\s"'])((?:Proxy-)?Authorization|[A-Za-z0-9]+(?:-[A-Za-z0-9]+)+)([ \t]*:[ \t]*)/gim;
+// A space before the colon is allowed: Authorization : v. Group 1 is a quote and the spaces after it, as in ' Authorization: v',
+// or one whitespace character, or nothing at the start of a line.
+const HEADER = /(^|["'][ \t]*|\s)((?:Proxy-)?Authorization|[A-Za-z0-9]+(?:-[A-Za-z0-9]+)+)([ \t]*:[ \t]*)/gim;
 function maskHeaders(text: string): string {
   let out = '', last = 0;
+  // A quote with spaces before the name opens an argument only when an even number of the same quote comes before it on its line.
+  // Else it closes other text, as in "note" X-Api-Key: v "w", and the value runs to the end of the line.
+  // The count moves forward only, so all the calls together read the text once.
+  let seen = 0, double = 0, single = 0;
+  const opensArgument = (at: number) => {
+    for (; seen < at; seen++) {
+      const c = text[seen];
+      if (c === '\n' || c === '\r') double = single = 0;
+      else if (c === '"') double++;
+      else if (c === "'") single++;
+    }
+    return (text[at] === '"' ? double : single) % 2 === 0;
+  };
   for (const m of text.matchAll(HEADER)) {
     if (m.index < last || !secretName(m[2])) continue;
     const start = m.index + m[0].length, quote = text[start];
+    const arg = m[1].length > 1 && !opensArgument(m.index) ? undefined : m[1][0];
     // Text after a previously masked quoted value must survive subsequent passes.
     if (text.startsWith('[REDACTED]', start)) continue;
     // A YAML comment after the key (api-key:   # note) is masked, and its # stays, so the YAML pass still masks the block under it.
@@ -542,6 +560,8 @@ function maskHeaders(text: string): string {
       last = lineEnd(text, start);
       continue;
     }
+    // A key that heads a YAML block or a flow value is left whole for the YAML pass, which masks every line of the value.
+    if (!/["']/.test(m[1]) && headsYaml(text, m.index + m[1].length, start)) continue;
     let end = start;
     if (quote === '"' || quote === "'") {
       end++;
@@ -558,8 +578,8 @@ function maskHeaders(text: string): string {
       // An escaped quote is part of the value: curl -H "X-Api-Key: \"v\"" masks \"v\", not only the backslash.
       // Inside a quoted argument ('Authorization: v' or "X-Api-Key: v"), the value ends at that argument's closing quote;
       // the other quote is part of the value, as in Digest username="u". Outside one, the value runs to the end of the line.
-      const value = m[1] === '"' ? /(?:\\.|[^\s"\\])(?:\\.|[^\r\n"\\])*/y
-        : m[1] === "'" ? /(?:\\.|[^\s'\\])(?:\\.|[^\r\n'\\])*/y
+      const value = arg === '"' ? /(?:\\.|[^\s"\\])(?:\\.|[^\r\n"\\])*/y
+        : arg === "'" ? /(?:\\.|[^\s'\\])(?:\\.|[^\r\n'\\])*/y
         : /(?:\\.|[^\s"'\\])(?:\\.|[^\r\n\\])*/y;
       value.lastIndex = start;
       if (!value.exec(text)) continue;
@@ -578,13 +598,31 @@ const YAML_HEAD = new RegExp(`^((?:-[ \\t]+)*)(["']?)(${YAML_KEY})\\2([ \\t]*:)(
 // A YAML flow value under an unquoted secret key: secrets: [a, b] or tokens: {a: b}. Groups: head up to the bracket, key.
 // A quoted key is left to the JSON rules, so pretty-printed JSON "tokens": [1, 2] stays. A [REDACTED] from an earlier pass is not a flow value.
 const YAML_FLOW = new RegExp(`^((?:-[ \\t]+)*(${YAML_KEY})[ \\t]*:[ \\t]*)(?:\\{|\\[(?!REDACTED\\]))`);
+// A YAML line ends at \r\n or \n. Text that ends at a lone \r is not a YAML line: no YAML rule reads it, and the key rules still do.
+const YAML_EOL = /\r\n|[\r\n]/g;
+// True when the key at `key` starts its line (after indentation and list dashes) and that line is a YAML block head or opens a flow value.
+function headsYaml(text: string, key: number, value: number): boolean {
+  let from = key;
+  while (from > 0 && (text[from - 1] === ' ' || text[from - 1] === '\t' || text[from - 1] === '-')) from--;
+  if ((from > 0 && text[from - 1] !== '\n' && text[from - 1] !== '\r') || !/^[ \t]*(?:-[ \t]+)*$/.test(text.slice(from, key))) return false;
+  YAML_EOL.lastIndex = value;
+  const eol = YAML_EOL.exec(text);
+  if (eol?.[0] === '\r') return false;
+  const body = text.slice(key, eol?.index ?? text.length);
+  return YAML_FLOW.test(body) || YAML_HEAD.test(body);
+}
 // Keep YAML list structure; retain the existing key-line handling outside lists and in comments.
 function maskYamlLists(text: string): string {
   const out: string[] = [];
   let last = 0, blockIndent: number | undefined;
-  for (const m of text.matchAll(/([^\r\n]*)(\r?\n|$)/g)) {
+  // The lines are found one by one from the last line end, so the scan is linear in the input.
+  for (let next = 0; next < text.length;) {
+    YAML_EOL.lastIndex = next;
+    const eol = YAML_EOL.exec(text), index = next, end = eol?.index ?? text.length;
+    const m = { 0: text.slice(index, end) + (eol?.[0] ?? ''), 1: text.slice(index, end), 2: eol?.[0] ?? '', index };
+    next = end + m[2].length;
     // A line inside a flow value masked below is already gone.
-    if (!m[0] || m.index < last) continue;
+    if (m.index < last || m[2] === '\r') continue;
     const line = m[1], whitespace = /^[ \t]*/.exec(line)?.[0] ?? '';
     const body = line.slice(whitespace.length);
     if (blockIndent !== undefined) {
@@ -628,7 +666,9 @@ export function redact(text: string): string {
     .replace(/\bsk-[A-Za-z0-9_-]{16,}/g, '[REDACTED]')
     .replace(/\bxox[abposr]-[A-Za-z0-9-]{10,}/g, '[REDACTED]')
     .replace(/\b(?:AKIA|ASIA)[0-9A-Z]{16}\b/g, '[REDACTED]')
-    .replace(/\beyJ[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]{8,}/g, '[REDACTED]')
+    // A JWT is looked for once in each run of token characters, at the first eyJ after a word boundary. A later eyJ in the
+    // same run ends at the same place, so it cannot match when the first does not. This keeps the scan linear.
+    .replace(/(?<![A-Za-z0-9_-])((?:(?!\beyJ)[A-Za-z0-9_-])*)\beyJ[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]{8,}/g, '$1[REDACTED]')
     .replace(/\b(Bearer)\s+[A-Za-z0-9._~+/=-]{8,}/gi, '$1 [REDACTED]');
   // A secret-named field is masked whole, also when a part of it is already [REDACTED]. The result is stable.
   const fields = maskComposites(tokens)
