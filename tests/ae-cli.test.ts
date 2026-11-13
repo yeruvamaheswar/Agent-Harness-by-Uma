@@ -92,8 +92,8 @@ test('EVAL-6: failures walk the ladder builder, escalated, fallback, then FAILED
   }
   assert.deepEqual(seen.map(x => x.failures), [0, 1, 2, 3]);
   assert.deepEqual(seen.map(x => x.used), ['model', 'model', 'escalated', 'fallback']);
-  assert.deepEqual(seen.map(x => x.target.model), ['claude-sonnet-5-5', 'claude-sonnet-5-5', 'claude-sonnet-5-5', 'claude-opus-5-5']);
-  assert.deepEqual(seen.map(x => x.target.options[0].value), ['high', 'high', 'xhigh', 'high'], 'one effort rung up at failure 2; the Fallback at failure 3');
+  assert.deepEqual(seen.map(x => x.target.model), ['claude-sonnet-5-5', 'claude-sonnet-5-5', 'claude-opus-5-5', 'claude-opus-5-5']);
+  assert.deepEqual(seen.map(x => x.target.options[0].value), ['high', 'high', 'medium', 'high'], 'next tier at medium at failure 2; the Fallback at failure 3');
   assert.ok(seen[2].chain.some((c: any) => /escalated/.test(c.reason)));
   assert.equal(seen[0].target.dispatch, 't3-delegate');
   assert.equal(typeof seen[0].intensity.value, 'number');

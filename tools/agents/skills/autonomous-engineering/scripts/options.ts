@@ -92,12 +92,12 @@ export function workerLabel(s: Slice, rec: SliceRecord): string {
   return a && a.handoff === undefined ? recordedLabel(a) ?? base : base;
 }
 // The agent label an attempt recorded for itself at `ae start` (provider, model, effort), or undefined when it recorded none
-// or an unknown provider. Claude keeps its tier (opus, sonnet, haiku); Codex keeps the model id.
+// or an unknown provider. Claude keeps its tier (haiku, sonnet, opus, fable); Codex keeps the model id.
 function recordedLabel(a: Attempt): string | undefined {
   if (!a.provider || !a.model) return undefined;
   const family = familyOfProvider(a.provider), agent = family === 'Claude' ? 'Claude' : family === 'OpenAI' ? 'Codex' : undefined;
   if (!agent) return undefined;
-  const model = agent === 'Claude' ? /(opus|sonnet|haiku)/i.exec(a.model)?.[1].toLowerCase() : a.model;
+  const model = agent === 'Claude' ? /(opus|sonnet|haiku|fable)/i.exec(a.model)?.[1].toLowerCase() : a.model;
   if (!model) return undefined;
   const label = `${agent} (${model}${a.effort ? `/${a.effort}` : ''})`;
   return tryRef(label) ? label : undefined;

@@ -24,10 +24,14 @@ Do not start a child when one agent can finish the work in a few steps, when the
 Pick provider, model, and effort per child. Do not copy one choice across the fan-out.
 
 - Spread work across providers by fit. Do not leave a capable provider idle while another carries several children. Do not invent a task to use a provider.
-- Assign the cheapest model and the lowest effort that can meet the slice goal and pass its check. Cheapest means the least usage spent for a correct result.
+- Assign the cheapest model and the lowest effort that can meet the slice goal and pass its check. Cheapest means the least usage spent for a correct result. For Claude, the start comes from "Claude starting points" in `model-tiers.md`; the size is the floor.
 - Move up one rung only after a failed check. State the reason. Do not move up on a guess that the task is hard.
-- Typical fits: fact-finding, probes, and mechanical edits suit Haiku, Sonnet, or a fast model at low or medium effort.
-- Size the work with the rubric in the `multi-agent-planning` skill (`references/routing.md`): cheap, mid, or strong. Architecture and security get no forced strong start. Size them up only when you judge that the work needs it. Say why.
+- Use a small model (Haiku, or any cheap tier) only where a mistake is cheap to spot: finding files, running tests, reading logs, summarizing.
+- Give a cheap-tier child a code edit only when a deterministic check (test, build, lint) catches its errors. Other code edits and judgment calls stay on the lead's model or a mid or strong child.
+- Keep the lead's context lean. Cheap children do the verbose reading. The lead keeps the decisions.
+- For a Claude child, take the start from "Claude starting points" in `multi-agent-planning/references/model-tiers.md`. For example, a major refactor, migration, or architecture starts at `fable/medium`.
+- The size is the floor. Size the work with the rubric in the `multi-agent-planning` skill (`references/routing.md`): cheap, mid, or strong. Size it up only when you judge that the work needs it. Say why.
+- Batch work (eval runs, probes, repeated reviews): run every item at the lowest routable effort first, often `low`. Then rerun only the failures one level higher.
 - After a second failed attempt, move up. Say why.
 - Do not use high, xhigh, max, or ultrathink unless the user named that task, or a specific failure justifies one step up. A blanket "ultrathink" in a parent brief is not permission for every child.
 - A reviewer must be a different session from the builder. Prefer a different model family.
@@ -58,7 +62,7 @@ Checked 2026-10-26 against `delegate_task` and `orchestrator_capabilities`.
 
 ## After a failed check
 
-Follow the attempt ladder: the first failure gets one bounded fix by the builder; the second gets the escalation step (one rung up, or the next-best provider); the third goes to the `Fallback:` owner. The next failure sets FAILED. Say why at each step. Do not raise the other children.
+Follow the attempt ladder: the first failure gets one bounded fix by the builder; the second gets the escalation step (one level up, per the escalation table in `multi-agent-planning/references/routing.md`, or the next-best provider); the third goes to the `Fallback:` owner. The next failure sets FAILED. Say why at each step. Do not raise the other children.
 
 An interruption is not a failed attempt. A quota stop, a provider error, a host restart, or a lost session does not use the budget. Checkpoint the work and hand it to a replacement. Three interruptions in a row with no fingerprint progress set BLOCKED.
 

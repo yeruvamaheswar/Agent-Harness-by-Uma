@@ -220,7 +220,7 @@ One table for every rule that stops a repeat. A handoff and an interruption are 
 - `Codex (model-id/effort)` sets the effort option when the model advertises it under `effort`, `reasoningEffort`, or `reasoning_effort`. Otherwise `notes` says so and no option is set.
 - With no capabilities on Claude Code, Claude is a `native-subagent`. Other agents are `handoff`.
 - With host `other`, every target is `handoff`.
-- Escalation: one level. Effort low, medium, high, xhigh; then tier haiku, sonnet, opus at high. Never `max`.
+- Escalation: one level per failure. Claude raises effort low, medium, high; past `high` it goes to the next tier at `medium` (haiku, sonnet, opus, fable). Past `fable/high` it uses the Fallback. A Claude ref at `xhigh` counts as past `high`. Never `max`.
 - A named Codex model with an effort steps through the same efforts and then has no step left. It never changes model. `Antigravity (model-id)` has no step: its effort is in the id.
 - When `auto`, `default`, a named model without an effort, or the top rung cannot escalate, dispatch uses the Fallback. When nothing can run, it returns a handoff.
 - `intensity` is a relative estimate, not a measured quota.
@@ -267,7 +267,7 @@ Source: `plans/usage-continuity.md`. Code: `scripts/usage.ts`. The engine never 
 ### Policy (`--policy FILE`, optional)
 ```json
 {"thresholds": {"default": {"assess": 70, "prepare": 85, "transfer": 95}, "Codex": {"assess": 60, "prepare": 75, "transfer": 90}, "context": {"assess": 80, "prepare": 90, "transfer": 98}},
- "ranks": {"Claude haiku": 1, "Claude sonnet": 2, "Claude opus": 3, "Codex": 3, "Antigravity": 1, "Cursor": 2, "Grok": 0},
+ "ranks": {"Claude haiku": 1, "Claude sonnet": 2, "Claude opus": 3, "Claude fable": 3, "Codex": 3, "Antigravity": 1, "Cursor": 2, "Grok": 0},
  "pool": ["Cursor (auto)", "Codex (auto)", "Claude (sonnet/high)", "Claude (opus/high)"]}
 ```
 - Any key may be left out; the defaults above apply. Threshold lookup: `Agent.kind`, then `Agent`, then `kind`, then `default`. Each needs assess <= prepare <= transfer.

@@ -110,7 +110,7 @@ ae fail plans/demo.md 1 --reason "demo: first attempt failed"
 ae dispatch plans/demo.md 1
 ```
 
-Read the two `dispatch` results. With host `other` (the default) the engine cannot launch an agent, so every target is a `handoff` to the agent named in `Model:`. The `chain` lists the order it tried: `Model:`, then `Fallback:`. The `failures` count rises from 0 to 1, and `escalateWhen` says what happens next: the next failure escalates one level, failure 3 uses the `Fallback:` agent, and failure 4 sets `FAILED`. Effort rises one step at a time for Claude (low, medium, high, xhigh) and never reaches `max`. The reference is `tools/agents/skills/autonomous-engineering/references/engine.md`, section "Dispatch and escalation".
+Read the two `dispatch` results. With host `other` (the default) the engine cannot launch an agent, so every target is a `handoff` to the agent named in `Model:`. The `chain` lists the order it tried: `Model:`, then `Fallback:`. The `failures` count rises from 0 to 1, and `escalateWhen` says what happens next: the next failure escalates one level, failure 3 uses the `Fallback:` agent, and failure 4 sets `FAILED`. Effort rises one step at a time for Claude (low, medium, high); past `high` the next model up starts at `medium` (haiku, sonnet, opus, fable). It never reaches `max`. The reference is `tools/agents/skills/autonomous-engineering/references/engine.md`, section "Dispatch and escalation".
 
 Not run: dispatch with `--host t3`, which needs a T3 capabilities file from a live host.
 

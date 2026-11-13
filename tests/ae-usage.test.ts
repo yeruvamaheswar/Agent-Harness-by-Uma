@@ -428,7 +428,7 @@ test('review 16: a context-only limit names the same agent as a fresh session, n
 });
 
 test('review 8: Grok never builds, and an unranked slice Model needs the highest rank', () => {
-  const r = rankCandidates({ model: 'Claude (fable/high)', fallback: 'Grok (default)' }, 'Claude (fable/high)', false, snap({}), P, NO_HOST);
+  const r = rankCandidates({ model: 'Claude (mythos/high)', fallback: 'Grok (default)' }, 'Claude (mythos/high)', false, snap({}), P, NO_HOST);
   assert.ok(!r.candidates.some(c => c.label.startsWith('Grok')));
   assert.equal(r.need, 3);
   assert.deepEqual(r.candidates.map(c => c.label), ['Codex (auto)']);

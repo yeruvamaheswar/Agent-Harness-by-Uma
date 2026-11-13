@@ -21,7 +21,7 @@ export const DEFAULT_POLICY: Policy = {
   thresholds: { default: { assess: 70, prepare: 85, transfer: 95 } },
   // Capability rank per agent, or per Claude tier. A replacement needs a rank at least that of the slice's Model.
   // Grok is 0: the planner uses Grok for review only. Antigravity is 1: the agent key cannot tell its models apart, so it gets the lowest build rank.
-  ranks: { 'Claude haiku': 1, 'Claude sonnet': 2, 'Claude opus': 3, Codex: 3, Antigravity: 1, Cursor: 2, Grok: 0 },
+  ranks: { 'Claude haiku': 1, 'Claude sonnet': 2, 'Claude opus': 3, 'Claude fable': 3, Codex: 3, Antigravity: 1, Cursor: 2, Grok: 0 },
   pool: ['Cursor (auto)', 'Codex (auto)', 'Claude (sonnet/high)', 'Claude (opus/high)'],
 };
 
@@ -115,7 +115,7 @@ export const thresholdsFor = (p: Policy, agent: string, kind: LimitKind) =>
 export function rankOf(ref: ModelRef, p: Policy): number | null {
   if (ref.agent === 'user' || ref.agent === 'CI') return null;
   if (ref.agent === 'Claude') {
-    const tier = ref.tier ?? ['haiku', 'sonnet', 'opus'].find(t => ref.modelId?.includes(t));
+    const tier = ref.tier ?? ['haiku', 'sonnet', 'opus', 'fable'].find(t => ref.modelId?.includes(t));
     return p.ranks[`Claude ${tier}`] ?? p.ranks.Claude ?? null;
   }
   return p.ranks[ref.agent] ?? null;

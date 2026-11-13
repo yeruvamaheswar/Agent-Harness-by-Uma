@@ -30,18 +30,21 @@ These are the user's subscriptions.
 ## Size the slice, then pick the model
 Size each slice. Then pick the cheapest model and effort in `model-tiers.md` at or above that size, from any routable provider.
 
+For Claude, take the start from "Claude starting points" in `model-tiers.md`. The size is the floor.
+
 | Size | Work |
 |---|---|
 | cheap | Fact-finding, probes, mechanical edits, docs without judgment |
 | mid | Code from a clear spec with tests, multi-file docs, routine debugging |
 | strong | Open design, security-critical design or auth changes, migrations, cross-platform contracts, hard debugging |
 
-- The rubric is a judgment, not a rule. Architecture and security get no forced strong start. Size them up only when the work needs it. Say why.
+- The rubric is a judgment, not a rule. Size a slice up only when the work needs it. Say why.
+- The Claude starting table gives a start by task type. For example, a major refactor, migration, or architecture starts at `Claude (fable/medium)`.
 - Within a tier, prefer the lowest effort and a provider with free capacity. Write the cost as `unknown` when no host reports it.
 - Cursor does hands-on UI edits and refactors at `Cursor (auto)`. Cursor does not use the tiers.
 - Independent critical review: a strong-tier model in a fresh session, never the builder's session.
 - Optional extra critique: `Grok (default)`, in `Review:` only.
-- Claude rungs are in `model-tiers.md` and in the `html-explainer` skill. Pick the lowest rung that fits.
+- Claude rungs are in `model-tiers.md` and in the `html-explainer` skill. Start from "Claude starting points". Then use the lowest rung at or above the size.
 
 ## Only Cursor stays auto
 - Write `Cursor (auto)` in `Model:`, `Review:`, and `Fallback:`. Do not override the Cursor model. This is the user's decision.
@@ -80,7 +83,8 @@ Rules:
 
 ## Fallback and escalation
 - `Fallback:` is the new owner after the escalation step fails.
-- A higher-effort rerun of the same agent is the escalation step. Do not write it in `Fallback:`.
+- A rerun of the same agent at a higher effort, or for Claude on the next model up, is the escalation step. Do not write it in `Fallback:`.
+- Before you raise effort or model, check that the slice can verify its own work: a test, a build, or a script.
 - `Review:` and `Fallback:` name different agents or sessions.
 - When the fallback takes over, the reviewer is a session that did not apply the fix.
 - The fallback of an `integration` slice did not build the combined slices. When every other agent built one of them, the fallback is a new session of the integrator at the same rung, for example `Claude (sonnet/medium, fresh session)`.
@@ -90,7 +94,7 @@ Rules:
 | Codex (model-id/effort) | The same model at the next effort, within the efforts the host advertises. With no step left, go to `Fallback:` | A model in another family at or above the slice size, or Claude at the rung the risk needs |
 | Antigravity (model-id) | None. The effort is in the id, so go straight to `Fallback:` | A model in another family at or above the slice size |
 | Cursor (auto) | Cursor rerun with the failing output and the review findings | Codex (model-id/effort), or Claude at the rung the risk needs |
-| Claude (rung) | One rung up the `html-explainer` list. `opus/max` only with a written reason | A model at or above the slice size from another provider, or a new Claude session when the slice needs Claude judgment |
+| Claude (rung) | Raise effort one level, up to `high`. Past `high`, go to the next model up at `medium`: haiku/high to sonnet/medium, sonnet/high to opus/medium, opus/high to fable/medium. Past fable/high, go to `Fallback:` | A model at or above the slice size from another provider, or a new Claude session when the slice needs Claude judgment |
 
 ### Attempt budget
 - Three attempts per slice. First, one bounded fix by the builder. Second, the escalation step. Third, the `Fallback:` owner.
@@ -117,6 +121,11 @@ The lead takes the first option that applies. The numbers are the recovery optio
 - Option 3: probe the CLI with a one-line read-only prompt. When it answers, run the slice's continuation packet through it in the slice's workspace, with no model override. The slice stays with its planned agent.
 - When the CLI also fails, option 5 moves the slice to the `Fallback:` owner with the partial work. The slice stays `IN_PROGRESS`; mark the builder's Worker tracking row `BLOCKED` with the error, and tell the user what to fix.
 - Nothing switches back by itself. A later return to the planned agent is a new handoff by the Claude lead.
+
+## Model change and new threads
+- A model change mid-thread loses the prompt cache and may drop thinking.
+- Change the model only in a fresh session (a new thread or a child) that starts from a written handoff, or after `/compact` in Claude Code. Exception: option 4 in "Provider error".
+- A new thread picks its model from "Claude starting points" in `model-tiers.md`. A chat a person waits on starts at `Claude (sonnet/low)` or `Claude (sonnet/medium)`.
 
 ## Delegation per host
 | Host | Delegation |

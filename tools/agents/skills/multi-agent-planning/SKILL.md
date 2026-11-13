@@ -68,7 +68,7 @@ Understand → Design → Slice → Implement → Test → Review → Integrate 
 
 ## Capability discovery
 - Discover again at every plan start. List every provider, its status, and its model ids in Existing state. `references/routing.md` gives the method per host.
-- Route from `references/model-tiers.md`. Size each slice, then pick the cheapest listed model and effort at or above that size, from any routable provider. A model with no row there is `tier unknown`.
+- Route from `references/model-tiers.md`. Size each slice, then pick the cheapest listed model and effort at or above that size, from any routable provider. For Claude, start from "Claude starting points" in that file; the size is the floor. A model with no row there is `tier unknown`.
 - Never invent model IDs, quotas, usage, costs, or tiers. Only Cursor stays `Cursor (auto)`. Codex names `Codex (model-id/effort)`. Exception: pstack panels in Cursor use the named models in `~/.cursor/rules/pstack-models.mdc`. Record discovery results in Existing state, not in `Model:`.
 - A subscription price is not API credit. Do not assume unlimited concurrency. Use no separately billed API without the user's authorization.
 
