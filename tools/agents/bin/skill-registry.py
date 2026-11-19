@@ -158,7 +158,13 @@ def check(reg, own):
         for plat, v in plats.items():
             if v["kind"] == "broken-link":
                 errors.append(f"{name}: broken link in {plat}")
+        copies = sorted({v["target"] for v in plats.values() if v["kind"] != "broken-link"})
+        if len(copies) > 1:
+            warnings.append(f"{name}: {len(copies)} separate copies with no owner repo: {', '.join(copies)}")
     hashes = {c: file_hash(Path(r) / "scripts" / "skillsync.py") for c, r in sources()["collections"].items()}
+    for c, h in hashes.items():
+        if h is None:
+            errors.append(f"{c}: scripts/skillsync.py is missing")
     if len({h for h in hashes.values() if h}) > 1:
         errors.append("scripts/skillsync.py differs between collection repos: " + ", ".join(f"{c}={(h or 'missing')[:8]}" for c, h in hashes.items()))
     return errors, warnings
