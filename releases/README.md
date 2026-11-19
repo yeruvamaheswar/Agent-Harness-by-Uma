@@ -10,6 +10,9 @@ Do not edit anything in this folder by hand. To change the policy, publish a new
 
 | Version | Created (UTC) | Source | Digest (SHA-256, first 12) |
 | --- | --- | --- | --- |
+| [1.6.3](1.6.3/) | 2026-11-13 | Local files (`--bootstrap`) | `609a0b9bb40b` |
+| [1.6.2](1.6.2/) | 2026-11-13 | Local files (`--bootstrap`) | `ce5bd8d503fd` |
+| [1.6.1](1.6.1/) | 2026-11-10 | Local files (`--bootstrap`) | `823216b459da` |
 | [1.6.0](1.6.0/) | 2026-11-09 | Local files (`--bootstrap`) | `b5ba4fe5b88b` |
 | [1.5.9](1.5.9/) | 2026-11-07 | Local files (`--bootstrap`) | `4e30bf0804c1` |
 | [1.5.8](1.5.8/) | 2026-11-07 | Local files (`--bootstrap`) | `14de141faa64` |
@@ -36,6 +39,15 @@ The full digest and provenance of each release are in its `release.json` and its
 
 ### What changed
 
+- **1.6.3**
+  - Wording-only cuts in `knowledge/core.md` for headroom: 6,865 of 7,000 bytes (1.6.2 was at 7,000). No rule was added, removed, or moved. Two T3 Code bullets became one.
+  - [`1.6.3/RULE-MAP.md`](1.6.3/RULE-MAP.md) maps every 1.6.2 line to its 1.6.3 line and marks 3 lines whose meaning may have changed.
+- **1.6.2**
+  - "Show work visually" now asks for one in-thread diagram, rendered in the host (T3 HTML, Mermaid), not a browser page or text sketch. Filled boxes set their text color. HTML boxes open a TL;DR via `popovertarget`, not script.
+- **1.6.1**
+  - "Context and agents": Claude starts from the `multi-agent-planning` table. After a failed check, Claude past `high` goes one model up at `medium`.
+  - Parallel slices: "only when independent and in separate files". Shorter wording in the approval and thread-message rules.
+  - The `subagent-budget` line now says it sets child models.
 - **1.6.0**
   - New section "Decisions and questions". GREEN decisions are made and recorded. AMBER decisions pick what evidence supports and record the assumption and a rollback. RED items (destructive acts, money, deploys, production data, security or auth, missing credentials, conflicting requirements, commit, push, merge, work repos) are asked once, in the preflight batch, and block only their dependent work.
   - Look before you ask: the request, the repo, the plan, the ledger, and memory. User instructions and project rules beat ledger entries; the newer user source wins; a denied permission is an answer.
