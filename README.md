@@ -91,26 +91,19 @@ Real captures of the explainer page, made by `tools/explainer.ts` ([how and when
 
 These skills live in `tools/agents/skills/`. Install one with `npm run harness -- skills install NAME`. Details for each are in [docs/skills.md](docs/skills.md).
 
+pstack, tStack, and Matt Pocock's skills live in their own repos (matt-skills, pstack, tstack) and are linked, not copied. [docs/skill-ownership.md](docs/skill-ownership.md) says who owns each skill, where a new skill goes, and how `~/.agents/bin/skill-registry.py check` finds duplicates.
+
 <!-- BEGIN GENERATED: skills -->
 | Skill | Status | What it does | How to use |
 | --- | --- | --- | --- |
 | autonomous-engineering | beta | Execute, review, and recover a multi-agent-planning plan to VERIFIED slices, with an engine that records state and evidence and refuses unsafe commands. | /autonomous-engineering; Codex $autonomous-engineering. Also loads by description. |
-| babysit-pr | experimental | Monitor a pull request through review and CI. | /babysit-pr; Codex $babysit-pr. Also loads by description. |
 | continue-work | beta | Resume a task in a new session from the prior trail and the real repo state, then continue from the resume point. | /continue-work; Codex $continue-work. Load only by name. |
-| council | experimental | Trigger this if the user says 'council'. | /council; Codex $council. Also loads by description. |
-| file-pr | beta | File a concise pull request. | /file-pr; Codex $file-pr. Also loads by description. |
-| full-send | experimental | Trigger this if the user says 'full send'. | /full-send; Codex $full-send. Load only by name. |
-| full-stop | experimental | Trigger this if the user says 'full stop', even as a closing "Full stop." that reads like emphasis. | /full-stop; Codex $full-stop. Load only by name. |
 | grill-me | stable | Interview the user relentlessly before building until goals, constraints, and decisions are settled. | /grill-me; Codex $grill-me. Also loads by description. |
 | html-explainer | stable | Write plans, audits, reviews, reports, and comparisons as a plan-page Markdown file and build its HTML page with md-view.sh. | /html-explainer; Codex $html-explainer. Also loads by description. |
-| leaving-pr-comments | beta | Use whenever leaving comments on GitHub. | /leaving-pr-comments; Codex $leaving-pr-comments. Also loads by description. |
 | make-it-verifiable | beta | Plan how to prove a change works before any code, then run those checks with evidence. | /make-it-verifiable; Codex $make-it-verifiable. Load only by name. |
-| modernize | beta | For getting old prs up to date. | /modernize; Codex $modernize. Also loads by description. |
 | multi-agent-planning | stable | Plan software work as verified slices and route each slice to an agent, model, and effort. | /multi-agent-planning; Codex $multi-agent-planning. Also loads by description. |
 | render-rules | stable | Platform rules and a render.yaml Blueprint checklist for deploying to Render. | /render-rules; Codex $render-rules. Also loads by description. |
-| sol-loop | experimental | Use when the user says "sol loop". | /sol-loop; Codex $sol-loop. Also loads by description. |
 | subagent-budget | stable | Decide how many subagents to start, which provider and model each gets, and at what effort, so usage is spent where it pays and no provider sits idle. | /subagent-budget; Codex $subagent-budget. Also loads by description. |
-| takeover | beta | Take over existing work. | /takeover; Codex $takeover. Also loads by description. |
 | thread-continuity | experimental | Hand a T3 Code task to one fresh thread with the same project, checkout, mode, and the user's original approval, so the successor continues without asking again and never writes beside its predecessor. | /thread-continuity; Codex $thread-continuity. Load only by name. |
 | verify | beta | Check a built product against its contract in a fresh session and report what passes, fails, or is unknown. | /verify; Codex $verify. Load only by name. |
 <!-- END GENERATED: skills -->
@@ -218,6 +211,7 @@ The active policy release is the newest folder in `releases/`: `1.5.5` at the ti
 | [docs/operations.md](docs/operations.md) | Configuration reference, environment variable names, tests and evals |
 | [docs/README.md](docs/README.md) | Every command, backups, recovery, eval platforms |
 | [docs/skills.md](docs/skills.md) | One reference entry per skill |
+| [docs/skill-ownership.md](docs/skill-ownership.md) | Which repo owns each skill, the registry, and where new skills go |
 | [docs/workflows.md](docs/workflows.md) | Eight workflows, each labeled runnable or concept |
 | [docs/platforms.md](docs/platforms.md) | Codex, Claude Code, Cursor, Grok Bot, repo scope, skill visibility |
 | [docs/multi-agent-planning.md](docs/multi-agent-planning.md) | The slice planner: invocation, routing, states, install |
