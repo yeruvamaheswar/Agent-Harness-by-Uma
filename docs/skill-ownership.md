@@ -9,7 +9,7 @@ Third-party mirrors live in `~/3p-Repos/` (with upstream clones in `~/3p-Repos/.
 | Agent harness | this repo, `tools/agents/skills/` | Uma's own skills (see [skills.md](skills.md)) | `npm run harness -- skills install NAME` (copy + receipt) |
 | tstack | [yeruvamaheswar/tstack](https://github.com/yeruvamaheswar/tstack) (private), from t3dotgg/tstack | 9 PR and review skills, listed below | `python3 ~/3p-Repos/tstack/scripts/skillsync.py link` |
 | pstack | [yeruvamaheswar/pstack](https://github.com/yeruvamaheswar/pstack) (private), from cursor/plugins `pstack/skills` | 58 skills | `python3 ~/3p-Repos/pstack/scripts/skillsync.py link` |
-| matt-skills | [yeruvamaheswar/matt-skills](https://github.com/yeruvamaheswar/matt-skills) (private), from mattpocock/skills | 39 skills, none active by default | `activate` in its `UPSTREAM.json`, then `skillsync.py link` |
+| matt-skills | [yeruvamaheswar/matt-skills](https://github.com/yeruvamaheswar/matt-skills) (private), from mattpocock/skills | 39 skills, none active by default; 6 renamed with a `matt-` prefix (below) | `activate` in its `UPSTREAM.json`, then `skillsync.py link` |
 | skills CLI | `~/.agents/.skill-lock.json` | for example security-audit | `npx skills add` |
 
 ```text
@@ -20,7 +20,12 @@ harness ───── skills install ─────> ~/.agents/skills/<name> 
 ```
 
 ## Registry
-`tools/agents/bin/skill-registry.py` (installed to `~/.agents/bin/`) builds `~/.agents/skill-registry.json` from the owner repos and the install folders.
+`tools/agents/bin/skill-registry.py` (installed to `~/.agents/bin/`) builds `~/.agents/skill-registry.json` from the owner repos and the install folders. Harness skills are read from `origin/main` of `~/Code-Git-Repos/Agent-Harness-by-Uma-main`, so the branch that checkout is on does not matter.
+
+Format (version 2), for tools such as the agent control center:
+- `collections.<name>`: `path` (local clone), `github`, `upstream`, `upstream_path`, `skills` (count), `activate`.
+- `skills.<name>`: `owner`, `path`, `description`, `active`, `upstream`, `upstream_name`, `commit`, `also_in`, `installs` (per platform: `kind` link/dir, `target`).
+- `unowned.<name>`: `description`, `installs` for skills with no owner repo.
 
 - `skill-registry.py check` fails on a name that two owners keep active, a real copy where a link should be, a link to the wrong place, a broken link, or a `skillsync.py` that differs between the three repos.
 - `skill-registry.py where NAME` (or a folder path) says whether a name is taken and where a new skill belongs. Run it before you install a skill.
@@ -34,10 +39,18 @@ harness ───── skills install ─────> ~/.agents/skills/<name> 
 5. Another upstream: `npx skills add`, which records it in `~/.agents/.skill-lock.json`.
 Never copy a skill folder into `~/.agents/skills` or `~/.claude/skills` by hand.
 
-## Overlaps that are not duplicates
-- `grill-me`: the harness skill is Uma's own rewrite. matt-skills keeps Matt's `grill-me` (which only calls his `grilling`) inactive.
-- `teach`, `tdd`: pstack and Matt Pocock have different skills with these names. pstack owns them here.
-- `code-review` (Matt) and the Claude Code `code-review` plugin are different tools. `handoff` (Matt) and Grok's built-in `handoff` are different too.
+## No two skills share a name
+When an upstream skill's name is taken, the mirror renames it with its repo prefix (`rename` in that repo's `UPSTREAM.json`). The sync tool applies the prefix to the folder, the `name:` line, and references in the collection's other skills, so updates still merge. `skill-registry.py check` warns on any name owned twice.
+
+| Upstream skill | Local name | Different skill it would clash with |
+|---|---|---|
+| Matt `grill-me` | `matt-grill-me` | harness `grill-me` (Uma's own rewrite) |
+| Matt `teach` | `matt-teach` | pstack `teach` |
+| Matt `tdd` | `matt-tdd` | pstack `tdd` |
+| Matt `code-review` | `matt-code-review` | Claude Code `code-review` plugin |
+| Matt `handoff` | `matt-handoff` | Grok built-in `handoff` |
+| Matt `implement` | `matt-implement` | Grok built-in `implement` |
+
 - Cursor's own pstack plugin (`~/.cursor/plugins/cache/cursor-public/pstack/`) is a second, Cursor-managed copy. Turn it off in Cursor Settings > Plugins to use only the pstack repo.
 
 ## tstack skills
