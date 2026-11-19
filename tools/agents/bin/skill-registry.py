@@ -25,9 +25,10 @@ HOME = Path(os.environ.get("SKILLSYNC_HOME", str(Path.home())))
 AGENTS = HOME / ".agents"
 REGISTRY = AGENTS / "skill-registry.json"
 SOURCES = AGENTS / "skill-sources.json"
-REPOS = HOME / "Code-Git-Repos"
+REPOS = HOME / "Code-Git-Repos"   # your own repos
+THIRD_PARTY = HOME / "3p-Repos"   # mirrors of third-party skill collections
 DEFAULT_SOURCES = {
-    "collections": {"matt-skills": str(REPOS / "matt-skills"), "pstack": str(REPOS / "pstack"), "tstack": str(REPOS / "tstack")},
+    "collections": {"matt-skills": str(THIRD_PARTY / "matt-skills"), "pstack": str(THIRD_PARTY / "pstack"), "tstack": str(THIRD_PARTY / "tstack")},
     "harness": str(REPOS / "Agent-Harness-by-Uma-main" / "tools" / "agents" / "skills"),
     "install_dirs": {"shared (Codex)": str(AGENTS / "skills"), "claude-code (and Cursor)": str(HOME / ".claude" / "skills"),
                      "cursor": str(HOME / ".cursor" / "skills"), "codex": str(HOME / ".codex" / "skills")},

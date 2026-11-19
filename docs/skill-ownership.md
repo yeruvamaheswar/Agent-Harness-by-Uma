@@ -2,11 +2,13 @@
 
 Each skill has one owner. Agents read a link to the owner's copy, never a second copy.
 
+Third-party mirrors live in `~/3p-Repos/` (with upstream clones in `~/3p-Repos/.upstream/`). Your own repos stay in `~/Code-Git-Repos/`.
+
 | Owner | Repo | Skills | Installed by |
 |---|---|---|---|
 | Agent harness | this repo, `tools/agents/skills/` | Uma's own skills (see [skills.md](skills.md)) | `npm run harness -- skills install NAME` (copy + receipt) |
-| tstack | [yeruvamaheswar/tstack](https://github.com/yeruvamaheswar/tstack) (private), from t3dotgg/tstack | 9 PR and review skills, listed below | `python3 ~/Code-Git-Repos/tstack/scripts/skillsync.py link` |
-| pstack | [yeruvamaheswar/pstack](https://github.com/yeruvamaheswar/pstack) (private), from cursor/plugins `pstack/skills` | 58 skills | `python3 ~/Code-Git-Repos/pstack/scripts/skillsync.py link` |
+| tstack | [yeruvamaheswar/tstack](https://github.com/yeruvamaheswar/tstack) (private), from t3dotgg/tstack | 9 PR and review skills, listed below | `python3 ~/3p-Repos/tstack/scripts/skillsync.py link` |
+| pstack | [yeruvamaheswar/pstack](https://github.com/yeruvamaheswar/pstack) (private), from cursor/plugins `pstack/skills` | 58 skills | `python3 ~/3p-Repos/pstack/scripts/skillsync.py link` |
 | matt-skills | [yeruvamaheswar/matt-skills](https://github.com/yeruvamaheswar/matt-skills) (private), from mattpocock/skills | 39 skills, none active by default | `activate` in its `UPSTREAM.json`, then `skillsync.py link` |
 | skills CLI | `~/.agents/.skill-lock.json` | for example security-audit | `npx skills add` |
 
