@@ -2,7 +2,7 @@
 """Central skill registry: who owns each skill name, and is every install a link to its owner.
 
 Source: Agent-Harness-by-Uma tools/agents/bin/skill-registry.py. Installed to ~/.agents/bin/.
-Python 3.9+, no network.
+Python 3.9+. The only network use is a quick `git fetch` of the harness repo (skipped when offline).
 
   skill-registry.py build              Write ~/.agents/skill-registry.json from the owner repos and installs.
   skill-registry.py check [--json]     Build, then fail (exit 1) on duplicates, broken links, or drift.
@@ -18,6 +18,7 @@ Edit ~/.agents/skill-sources.json to change the repo paths.
 import hashlib
 import json
 import os
+import subprocess
 import sys
 from pathlib import Path
 
@@ -29,7 +30,8 @@ REPOS = HOME / "Code-Git-Repos"   # your own repos
 THIRD_PARTY = HOME / "3p-Repos"   # mirrors of third-party skill collections
 DEFAULT_SOURCES = {
     "collections": {"matt-skills": str(THIRD_PARTY / "matt-skills"), "pstack": str(THIRD_PARTY / "pstack"), "tstack": str(THIRD_PARTY / "tstack")},
-    "harness": str(REPOS / "Agent-Harness-by-Uma-main" / "tools" / "agents" / "skills"),
+    # Harness skills are read from the merged main branch, not from whatever branch the checkout is on.
+    "harness": {"repo": str(REPOS / "Agent-Harness-by-Uma-main"), "ref": "origin/main", "dir": "tools/agents/skills"},
     "install_dirs": {"shared (Codex)": str(AGENTS / "skills"), "claude-code (and Cursor)": str(HOME / ".claude" / "skills"),
                      "cursor": str(HOME / ".cursor" / "skills"), "codex": str(HOME / ".codex" / "skills")},
 }
@@ -48,6 +50,48 @@ def sources():
             else:
                 s[k] = v
     return s
+
+
+def frontmatter(text):
+    out = {}
+    if text.startswith("---"):
+        end = text.find("\n---", 3)
+        for line in text[3:end if end > 0 else None].splitlines():
+            if ":" in line and not line.startswith(" "):
+                k, v = line.split(":", 1)
+                out[k.strip()] = v.strip().strip("'\"")
+    return out
+
+
+def describe(path):
+    try:
+        return frontmatter((Path(path) / "SKILL.md").read_text(errors="replace")).get("description", "")
+    except OSError:
+        return ""
+
+
+def git(repo, *args):
+    p = subprocess.run(["git", "-C", str(repo), *args], capture_output=True, text=True, timeout=30)
+    return p.stdout if p.returncode == 0 else None
+
+
+def harness_skills(h):
+    """name -> (path, description) from the harness repo's merged branch."""
+    repo, ref, d = Path(h["repo"]), h["ref"], h["dir"].strip("/")
+    if not (repo / ".git").exists():
+        return {}
+    try:
+        git(repo, "fetch", "-q", "origin", ref.split("/", 1)[-1])
+    except subprocess.TimeoutExpired:
+        pass  # offline: use the last fetched ref
+    listing = git(repo, "ls-tree", "--name-only", ref, d + "/") or ""
+    out = {}
+    for line in listing.splitlines():
+        name = line.rsplit("/", 1)[-1]
+        text = git(repo, "show", f"{ref}:{d}/{name}/SKILL.md")
+        if text is not None:
+            out[name] = (str(repo / d / name) + f" (at {ref})", frontmatter(text).get("description", ""))
+    return out
 
 
 def skill_name(path):
@@ -75,19 +119,22 @@ def owners():
         act = m.get("activate", [])
         for name, e in m["skills"].items():
             active = e.get("status") == "active" and (act == "all" or name in act)
-            out.setdefault(name, []).append({"owner": coll, "path": str(Path(repo) / "skills" / name), "active": active,
-                                             "upstream": m["upstream"]["url"], "commit": e.get("commit", "")})
-    h = Path(s["harness"])
-    if h.is_dir():
-        for p in sorted(h.iterdir()):
-            if (p / "SKILL.md").exists():
-                out.setdefault(p.name, []).append({"owner": "agent-harness", "path": str(p), "active": True,
-                                                   "upstream": "Agent-Harness-by-Uma", "commit": ""})
+            path = Path(repo) / "skills" / name
+            out.setdefault(name, []).append({"owner": coll, "path": str(path), "active": active,
+                                             "upstream": m["upstream"]["url"], "commit": e.get("commit", ""),
+                                             "upstream_name": e.get("upstream_name", name), "description": describe(path)})
+    h = s["harness"]
+    if isinstance(h, str):  # older skill-sources.json: a plain folder
+        h = {"repo": str(Path(h).parents[2]), "ref": "HEAD", "dir": "tools/agents/skills"}
+    for name, (path, desc) in sorted(harness_skills(h).items()):
+        out.setdefault(name, []).append({"owner": "agent-harness", "path": path, "active": True,
+                                         "upstream": "Agent-Harness-by-Uma", "commit": h["ref"], "description": desc})
     lock = AGENTS / ".skill-lock.json"
     if lock.exists():
         for name, e in json.loads(lock.read_text()).get("skills", {}).items():
             out.setdefault(name, []).append({"owner": "skills-cli", "path": str(AGENTS / "skills" / name), "active": True,
-                                             "upstream": e.get("sourceUrl", ""), "commit": e.get("skillFolderHash", "")})
+                                             "upstream": e.get("sourceUrl", ""), "commit": e.get("skillFolderHash", ""),
+                                             "description": describe(AGENTS / "skills" / name)})
     return out
 
 
@@ -115,17 +162,29 @@ def scan_installs():
 def build():
     own = owners()
     inst = scan_installs()
-    reg = {"version": 1, "skills": {}, "unowned": {}}
+    reg = {"version": 2, "collections": {}, "skills": {}, "unowned": {}}
+    for coll, repo in sources()["collections"].items():
+        man = Path(repo) / "UPSTREAM.json"
+        if man.exists():
+            m = json.loads(man.read_text())
+            remote = git(repo, "remote", "get-url", "origin") or ""
+            reg["collections"][coll] = {"path": repo, "github": remote.strip(), "upstream": m["upstream"]["url"],
+                                        "upstream_path": m["upstream"]["path"], "skills": len(m["skills"]),
+                                        "activate": m.get("activate", [])}
     for name, lst in sorted(own.items()):
         primary = next((o for o in lst if o["active"]), lst[0])
         reg["skills"][name] = {"owner": primary["owner"], "path": primary["path"], "active": primary["active"],
-                               "upstream": primary["upstream"], "commit": primary["commit"],
+                               "description": primary.get("description", ""),
+                               "upstream": primary["upstream"], "upstream_name": primary.get("upstream_name", name),
+                               "commit": primary["commit"],
                                "also_in": [o["owner"] for o in lst if o is not primary],
                                "installs": {p: v[name] for p, v in inst.items() if name in v}}
     for plat, items in inst.items():
         for name, v in items.items():
             if name not in reg["skills"]:
-                reg["unowned"].setdefault(name, {})[plat] = v
+                e = reg["unowned"].setdefault(name, {"description": describe(v["target"]) if v["kind"] != "broken-link" else "",
+                                                     "installs": {}})
+                e["installs"][plat] = v
     REGISTRY.write_text(json.dumps(reg, indent=2) + "\n")
     return reg, own
 
@@ -155,7 +214,8 @@ def check(reg, own):
                 errors.append(f"{name}: {plat} links to {v['target']}, not {want}")
         if "shared (Codex)" not in e["installs"]:
             errors.append(f"{name}: active in {e['owner']} but not installed in ~/.agents/skills (run skillsync.py link)")
-    for name, plats in reg["unowned"].items():
+    for name, entry in reg["unowned"].items():
+        plats = entry["installs"]
         for plat, v in plats.items():
             if v["kind"] == "broken-link":
                 errors.append(f"{name}: broken link in {plat}")
